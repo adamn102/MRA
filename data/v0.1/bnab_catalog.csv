@@ -1,0 +1,24 @@
+antibody,epitope_class,antibody_class,mechanism,hxb2_position,wt_aa,escape_aa,nl43_env_position,nl43_wt_aa,nl43_matches_expected,evidence_type,citation,provisional,note
+VRC01,CD4bs,3BNC117/VRC01-class,contact,368,D,R,366,D,True,literature_provisional,,True,CD4bs contact Asp368; also impairs CD4 binding.
+VRC01,CD4bs,3BNC117/VRC01-class,contact,279,N,K,277,D,False,literature_provisional,,True,Loop D change reducing CD4bs bNAb binding.
+VRC01,CD4bs,3BNC117/VRC01-class,glycan_sequon,197,N,,195,N,True,literature_provisional,,True,N197 glycan modulates CD4bs bNAb access.
+3BNC117,CD4bs,3BNC117/VRC01-class,contact,458,G,S,456,G,True,literature_provisional,,True,Loop V5/CD4bs periphery; 3BNC117 escape.
+3BNC117,CD4bs,3BNC117/VRC01-class,contact,471,G,E,469,G,True,literature_provisional,,True,CD4bs periphery reducing 3BNC117 neutralisation.
+N6,CD4bs,VRC01-class (broad),contact,279,N,D,277,D,False,literature_provisional,,True,Loop D; modulates even the broad N6.
+10-1074,V3-glycan,PGT121/10-1074,glycan_sequon,332,N,,330,N,True,literature_provisional,,True,N332 glycan required for 10-1074.
+10-1074,V3-glycan,PGT121/10-1074,contact,325,D,N,323,N,False,literature_provisional,,True,GDIR/324-327 V3 base.
+PGT121,V3-glycan,PGT121/10-1074,glycan_sequon,332,N,,330,N,True,literature_provisional,,True,N332 glycan dependence.
+PGT128,V3-glycan,PGT128,glycan_sequon,301,N,,299,N,True,literature_provisional,,True,N301 glycan contributes to PGT128.
+PGT128,V3-glycan,PGT128,glycan_sequon,332,N,,330,N,True,literature_provisional,,True,N332 glycan dependence.
+PG9,V2-apex,PG9/PG16,glycan_sequon,160,N,,160,N,True,literature_provisional,,True,N160 glycan central to V2 apex; N160K classic escape.
+PG9,V2-apex,PG9/PG16,contact,169,K,E,169,V,False,literature_provisional,,True,C-strand (166-171) cationic contact.
+PGT145,V2-apex,PGT145,glycan_sequon,160,N,,160,N,True,literature_provisional,,True,N160 glycan dependence.
+CAP256-VRC26,V2-apex,CAP256-VRC26,contact,166,R,S,166,R,True,literature_provisional,,True,C-strand contact.
+CAP256-VRC26,V2-apex,CAP256-VRC26,glycan_sequon,160,N,,160,N,True,literature_provisional,,True,N160 glycan dependence.
+10E8,MPER,10E8,contact,672,W,A,670,W,True,literature_provisional,,True,Core MPER contact Trp672.
+10E8,MPER,10E8,contact,680,W,S,678,W,True,literature_provisional,,True,MPER helix 680.
+4E10,MPER,4E10,contact,672,W,A,670,W,True,literature_provisional,,True,Trp672 MPER contact.
+4E10,MPER,4E10,contact,673,F,A,671,F,True,literature_provisional,,True,Phe673 MPER contact.
+PGT151,interface,PGT151,glycan_sequon,611,N,,609,N,True,literature_provisional,,True,N611 glycan at the gp120-gp41 interface.
+VRC34,fusion-peptide,VRC34.01,contact,512,A,E,510,A,True,literature_provisional,,True,Fusion-peptide N-terminus (512).
+VRC34,fusion-peptide,VRC34.01,glycan_sequon,88,N,,88,N,True,literature_provisional,,True,N88 glycan flanks the fusion peptide.

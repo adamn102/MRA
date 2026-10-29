@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: MIT -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'none'">
+<title>Resistance & escape &mdash; HIV-1 Mutation Rate Atlas</title>
+<link rel="stylesheet" href="css/mra.css">
+</head>
+<body>
+<main>
+<h1>Drug-resistance mutations and antibody escape</h1>
+<p>Estimated <strong>mutation rates</strong> for documented resistance mutations and broadly
+neutralizing antibody escape positions. The rate is the mutational supply &mdash; how often the
+variant is generated per replication &mdash; not how often it is observed clinically; selection
+acts on top of this. Both are shown so the distinction is visible.</p>
+
+<div id="scope-slot"></div>
+
+<h2>Drug-resistance mutations</h2>
+<div class="controls">
+  <div>
+    <label for="drug-class">Drug class</label>
+    <select id="drug-class"></select>
+  </div>
+  <div>
+    <label for="drug-stratum">Treatment stratum (for clinical frequency)</label>
+    <select id="drug-stratum"></select>
+  </div>
+  <div>
+    <label for="access-filter">Accessibility</label>
+    <select id="access-filter">
+      <option value="1" selected>1-nucleotide changes only</option>
+      <option value="all">include 2- and 3-nucleotide changes</option>
+    </select>
+  </div>
+  <div><span id="drm-share"></span></div>
+</div>
+<div id="drm-status" class="caveat">Loading the catalog&hellip;</div>
+<div id="drm-table"></div>
+
+<h2>Broadly neutralizing antibody escape</h2>
+<div id="bnab-provisional"></div>
+<div class="controls">
+  <div>
+    <label for="bnab-class">Epitope class</label>
+    <select id="bnab-class"></select>
+  </div>
+</div>
+<div id="bnab-table"></div>
+
+<h3 id="drill-heading" hidden>Codon sensitivity</h3>
+<p id="drill-intro" class="caveat" hidden></p>
+<figure class="chart"><div id="drill-chart"></div><figcaption id="drill-caption"></figcaption></figure>
+<div id="drill-detail"></div>
+</main>
+<script type="module" src="js/drm.js"></script>
+</body>
+</html>

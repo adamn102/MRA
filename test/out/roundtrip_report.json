@@ -1,0 +1,263 @@
+{
+  "version": "v0.1",
+  "tolerance": 0.01,
+  "published_source": "shipped assets in /Users/anitido/Bioinformatics/ERR-Seq_2/MutRatePaper/mra/portal/data/v0.1",
+  "layers": {
+    "nucleotide": {
+      "row_counts": {
+        "engine": 24639,
+        "published": 24639,
+        "engine_only": 0,
+        "published_only": 0
+      },
+      "ref_nucleotide": {
+        "n": 24639,
+        "mismatches": 0
+      },
+      "context_3p": {
+        "n": 24639,
+        "mismatches": 0
+      },
+      "bio_rate": {
+        "n": 24639,
+        "max_rel_dev": 0.008267385495289891,
+        "p99_rel_dev": 0.004535006974970816,
+        "tolerance": 0.01,
+        "fraction_within_tol": 1.0
+      },
+      "bio_rate_lo95": {
+        "n": 24639,
+        "max_rel_dev": 0.008241448407369852,
+        "p99_rel_dev": 0.004543326425411153,
+        "tolerance": 0.01,
+        "fraction_within_tol": 1.0
+      },
+      "bio_rate_hi95": {
+        "n": 24639,
+        "max_rel_dev": 0.008258130553010008,
+        "p99_rel_dev": 0.0045427537949582425,
+        "tolerance": 0.01,
+        "fraction_within_tol": 1.0
+      },
+      "interval_source_approximated": 0
+    },
+    "paths": {
+      "row_counts": {
+        "engine": 187992,
+        "published": 187992,
+        "engine_only": 0,
+        "published_only": 0
+      },
+      "codon": {
+        "n": 187992,
+        "mismatches": 0
+      },
+      "n_nt_changes": {
+        "n": 187992,
+        "mismatches": 0
+      },
+      "mutation_type_path": {
+        "n": 187992,
+        "mismatches": 0
+      },
+      "mu_path": {
+        "n": 187992,
+        "max_rel_dev": 0.014875188601258648,
+        "p99_rel_dev": 0.007138211256273907,
+        "by_group": {
+          "1": {
+            "n": 26856,
+            "max_rel_dev": 0.008267385495289891,
+            "p99_rel_dev": 0.004551035101252914,
+            "tolerance": 0.010000000000000009,
+            "fraction_within_tol": 1.0
+          },
+          "2": {
+            "n": 80568,
+            "max_rel_dev": 0.013461478055470065,
+            "p99_rel_dev": 0.006395544738044359,
+            "tolerance": 0.020100000000000007,
+            "fraction_within_tol": 1.0
+          },
+          "3": {
+            "n": 80568,
+            "max_rel_dev": 0.014875188601258648,
+            "p99_rel_dev": 0.007960216356518505,
+            "tolerance": 0.030301000000000133,
+            "fraction_within_tol": 1.0
+          }
+        }
+      },
+      "mu_path_lo95": {
+        "n": 187992,
+        "max_rel_dev": 0.014836610490425773,
+        "p99_rel_dev": 0.00714298401022507,
+        "by_group": {
+          "1": {
+            "n": 26856,
+            "max_rel_dev": 0.008241448407369852,
+            "p99_rel_dev": 0.004550131181649492,
+            "tolerance": 0.010000000000000009,
+            "fraction_within_tol": 1.0
+          },
+          "2": {
+            "n": 80568,
+            "max_rel_dev": 0.0134118050896442,
+            "p99_rel_dev": 0.006390543517516666,
+            "tolerance": 0.020100000000000007,
+            "fraction_within_tol": 1.0
+          },
+          "3": {
+            "n": 80568,
+            "max_rel_dev": 0.014836610490425773,
+            "p99_rel_dev": 0.007963738465511135,
+            "tolerance": 0.030301000000000133,
+            "fraction_within_tol": 1.0
+          }
+        }
+      },
+      "mu_path_hi95": {
+        "n": 187992,
+        "max_rel_dev": 0.014843801838186106,
+        "p99_rel_dev": 0.007128272019473476,
+        "by_group": {
+          "1": {
+            "n": 26856,
+            "max_rel_dev": 0.008258130553010008,
+            "p99_rel_dev": 0.004554715859358062,
+            "tolerance": 0.010000000000000009,
+            "fraction_within_tol": 1.0
+          },
+          "2": {
+            "n": 80568,
+            "max_rel_dev": 0.013518439207208546,
+            "p99_rel_dev": 0.006391894121772216,
+            "tolerance": 0.020100000000000007,
+            "fraction_within_tol": 1.0
+          },
+          "3": {
+            "n": 80568,
+            "max_rel_dev": 0.014843801838186106,
+            "p99_rel_dev": 0.007969213006776471,
+            "tolerance": 0.030301000000000133,
+            "fraction_within_tol": 1.0
+          }
+        }
+      }
+    },
+    "amino_acid": {
+      "row_counts": {
+        "engine": 62518,
+        "published": 62518,
+        "engine_only": 0,
+        "published_only": 0
+      },
+      "ref_aa": {
+        "n": 62518,
+        "mismatches": 0
+      },
+      "aa_change": {
+        "n": 62518,
+        "mismatches": 0
+      },
+      "synonymous": {
+        "n": 62518,
+        "mismatches": 0
+      },
+      "min_nt_changes": {
+        "n": 62518,
+        "mismatches": 0
+      },
+      "n_paths": {
+        "n": 62518,
+        "mismatches": 0
+      },
+      "mu_aa": {
+        "n": 62518,
+        "max_rel_dev": 0.01355926372144702,
+        "p99_rel_dev": 0.0062429006342001585,
+        "by_group": {
+          "1": {
+            "n": 21301,
+            "max_rel_dev": 0.00827100394902429,
+            "p99_rel_dev": 0.004314286424791092,
+            "tolerance": 0.030301000000000133,
+            "fraction_within_tol": 1.0
+          },
+          "2": {
+            "n": 29848,
+            "max_rel_dev": 0.01345893217719826,
+            "p99_rel_dev": 0.006284082223286318,
+            "tolerance": 0.030301000000000133,
+            "fraction_within_tol": 1.0
+          },
+          "3": {
+            "n": 11369,
+            "max_rel_dev": 0.01355926372144702,
+            "p99_rel_dev": 0.007557678912080785,
+            "tolerance": 0.030301000000000133,
+            "fraction_within_tol": 1.0
+          }
+        }
+      },
+      "mu_aa_lo95": {
+        "n": 62518,
+        "max_rel_dev": 0.013585110483142919,
+        "p99_rel_dev": 0.0062339187421492125,
+        "by_group": {
+          "1": {
+            "n": 21301,
+            "max_rel_dev": 0.008237048245511292,
+            "p99_rel_dev": 0.004331406326689205,
+            "tolerance": 0.030301000000000133,
+            "fraction_within_tol": 1.0
+          },
+          "2": {
+            "n": 29848,
+            "max_rel_dev": 0.013410523951048746,
+            "p99_rel_dev": 0.0062857406051898285,
+            "tolerance": 0.030301000000000133,
+            "fraction_within_tol": 1.0
+          },
+          "3": {
+            "n": 11369,
+            "max_rel_dev": 0.013585110483142919,
+            "p99_rel_dev": 0.007575706241366844,
+            "tolerance": 0.030301000000000133,
+            "fraction_within_tol": 1.0
+          }
+        }
+      },
+      "mu_aa_hi95": {
+        "n": 62518,
+        "max_rel_dev": 0.013517482093466435,
+        "p99_rel_dev": 0.00622798929088177,
+        "by_group": {
+          "1": {
+            "n": 21301,
+            "max_rel_dev": 0.00825807617792598,
+            "p99_rel_dev": 0.0042998841066133305,
+            "tolerance": 0.030301000000000133,
+            "fraction_within_tol": 1.0
+          },
+          "2": {
+            "n": 29848,
+            "max_rel_dev": 0.013517482093466435,
+            "p99_rel_dev": 0.006307943754303569,
+            "tolerance": 0.030301000000000133,
+            "fraction_within_tol": 1.0
+          },
+          "3": {
+            "n": 11369,
+            "max_rel_dev": 0.013484640775324588,
+            "p99_rel_dev": 0.007537063314448815,
+            "tolerance": 0.030301000000000133,
+            "fraction_within_tol": 1.0
+          }
+        }
+      }
+    }
+  },
+  "passed": true,
+  "failures": []
+}

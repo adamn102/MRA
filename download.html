@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: MIT -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'none'">
+<title>Download &mdash; HIV-1 Mutation Rate Atlas</title>
+<link rel="stylesheet" href="css/mra.css">
+</head>
+<body>
+<main>
+<h1>Download the atlas</h1>
+<div id="version-info"></div>
+
+<h2>Tables</h2>
+<p>Each file is downloaded with a provenance header naming the atlas version, the model and
+your retrieval date, so a file on your disk is self-identifying. Checksums below are the ones
+recorded in the release manifest; the browser verifies them before the download where your
+browser allows it.</p>
+<div id="asset-table"></div>
+
+<h2>The model bundle</h2>
+<p>The fitted model as a single JSON file &mdash; every type coefficient, every context delta,
+all 13 G&rarr;A intercepts and all six position splines, as coefficients and pre-evaluated per
+position. This is what the sequence tool runs on, and it is enough to reproduce every rate in
+the nucleotide table.</p>
+<div id="bundle-slot"></div>
+
+<h2>Data dictionary</h2>
+<div id="dictionary"></div>
+
+<h2>How to cite</h2>
+<div id="citation-slot"></div>
+</main>
+<script type="module" src="js/download.js"></script>
+</body>
+</html>

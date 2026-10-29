@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: MIT -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'none'">
+<title>Your sequence &mdash; HIV-1 Mutation Rate Atlas</title>
+<link rel="stylesheet" href="css/mra.css">
+</head>
+<body>
+<main>
+<h1>Custom atlas from your own sequence</h1>
+<div id="privacy-slot"></div>
+<div id="caveat-slot"></div>
+
+<h2>Submit</h2>
+<p>Paste one nucleotide sequence or a multi-FASTA batch, or drop a file below. Any region of
+the HIV-1 genome works &mdash; a partial amplicon such as a clinical <em>pol</em> fragment is
+the common case. Reverse-complemented sequences are detected automatically.</p>
+<textarea id="fasta" spellcheck="false" placeholder="&gt;my_isolate&#10;ATGGGTGCGAGAGCGTCGGTATTAAGCGGGGGAGAATTAGAT..."></textarea>
+<div class="controls">
+  <div><button id="run">Compute custom atlas</button></div>
+  <div><button id="load-file" class="secondary">Load FASTA file&hellip;</button>
+       <input type="file" id="file-input" accept=".fa,.fasta,.fas,.txt,.seq" hidden></div>
+  <div><button id="load-nl43" class="secondary">Load NL4-3 (worked example)</button></div>
+  <div><button id="clear" class="secondary">Clear everything</button></div>
+  <div><span id="batch-note" class="caveat"></span></div>
+</div>
+<div id="progress-slot"></div>
+<div id="run-status"></div>
+
+<h2 id="results-heading" hidden>Results</h2>
+<div id="summary-table"></div>
+<div id="detail-slot"></div>
+</main>
+<script type="module" src="js/sequence.js"></script>
+</body>
+</html>

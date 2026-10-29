@@ -1,0 +1,41 @@
+HIV-1 Mutation Rate Atlas -- data licence
+=========================================
+
+SPDX-License-Identifier: CC-BY-4.0
+
+SCOPE
+-----
+This licence covers the ATLAS DATA in this repository:
+
+  data/**                       model bundle and all supply tables
+  any file exported by the portal (browse downloads, custom atlases)
+
+The software in this repository (js/, css/, scripts/, test/, *.html) is
+licensed MIT -- see LICENSE.
+
+TERMS
+-----
+These data are made available under the Creative Commons Attribution 4.0
+International licence (CC-BY-4.0). You are free to share and adapt the
+material for any purpose, including commercially, provided you give
+appropriate credit, link to the licence, and indicate if changes were made.
+
+The full legal code is at:
+  https://creativecommons.org/licenses/by/4.0/legalcode
+A plain-language summary is at:
+  https://creativecommons.org/licenses/by/4.0/
+
+Maintainer note: if you are depositing this repository with a journal or a
+data repository that requires the licence text to be present in the archive
+rather than referenced, paste the full legal code from the URL above into
+this file below this line. Doing so changes nothing about the terms.
+
+REQUIRED ATTRIBUTION
+--------------------
+Any use of these data must cite the atlas and state the version used:
+
+  [AUTHORS] (2026). HIV-1 Mutation Rate Atlas, version v0.1.
+  [JOURNAL / PREPRINT SERVER]. DOI: [TO BE ASSIGNED]
+
+A machine-readable citation block is shipped as data/<version>/citation.json
+and is embedded as a header comment in every file the portal exports.

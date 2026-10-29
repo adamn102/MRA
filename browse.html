@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: MIT -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'none'">
+<title>Browse the atlas &mdash; HIV-1 Mutation Rate Atlas</title>
+<link rel="stylesheet" href="css/mra.css">
+</head>
+<body>
+<main>
+<h1>Browse the published NL4-3 atlas</h1>
+<div id="scope-slot"></div>
+
+<h2>Position dashboard</h2>
+<p>Pick a protein and a position. You get the reference amino acid and codon, and the
+mutability of every reachable amino-acid change, with its 95% interval, the minimum number of
+nucleotide substitutions required and the number of paths.</p>
+<div class="controls">
+  <div>
+    <label for="protein">Protein or subunit</label>
+    <select id="protein"></select>
+  </div>
+  <div>
+    <label for="position">Position (in that protein's own numbering)</label>
+    <input type="number" id="position" min="1" value="46" size="8">
+  </div>
+  <div><button id="go">Show position</button></div>
+  <div><span id="share-slot"></span></div>
+</div>
+<div id="dashboard-status" class="caveat">Loading the atlas tables&hellip;</div>
+<div id="dashboard-head"></div>
+<figure class="chart"><div id="dashboard-chart"></div>
+  <figcaption id="dashboard-caption"></figcaption></figure>
+<div id="dashboard-table"></div>
+<h3 id="paths-heading" hidden>Individual codon paths at this position</h3>
+<div id="dashboard-paths"></div>
+
+<h2>Table analysis &mdash; paste a list of mutations</h2>
+<p>One mutation per line, in the form <code>RT K65R</code>, <code>PR M46I</code>,
+<code>IN N155H</code>, <code>Env N160K</code> or <code>Gag M1K</code>. The reference amino acid
+is optional; when given it is checked against the atlas and a mismatch is reported rather than
+quietly ignored.</p>
+<textarea id="mutation-list" spellcheck="false">RT K65R
+RT M184V
+RT K103N
+PR M46I
+PR L90M
+IN N155H
+IN Q148H</textarea>
+<div class="controls">
+  <div><button id="analyse">Analyse list</button></div>
+  <div><button id="load-file" class="secondary">Load from file&hellip;</button>
+       <input type="file" id="file-input" accept=".txt,.csv,.tsv" hidden></div>
+</div>
+<div id="analysis-result"></div>
+</main>
+<script type="module" src="js/browse.js"></script>
+</body>
+</html>

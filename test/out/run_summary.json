@@ -1,0 +1,79 @@
+{
+  "version": "v0.1",
+  "model": "mra_joint_control_wt_nb_ga2_sub1_ga3_sum0_bio_splines",
+  "query_length": 8618,
+  "align_ms": 35,
+  "engine_ms": 176,
+  "name": "NL4-3",
+  "queryLength": 8618,
+  "identity": 1,
+  "alignedBases": 8618,
+  "unalignedSpans": 0,
+  "droppedOutsideRegion": 405,
+  "fallbackPositions": 0,
+  "gaContextUnavailable": 0,
+  "contextUnavailable": 0,
+  "codonsAnalysed": 2984,
+  "codonsSkippedUnaligned": 0,
+  "codonsSkippedOutsideRegion": 0,
+  "codonsSkippedAmbiguous": 0,
+  "proteins": {
+    "Env": {
+      "codonsInReference": 855,
+      "codonsAnalysed": 855,
+      "firstAnalysed": 1,
+      "lastAnalysed": 855
+    },
+    "Gag": {
+      "codonsInReference": 501,
+      "codonsAnalysed": 501,
+      "firstAnalysed": 1,
+      "lastAnalysed": 501
+    },
+    "Nef": {
+      "codonsInReference": 72,
+      "codonsAnalysed": 72,
+      "firstAnalysed": 1,
+      "lastAnalysed": 72
+    },
+    "Pol": {
+      "codonsInReference": 999,
+      "codonsAnalysed": 999,
+      "firstAnalysed": 1,
+      "lastAnalysed": 999
+    },
+    "Rev": {
+      "codonsInReference": 117,
+      "codonsAnalysed": 117,
+      "firstAnalysed": 1,
+      "lastAnalysed": 117
+    },
+    "Tat": {
+      "codonsInReference": 87,
+      "codonsAnalysed": 87,
+      "firstAnalysed": 1,
+      "lastAnalysed": 87
+    },
+    "Vif": {
+      "codonsInReference": 193,
+      "codonsAnalysed": 193,
+      "firstAnalysed": 1,
+      "lastAnalysed": 193
+    },
+    "Vpr": {
+      "codonsInReference": 78,
+      "codonsAnalysed": 78,
+      "firstAnalysed": 1,
+      "lastAnalysed": 78
+    },
+    "Vpu": {
+      "codonsInReference": 82,
+      "codonsAnalysed": 82,
+      "firstAnalysed": 1,
+      "lastAnalysed": 82
+    }
+  },
+  "ntRows": 24639,
+  "aaRows": 62518,
+  "pathRows": 187992
+}

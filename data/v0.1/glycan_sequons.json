@@ -1,0 +1,723 @@
+{
+ "note": "N-X-S/T sequons (X != P) in modelled NL4-3 Env, from the reference sequence. codon_nt gives the three NL4-3 reference nucleotide positions of the N, X and S/T codons. bnab_dependent marks sequons the provisional bNAb catalog relies on.",
+ "n_sequons": 31,
+ "env_modelled_range_nl43": [
+  1,
+  855
+ ],
+ "sequons": [
+  {
+   "nl43_env_position": 88,
+   "hxb2_position": 88,
+   "motif": "NVT",
+   "codon_nt": [
+    [
+     5693,
+     5694,
+     5695
+    ],
+    [
+     5696,
+     5697,
+     5698
+    ],
+    [
+     5699,
+     5700,
+     5701
+    ]
+   ],
+   "bnab_dependent": true
+  },
+  {
+   "nl43_env_position": 136,
+   "hxb2_position": 136,
+   "motif": "NDT",
+   "codon_nt": [
+    [
+     5837,
+     5838,
+     5839
+    ],
+    [
+     5840,
+     5841,
+     5842
+    ],
+    [
+     5843,
+     5844,
+     5845
+    ]
+   ],
+   "bnab_dependent": false
+  },
+  {
+   "nl43_env_position": 141,
+   "hxb2_position": 141,
+   "motif": "NSS",
+   "codon_nt": [
+    [
+     5852,
+     5853,
+     5854
+    ],
+    [
+     5855,
+     5856,
+     5857
+    ],
+    [
+     5858,
+     5859,
+     5860
+    ]
+   ],
+   "bnab_dependent": false
+  },
+  {
+   "nl43_env_position": 156,
+   "hxb2_position": 156,
+   "motif": "NCS",
+   "codon_nt": [
+    [
+     5897,
+     5898,
+     5899
+    ],
+    [
+     5900,
+     5901,
+     5902
+    ],
+    [
+     5903,
+     5904,
+     5905
+    ]
+   ],
+   "bnab_dependent": false
+  },
+  {
+   "nl43_env_position": 160,
+   "hxb2_position": 160,
+   "motif": "NIS",
+   "codon_nt": [
+    [
+     5909,
+     5910,
+     5911
+    ],
+    [
+     5912,
+     5913,
+     5914
+    ],
+    [
+     5915,
+     5916,
+     5917
+    ]
+   ],
+   "bnab_dependent": true
+  },
+  {
+   "nl43_env_position": 186,
+   "hxb2_position": 186,
+   "motif": "NTS",
+   "codon_nt": [
+    [
+     5987,
+     5988,
+     5989
+    ],
+    [
+     5990,
+     5991,
+     5992
+    ],
+    [
+     5993,
+     5994,
+     5995
+    ]
+   ],
+   "bnab_dependent": false
+  },
+  {
+   "nl43_env_position": 195,
+   "hxb2_position": 197,
+   "motif": "NTS",
+   "codon_nt": [
+    [
+     6014,
+     6015,
+     6016
+    ],
+    [
+     6017,
+     6018,
+     6019
+    ],
+    [
+     6020,
+     6021,
+     6022
+    ]
+   ],
+   "bnab_dependent": true
+  },
+  {
+   "nl43_env_position": 228,
+   "hxb2_position": 230,
+   "motif": "NKT",
+   "codon_nt": [
+    [
+     6113,
+     6114,
+     6115
+    ],
+    [
+     6116,
+     6117,
+     6118
+    ],
+    [
+     6119,
+     6120,
+     6121
+    ]
+   ],
+   "bnab_dependent": false
+  },
+  {
+   "nl43_env_position": 232,
+   "hxb2_position": 234,
+   "motif": "NGT",
+   "codon_nt": [
+    [
+     6125,
+     6126,
+     6127
+    ],
+    [
+     6128,
+     6129,
+     6130
+    ],
+    [
+     6131,
+     6132,
+     6133
+    ]
+   ],
+   "bnab_dependent": false
+  },
+  {
+   "nl43_env_position": 239,
+   "hxb2_position": 241,
+   "motif": "NVS",
+   "codon_nt": [
+    [
+     6146,
+     6147,
+     6148
+    ],
+    [
+     6149,
+     6150,
+     6151
+    ],
+    [
+     6152,
+     6153,
+     6154
+    ]
+   ],
+   "bnab_dependent": false
+  },
+  {
+   "nl43_env_position": 260,
+   "hxb2_position": 262,
+   "motif": "NGS",
+   "codon_nt": [
+    [
+     6209,
+     6210,
+     6211
+    ],
+    [
+     6212,
+     6213,
+     6214
+    ],
+    [
+     6215,
+     6216,
+     6217
+    ]
+   ],
+   "bnab_dependent": false
+  },
+  {
+   "nl43_env_position": 274,
+   "hxb2_position": 276,
+   "motif": "NFT",
+   "codon_nt": [
+    [
+     6251,
+     6252,
+     6253
+    ],
+    [
+     6254,
+     6255,
+     6256
+    ],
+    [
+     6257,
+     6258,
+     6259
+    ]
+   ],
+   "bnab_dependent": false
+  },
+  {
+   "nl43_env_position": 287,
+   "hxb2_position": 289,
+   "motif": "NTS",
+   "codon_nt": [
+    [
+     6290,
+     6291,
+     6292
+    ],
+    [
+     6293,
+     6294,
+     6295
+    ],
+    [
+     6296,
+     6297,
+     6298
+    ]
+   ],
+   "bnab_dependent": false
+  },
+  {
+   "nl43_env_position": 293,
+   "hxb2_position": 295,
+   "motif": "NCT",
+   "codon_nt": [
+    [
+     6308,
+     6309,
+     6310
+    ],
+    [
+     6311,
+     6312,
+     6313
+    ],
+    [
+     6314,
+     6315,
+     6316
+    ]
+   ],
+   "bnab_dependent": false
+  },
+  {
+   "nl43_env_position": 299,
+   "hxb2_position": 301,
+   "motif": "NNT",
+   "codon_nt": [
+    [
+     6326,
+     6327,
+     6328
+    ],
+    [
+     6329,
+     6330,
+     6331
+    ],
+    [
+     6332,
+     6333,
+     6334
+    ]
+   ],
+   "bnab_dependent": true
+  },
+  {
+   "nl43_env_position": 330,
+   "hxb2_position": 332,
+   "motif": "NIS",
+   "codon_nt": [
+    [
+     6419,
+     6420,
+     6421
+    ],
+    [
+     6422,
+     6423,
+     6424
+    ],
+    [
+     6425,
+     6426,
+     6427
+    ]
+   ],
+   "bnab_dependent": true
+  },
+  {
+   "nl43_env_position": 337,
+   "hxb2_position": 339,
+   "motif": "NAT",
+   "codon_nt": [
+    [
+     6440,
+     6441,
+     6442
+    ],
+    [
+     6443,
+     6444,
+     6445
+    ],
+    [
+     6446,
+     6447,
+     6448
+    ]
+   ],
+   "bnab_dependent": false
+  },
+  {
+   "nl43_env_position": 354,
+   "hxb2_position": 356,
+   "motif": "NKT",
+   "codon_nt": [
+    [
+     6491,
+     6492,
+     6493
+    ],
+    [
+     6494,
+     6495,
+     6496
+    ],
+    [
+     6497,
+     6498,
+     6499
+    ]
+   ],
+   "bnab_dependent": false
+  },
+  {
+   "nl43_env_position": 384,
+   "hxb2_position": 386,
+   "motif": "NST",
+   "codon_nt": [
+    [
+     6581,
+     6582,
+     6583
+    ],
+    [
+     6584,
+     6585,
+     6586
+    ],
+    [
+     6587,
+     6588,
+     6589
+    ]
+   ],
+   "bnab_dependent": false
+  },
+  {
+   "nl43_env_position": 390,
+   "hxb2_position": 392,
+   "motif": "NST",
+   "codon_nt": [
+    [
+     6599,
+     6600,
+     6601
+    ],
+    [
+     6602,
+     6603,
+     6604
+    ],
+    [
+     6605,
+     6606,
+     6607
+    ]
+   ],
+   "bnab_dependent": false
+  },
+  {
+   "nl43_env_position": 395,
+   "hxb2_position": 397,
+   "motif": "NST",
+   "codon_nt": [
+    [
+     6614,
+     6615,
+     6616
+    ],
+    [
+     6617,
+     6618,
+     6619
+    ],
+    [
+     6620,
+     6621,
+     6622
+    ]
+   ],
+   "bnab_dependent": false
+  },
+  {
+   "nl43_env_position": 404,
+   "hxb2_position": 406,
+   "motif": "NNT",
+   "codon_nt": [
+    [
+     6641,
+     6642,
+     6643
+    ],
+    [
+     6644,
+     6645,
+     6646
+    ],
+    [
+     6647,
+     6648,
+     6649
+    ]
+   ],
+   "bnab_dependent": false
+  },
+  {
+   "nl43_env_position": 446,
+   "hxb2_position": 448,
+   "motif": "NIT",
+   "codon_nt": [
+    [
+     6767,
+     6768,
+     6769
+    ],
+    [
+     6770,
+     6771,
+     6772
+    ],
+    [
+     6773,
+     6774,
+     6775
+    ]
+   ],
+   "bnab_dependent": false
+  },
+  {
+   "nl43_env_position": 461,
+   "hxb2_position": 463,
+   "motif": "NGS",
+   "codon_nt": [
+    [
+     6812,
+     6813,
+     6814
+    ],
+    [
+     6815,
+     6816,
+     6817
+    ],
+    [
+     6818,
+     6819,
+     6820
+    ]
+   ],
+   "bnab_dependent": false
+  },
+  {
+   "nl43_env_position": 609,
+   "hxb2_position": 611,
+   "motif": "NAS",
+   "codon_nt": [
+    [
+     7256,
+     7257,
+     7258
+    ],
+    [
+     7259,
+     7260,
+     7261
+    ],
+    [
+     7262,
+     7263,
+     7264
+    ]
+   ],
+   "bnab_dependent": true
+  },
+  {
+   "nl43_env_position": 614,
+   "hxb2_position": 616,
+   "motif": "NKS",
+   "codon_nt": [
+    [
+     7271,
+     7272,
+     7273
+    ],
+    [
+     7274,
+     7275,
+     7276
+    ],
+    [
+     7277,
+     7278,
+     7279
+    ]
+   ],
+   "bnab_dependent": false
+  },
+  {
+   "nl43_env_position": 623,
+   "hxb2_position": 625,
+   "motif": "NMT",
+   "codon_nt": [
+    [
+     7298,
+     7299,
+     7300
+    ],
+    [
+     7301,
+     7302,
+     7303
+    ],
+    [
+     7304,
+     7305,
+     7306
+    ]
+   ],
+   "bnab_dependent": false
+  },
+  {
+   "nl43_env_position": 635,
+   "hxb2_position": 637,
+   "motif": "NYT",
+   "codon_nt": [
+    [
+     7334,
+     7335,
+     7336
+    ],
+    [
+     7337,
+     7338,
+     7339
+    ],
+    [
+     7340,
+     7341,
+     7342
+    ]
+   ],
+   "bnab_dependent": false
+  },
+  {
+   "nl43_env_position": 672,
+   "hxb2_position": 674,
+   "motif": "NIT",
+   "codon_nt": [
+    [
+     7445,
+     7446,
+     7447
+    ],
+    [
+     7448,
+     7449,
+     7450
+    ],
+    [
+     7451,
+     7452,
+     7453
+    ]
+   ],
+   "bnab_dependent": false
+  },
+  {
+   "nl43_env_position": 748,
+   "hxb2_position": 750,
+   "motif": "NGS",
+   "codon_nt": [
+    [
+     7673,
+     7674,
+     7675
+    ],
+    [
+     7676,
+     7677,
+     7678
+    ],
+    [
+     7679,
+     7680,
+     7681
+    ]
+   ],
+   "bnab_dependent": false
+  },
+  {
+   "nl43_env_position": 814,
+   "hxb2_position": 816,
+   "motif": "NAT",
+   "codon_nt": [
+    [
+     7871,
+     7872,
+     7873
+    ],
+    [
+     7874,
+     7875,
+     7876
+    ],
+    [
+     7877,
+     7878,
+     7879
+    ]
+   ],
+   "bnab_dependent": false
+  }
+ ]
+}

@@ -1,0 +1,191 @@
+{
+  "note": "Selector tree for the DRM view. 'classes' are Stanford drug classes; 'strata' are the treatment strata present in that class's export, which mix class-level labels (PI, NRTI, NNRTI, INI, CAI) with individual drugs or regimens (ATV, LPV, EFV, DOR, RPV, DTG, CAB, ABC+XTC, AZT+XTC, TFV+XTC). 'naive' is treatment-naive and is the comparison baseline, not a treatment.",
+  "freq_pseudocount": 0.5,
+  "subtypes": [
+    "A",
+    "B",
+    "C",
+    "D",
+    "F",
+    "G",
+    "CRF01_AE",
+    "CRF02_AG"
+  ],
+  "classes": [
+    {
+      "class": "PI",
+      "label": "Protease inhibitors",
+      "target": "protease",
+      "protein": "PR",
+      "gene": "Pol",
+      "n_mutations": 59,
+      "position_range": [
+        10,
+        90
+      ],
+      "strata": [
+        {
+          "rx": "ATV",
+          "kind": "drug",
+          "n_rows": 59
+        },
+        {
+          "rx": "LPV",
+          "kind": "drug",
+          "n_rows": 59
+        },
+        {
+          "rx": "PI",
+          "kind": "class",
+          "n_rows": 59
+        },
+        {
+          "rx": "naive",
+          "kind": "naive",
+          "n_rows": 59
+        }
+      ],
+      "source_file": "PI.MixturesIncludedYes.UnpublishedIncludedNo.MoreThan0Perc.MoreThan1Occurrence.PatientPerMutCount.csv"
+    },
+    {
+      "class": "NRTI",
+      "label": "Nucleoside RT inhibitors",
+      "target": "reverse transcriptase",
+      "protein": "RT",
+      "gene": "Pol",
+      "n_mutations": 56,
+      "position_range": [
+        41,
+        219
+      ],
+      "strata": [
+        {
+          "rx": "ABC+XTC",
+          "kind": "drug",
+          "n_rows": 56
+        },
+        {
+          "rx": "AZT+XTC",
+          "kind": "drug",
+          "n_rows": 56
+        },
+        {
+          "rx": "NRTI",
+          "kind": "class",
+          "n_rows": 56
+        },
+        {
+          "rx": "TFV+XTC",
+          "kind": "drug",
+          "n_rows": 56
+        },
+        {
+          "rx": "naive",
+          "kind": "naive",
+          "n_rows": 56
+        }
+      ],
+      "source_file": "RTI.MixturesIncludedYes.UnpublishedIncludedNo.MoreThan0Perc.MoreThan1Occurrence.PatientPerMutCount.csv"
+    },
+    {
+      "class": "NNRTI",
+      "label": "Non-nucleoside RT inhibitors",
+      "target": "reverse transcriptase",
+      "protein": "RT",
+      "gene": "Pol",
+      "n_mutations": 57,
+      "position_range": [
+        90,
+        348
+      ],
+      "strata": [
+        {
+          "rx": "DOR",
+          "kind": "drug",
+          "n_rows": 57
+        },
+        {
+          "rx": "EFV",
+          "kind": "drug",
+          "n_rows": 57
+        },
+        {
+          "rx": "NNRTI",
+          "kind": "class",
+          "n_rows": 57
+        },
+        {
+          "rx": "RPV",
+          "kind": "drug",
+          "n_rows": 57
+        },
+        {
+          "rx": "naive",
+          "kind": "naive",
+          "n_rows": 57
+        }
+      ],
+      "source_file": "NNRTI.MixturesIncludedYes.UnpublishedIncludedNo.MoreThan0Perc.MoreThan1Occurrence.PatientPerMutCount.csv"
+    },
+    {
+      "class": "INI",
+      "label": "Integrase strand-transfer inhibitors",
+      "target": "integrase",
+      "protein": "IN",
+      "gene": "Pol",
+      "n_mutations": 54,
+      "position_range": [
+        51,
+        263
+      ],
+      "strata": [
+        {
+          "rx": "CAB",
+          "kind": "drug",
+          "n_rows": 54
+        },
+        {
+          "rx": "DTG",
+          "kind": "drug",
+          "n_rows": 54
+        },
+        {
+          "rx": "INI",
+          "kind": "class",
+          "n_rows": 54
+        },
+        {
+          "rx": "naive",
+          "kind": "naive",
+          "n_rows": 54
+        }
+      ],
+      "source_file": "INI.MixturesIncludedYes.UnpublishedIncludedNo.MoreThan0Perc.MoreThan1Occurrence.PatientCount.csv"
+    },
+    {
+      "class": "CAI",
+      "label": "Capsid inhibitors",
+      "target": "capsid",
+      "protein": "CA",
+      "gene": "Gag",
+      "n_mutations": 18,
+      "position_range": [
+        56,
+        107
+      ],
+      "strata": [
+        {
+          "rx": "CAI",
+          "kind": "class",
+          "n_rows": 18
+        },
+        {
+          "rx": "naive",
+          "kind": "naive",
+          "n_rows": 18
+        }
+      ],
+      "source_file": "CAI.MixturesIncludedYes.UnpublishedIncludedNo.MoreThan0Perc.MoreThan1Occurrence.PatientCount.csv"
+    }
+  ]
+}

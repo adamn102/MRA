@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: MIT -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'none'">
+<title>Overview &mdash; HIV-1 Mutation Rate Atlas</title>
+<link rel="stylesheet" href="css/mra.css">
+</head>
+<body>
+<main>
+<h1>HIV-1 Mutation Rate Atlas</h1>
+<p>A position-, mutation-type- and context-resolved map of <strong>de novo</strong> mutation
+rates across the HIV-1 genome, measured by ERR-Seq &mdash; UMI-based consensus sequencing of
+mutations accumulating in a single round of replication on an unmodified viral genome. Counts
+from wild-type libraries are modelled jointly with a control library capturing sequencing and
+PCR error, so the released quantity is the control-corrected <em>biological</em> rate per site
+per replication. Rates vary more than 1,000-fold across the genome.</p>
+
+<div id="privacy-slot"></div>
+
+<h2>What you can do here</h2>
+<ul>
+  <li><strong><a id="link-browse" href="browse.html">Browse the atlas</a></strong> &mdash;
+      query any protein and position for the reference amino acid and codon and the mutability
+      of every reachable amino-acid change at 1, 2 and 3 substitutions, with 95% intervals; or
+      paste a list of mutations such as <code>RT K65R</code> and get them all at once.</li>
+  <li><strong><a id="link-sequence" href="sequence.html">Your sequence</a></strong> &mdash;
+      submit one sequence or a multi-FASTA batch and get a custom atlas computed from
+      <em>your</em> codons and <em>your</em> local sequence contexts.</li>
+  <li><strong><a id="link-compare" href="compare.html">Compare &amp; genome track</a></strong>
+      &mdash; see which amino-acid changes have become more or less accessible in your sequence
+      relative to NL4-3, at which positions the codon differs, and the rate along the genome
+      with your sequence overlaid.</li>
+  <li><strong><a id="link-download" href="download.html">Download</a></strong> &mdash; the
+      underlying tables, a data dictionary and a citation block.</li>
+</ul>
+
+<h2>Two quantities</h2>
+<p><strong>Nucleotide rate.</strong> For a reference position and one of 12 base substitutions
+(plus insertion and deletion), the per-replication rate.</p>
+<p><strong>Amino-acid mutability, <code>mu_aa</code>.</strong> For a codon and a target amino
+acid, the rate summed over every nucleotide path from that codon to a codon encoding the
+target. Summed, not averaged or maximised, because one codon can often reach the same amino
+acid by more than one route. The number of paths and the minimum number of substitutions
+required are reported alongside.</p>
+
+<h2>Coverage and coordinates</h2>
+<div id="scope-slot"></div>
+<p>Every result carries <strong>HXB2 protein numbering</strong> &mdash; <code>RT 103</code>,
+<code>PR 46</code>, <code>IN 148</code> &mdash; because that is the clinical and publication
+standard and what Stanford HIVDB uses. Results computed from a submitted sequence also carry
+<strong>your own coordinates</strong>. The NL4-3 reference position is carried as a third
+column for traceability; it is an internal coordinate.</p>
+<p class="caveat">Whole-genome HXB2 <em>nucleotide</em> coordinates are not reported. The atlas
+reference starts at the gag start codon with indels downstream, so a constant offset would be
+wrong, and the shipped HXB2 mapping is amino-acid level. Protein-level HXB2 numbering is what
+the data supports.</p>
+</main>
+<script type="module" src="js/index.js"></script>
+</body>
+</html>
