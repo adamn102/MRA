@@ -6,6 +6,6 @@
 # no config file. This exists only for `wrangler pages deploy` from a terminal or CI.
 #
 # `name` is the Pages project; pick something neutral, not tied to any model name.
-name = "mra-portal"
+name = "mra-demo"
 pages_build_output_dir = "."
 compatibility_date = "2026-01-01"
