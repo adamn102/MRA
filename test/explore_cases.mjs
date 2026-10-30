@@ -7,7 +7,7 @@
 // aggregation that silently shifts the track will fail here rather than ship.
 
 import fs from "node:fs";
-import { perSiteSupply, smoothSeries, buildFrameIndex, geneSpans, oneStepSlices }
+import { perSiteSupply, smoothSeries, buildFrameIndex, geneSegments, oneStepSlices }
   from "../js/explore_core.js";
 
 const vArg = process.argv.indexOf("--version");
@@ -140,13 +140,32 @@ check("slices are sorted by descending supply",
 check("every slice is genuinely one nucleotide away",
       slices.every((r) => r.min_nt_changes === 1));
 
-// --- 5. gene spans ----------------------------------------------------------------
-const spans = geneSpans(reference.proteins);
-check("gene spans are returned in ascending order",
-      spans.every((s, i) => i === 0 || spans[i - 1].start <= s.start));
-check("Gag and Env are both shaded",
-      spans.some((s) => s.label === "Gag") && spans.some((s) => s.label === "Env"),
-      spans.map((s) => s.label).join(","));
+// --- 5. gene annotation band --------------------------------------------------------
+const segs = geneSegments(reference.proteins);
+check("segments are returned in ascending order",
+      segs.every((s, i) => i === 0 || segs[i - 1].start <= s.start));
+check("all nine genes appear in the band",
+      ["Gag", "Pol", "Vif", "Vpr", "Tat", "Rev", "Vpu", "Env", "Nef"]
+        .every((g) => segs.some((s) => s.label === g)),
+      [...new Set(segs.map((s) => s.label))].join(","));
+// tat and rev are spliced: two exons each, either side of env. A single min-to-max box would
+// run straight across env and imply continuous coding, so each must come back as two segments.
+for (const g of ["Tat", "Rev"]) {
+  const mine = segs.filter((s) => s.label === g);
+  check(`${g} is split into its two exons`, mine.length === 2,
+        mine.map((s) => `${s.start}-${s.end}`).join(" "));
+}
+check("no segment contains a non-coding gap",
+      segs.every((s) => s.end >= s.start));
+// every segment must be inside the modelled region, or the band would annotate rows the
+// track cannot plot
+check("segments lie inside the modelled region",
+      segs.every((s) => s.start >= reference.modelled_region.first_position &&
+                        s.end <= reference.modelled_region.last_position));
+// the gag/pol overlap must be visible as two separate segments that genuinely overlap
+const gag = segs.find((s) => s.label === "Gag"), pol = segs.find((s) => s.label === "Pol");
+check("gag and pol overlap in the band", gag.end > pol.start,
+      `gag ends ${gag.end}, pol starts ${pol.start}`);
 
 console.log("=".repeat(60));
 if (failures) { console.log(`${failures} CHECK(S) FAILED`); process.exit(1); }

@@ -105,3 +105,16 @@ pre.citation { background: var(--panel); border: 1px solid var(--rule); padding:
   font-size: 12px; white-space: pre-wrap; }
 
 @media (max-width: 900px) { .controls { flex-direction: column; align-items: stretch; } }
+
+/* --- genome-track position slider ---------------------------------------- */
+/* Aligned to the track's plot area rather than the figure: the SVG is 1020 units wide with
+   62 of left padding and 840 of plot, and it scales by viewBox, so these percentages keep
+   the thumb over the matching x-axis position at any container width. */
+.track-slider { max-width: 1020px; margin: 2px 0 0; }
+.track-slider input[type="range"] {
+  display: block;
+  margin-left: 6.0784%;                /* 62 / 1020  */
+  width: 82.3529%;                     /* 840 / 1020 */
+  accent-color: #b5485d;               /* same hue as the marker line on the track */
+  cursor: pointer;
+}

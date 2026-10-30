@@ -78,16 +78,31 @@ export function buildFrameIndex(proteins, aaByPosition) {
   return frameAt;
 }
 
-/** Gene spans wide enough to be worth shading on the track. */
-export function geneSpans(proteins, minWidth = 300) {
-  const spans = [];
+/**
+ * Contiguous coding segments per protein, for the gene annotation band.
+ *
+ * Taken as runs of consecutive nucleotides rather than first-to-last, because tat and rev are
+ * spliced: their first and last codons sit either side of a multi-kilobase intron, so a single
+ * box from min to max would draw them straight across env and imply continuous coding. A run
+ * per exon is what is actually true. Segments shorter than `minWidth` are dropped as unlabelable.
+ */
+export function geneSegments(proteins, minWidth = 40) {
+  const out = [];
   for (const [protein, rec] of Object.entries(proteins)) {
-    const c = rec.codon_nt;
-    if (!c || !c.length) continue;
-    const start = Math.min(...c[0]), end = Math.max(...c[c.length - 1]);
-    if (end - start > minWidth) spans.push({ start, end, label: protein });
+    const codons = rec.codon_nt;
+    if (!codons || !codons.length) continue;
+    const nts = [...new Set(codons.flat())].sort((a, b) => a - b);
+    let start = nts[0], prev = nts[0];
+    for (let i = 1; i <= nts.length; i++) {
+      const cur = nts[i];
+      if (cur !== prev + 1) {                     // run ended (or array exhausted)
+        if (prev - start + 1 >= minWidth) out.push({ start, end: prev, label: protein });
+        start = cur;
+      }
+      prev = cur;
+    }
   }
-  return spans.sort((a, b) => a.start - b.start);
+  return out.sort((a, b) => a.start - b.start || a.end - b.end);
 }
 
 /** One-step amino-acid changes at a codon, largest supply first -- the pie's slices. */

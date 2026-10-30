@@ -112,9 +112,25 @@ export function barChart(container, rows, options = {}) {
 export function genomeTrack(container, series, options = {}) {
   container.innerHTML = "";
   const width = options.width || 1020, height = options.height || 260;
-  const padLeft = 62, padRight = 118, padTop = 24, padBottom = 40;
-  const plotW = width - padLeft - padRight, plotH = height - padTop - padBottom;
+  const padLeft = 62, padRight = 118, padBottom = 40;
   const x0 = options.xMin || 1, x1 = options.xMax || 8213;
+
+  // An explicit gene band (labelled boxes above the plot) is opt-in via `geneBand`, so the
+  // older faint `spans` shading used elsewhere keeps its appearance. Overlapping reading
+  // frames -- gag/pol, and tat/rev/vpu/env -- are packed onto as many rows as they need,
+  // because drawing them on one row would either hide genes or imply they do not overlap.
+  const band = (options.geneBand || []).slice().sort((a, b) => a.start - b.start);
+  const bandRows = [];
+  for (const g of band) {
+    let r = 0;
+    while (bandRows[r] && bandRows[r].some((o) => !(g.start > o.end || g.end < o.start))) r++;
+    (bandRows[r] = bandRows[r] || []).push(g);
+    g._row = r;
+  }
+  const BOX_H = 12, ROW_GAP = 2;
+  const bandH = bandRows.length ? bandRows.length * (BOX_H + ROW_GAP) + 6 : 0;
+  const padTop = 24 + bandH;
+  const plotW = width - padLeft - padRight, plotH = height - padTop - padBottom;
 
   const all = series.flatMap((s) => s.points.map((p) => p[1])).filter((v) => v > 0);
   if (!all.length) {
@@ -137,6 +153,29 @@ export function genomeTrack(container, series, options = {}) {
     svg.appendChild(el("text", { x: (sx(span.start) + sx(span.end)) / 2, y: padTop - 3,
                                  "text-anchor": "middle", "font-size": 9, fill: "#5c6670" },
                        span.label || ""));
+  }
+
+  // Labelled gene band. The gene containing the marker is filled solid so the eye lands on
+  // it; the rest are tinted. A box too narrow for an inside label gets the label above it.
+  for (const g of band) {
+    const gx = sx(g.start), gw = Math.max(sx(g.end) - sx(g.start), 2);
+    const gy = 20 + g._row * (BOX_H + ROW_GAP);
+    const hot = Number.isFinite(options.marker) &&
+                options.marker >= g.start && options.marker <= g.end;
+    svg.appendChild(el("rect", { x: gx, y: gy, width: gw, height: BOX_H, rx: 2,
+                                 fill: hot ? "#2f4b7c" : "#ccd8e6",
+                                 stroke: hot ? "#22395e" : "#9fb0c6", "stroke-width": 0.7 }));
+    // Faint guide down the plot marks where this gene starts, so the band and the curve line up.
+    svg.appendChild(el("line", { x1: gx, x2: gx, y1: padTop, y2: padTop + plotH,
+                                 stroke: "#c9d4e2", "stroke-width": 0.6, "stroke-dasharray": "2 4" }));
+    if (gw >= 20) {
+      svg.appendChild(el("text", { x: gx + gw / 2, y: gy + BOX_H - 3, "text-anchor": "middle",
+                                   "font-size": 8.5, fill: hot ? "#ffffff" : "#3c4a5c" },
+                         g.label || ""));
+    } else {
+      svg.appendChild(el("text", { x: gx + gw / 2, y: gy - 2, "text-anchor": "middle",
+                                   "font-size": 8, fill: "#3c4a5c" }, g.label || ""));
+    }
   }
 
   for (const e of niceLogTicks(yLo, yHi)) {

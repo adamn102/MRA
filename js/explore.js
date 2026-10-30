@@ -17,7 +17,7 @@ import { loadSmallAssets, loadNucleotideLayer, loadAminoAcidLayer } from "./data
 import { renderTable, formatRate } from "./table.js";
 import { genomeTrack, pieChart } from "./chart.js";
 import { MraEngine } from "./mra_engine.js";
-import { perSiteSupply, smoothSeries, buildFrameIndex, geneSpans, oneStepSlices } from "./explore_core.js";
+import { perSiteSupply, smoothSeries, buildFrameIndex, geneSegments, oneStepSlices } from "./explore_core.js";
 
 const page = await bootstrapPage("explore.html");
 document.getElementById("scope-slot").appendChild(note(
@@ -48,7 +48,7 @@ const smoothed = (field, win) => smoothSeries(SITES, perSite, field, win);
 // Reverse index: nucleotide -> every reading frame that codes at that nucleotide.
 const frameAt = buildFrameIndex(assets.reference.proteins, aaLayer.byPosition);
 
-const GENE_SPANS = geneSpans(assets.reference.proteins);
+const GENE_SPANS = geneSegments(assets.reference.proteins);
 
 // ---------------------------------------------------------------------------------
 const elWin   = document.getElementById("explore-window");
@@ -77,8 +77,8 @@ function drawTrack() {
     { label: CLASS_LABEL[cls], colour: CLASS_COLOUR[cls], points: pts, width: 1.1 },
   ], {
     title: `Smoothed ${CLASS_LABEL[cls]} along the genome`,
-    xMin: FIRST, xMax: LAST, spans: GENE_SPANS,
-    width: 1020, height: 270,
+    xMin: FIRST, xMax: LAST, geneBand: GENE_SPANS,
+    width: 1020, height: 300,
     yLabel: "supply per site per replication",
     marker: selectedNt, markerLabel: hx || String(selectedNt),
     onSelect: (pos) => selectPosition(pos, "track"),
@@ -91,8 +91,9 @@ function drawTrack() {
   document.getElementById("explore-track-caption").innerHTML =
     `Centred running mean of the per-site rate over a ${win} nt window, summed across ` +
     `substitution classes${cls === "total" ? "" : " and restricted to " + CLASS_LABEL[cls]}. ` +
-    `Insertions and deletions are excluded. Grey shading marks genes; overlapping reading ` +
-    `frames are drawn at their own extents. Genome median ${formatRate(med)}` +
+    `Insertions and deletions are excluded. The band above the plot shows coding segments; ` +
+    `overlapping reading frames sit on separate rows, and spliced genes (tat, rev) appear as ` +
+    `one box per exon. The gene holding the marker is filled solid. Genome median ${formatRate(med)}` +
     (here ? `, value at the marker ${formatRate(here)}` : "") + `. ` +
     `<strong>G\u2192A carries most of the total supply</strong>, so the total track partly ` +
     `traces G density &mdash; use the class selector to separate the two.`;
