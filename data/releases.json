@@ -59,8 +59,9 @@
           "gzip_bytes": 115528
         },
         "bnab_catalog.csv": {
-          "sha256": "13b2d642928a84578c6006cdbea4a98ab3ed9c019ec31febbe51011dbad2f00f",
-          "gzip_bytes": 867
+          "sha256": "ac52c4bb6fa88b72359ab60964c0c8541dec084867317391880d13677cad88c3",
+          "gzip_bytes": 866,
+          "bytes": 2875
         },
         "citation.json": {
           "sha256": "fbd66539a033e594801bb22ed153bbb4cfc5be8ffde24aee41f95f0e98493a54",
