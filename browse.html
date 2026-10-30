@@ -8,6 +8,7 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'none'">
 <title>Browse the atlas &mdash; HIV-1 Mutation Rate Atlas</title>
 <link rel="stylesheet" href="css/mra.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
 <main>
@@ -33,7 +34,9 @@ nucleotide substitutions required and the number of paths.</p>
 <div id="dashboard-status" class="caveat">Loading the atlas tables&hellip;</div>
 <div id="dashboard-head"></div>
 <figure class="chart"><div id="dashboard-chart"></div>
-  <figcaption id="dashboard-caption"></figcaption></figure>
+  <figcaption id="dashboard-caption"></figcaption>
+  <div style="margin-top: 0.5em; text-align: center;"><button id="download-png" class="secondary" style="margin-top: 0.5em;">Download as PNG</button></div>
+</figure>
 <div id="dashboard-table"></div>
 <h3 id="paths-heading" hidden>Individual codon paths at this position</h3>
 <div id="dashboard-paths"></div>

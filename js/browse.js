@@ -14,6 +14,52 @@ import { barChart, pieChart } from "./chart.js";
 import { MraEngine } from "./mra_engine.js";
 import { resolveMutation } from "./mutations.js";
 
+
+/**
+ * Download the current dashboard as a PNG: query info + pie/bar chart.
+ */
+async function downloadDashboardPNG() {
+  const button = document.getElementById("download-png");
+  if (!button) return;
+  
+  button.disabled = true;
+  button.textContent = "Generating...";
+  
+  try {
+    // Collect the entire dashboard section: query info + chart
+    const dashboard = document.querySelector("main") || document.body;
+    
+    // Use html2canvas to render the dashboard as an image
+    const canvas = await html2canvas(dashboard, {
+      backgroundColor: "#ffffff",
+      scale: 2,                    // 2x for crisp output
+      logging: false,
+      useCORS: true,
+      allowTaint: true,
+    });
+    
+    // Convert canvas to PNG blob and download
+    canvas.toBlob((blob) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const date = new Date().toISOString().split("T")[0];  // YYYY-MM-DD
+      a.href = url;
+      a.download = `mra_atlas_${date}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      button.disabled = false;
+      button.textContent = "Download as PNG";
+    });
+  } catch (err) {
+    console.error("PNG download failed:", err);
+    button.disabled = false;
+    button.textContent = "Download failed";
+    setTimeout(() => { button.textContent = "Download as PNG"; }, 3000);
+  }
+}
 const page = await bootstrapPage("browse.html");
 const region = page.release.modelled_region;
 document.getElementById("scope-slot").appendChild(note(
@@ -194,6 +240,7 @@ document.getElementById("go").addEventListener("click", () => {
   window.history.replaceState({}, "", url);
   showPosition(key, pos);
 });
+document.getElementById("download-png")?.addEventListener("click", downloadDashboardPNG);
 document.getElementById("position").addEventListener("keydown",
   (e) => { if (e.key === "Enter") document.getElementById("go").click(); });
 
