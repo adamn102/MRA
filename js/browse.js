@@ -26,8 +26,16 @@ async function downloadDashboardPNG() {
   button.textContent = "Generating...";
   
   try {
+    // Check if html2canvas loaded
+    if (typeof html2canvas === "undefined") {
+      throw new Error("html2canvas library failed to load. Please refresh the page and try again.");
+    }
+    
     // Collect the entire dashboard section: query info + chart
     const dashboard = document.querySelector("main") || document.body;
+    if (!dashboard) {
+      throw new Error("Dashboard element not found on page.");
+    }
     
     // Use html2canvas to render the dashboard as an image
     const canvas = await html2canvas(dashboard, {
@@ -36,27 +44,41 @@ async function downloadDashboardPNG() {
       logging: false,
       useCORS: true,
       allowTaint: true,
+      proxy: null,                 // Disable proxy to avoid CORS issues
+      timeout: 30000,              // 30 second timeout
     });
     
-    // Convert canvas to PNG blob and download
-    canvas.toBlob((blob) => {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      const date = new Date().toISOString().split("T")[0];  // YYYY-MM-DD
-      a.href = url;
-      a.download = `mra_atlas_${date}.png`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      
-      button.disabled = false;
-      button.textContent = "Download as PNG";
+    // Convert canvas to PNG blob and download (properly awaited)
+    return new Promise((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        try {
+          if (!blob) {
+            throw new Error("Failed to create blob from canvas.");
+          }
+          
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          const date = new Date().toISOString().split("T")[0];  // YYYY-MM-DD
+          a.href = url;
+          a.download = `mra_atlas_${date}.png`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          
+          button.disabled = false;
+          button.textContent = "Download as PNG";
+          resolve();
+        } catch (err) {
+          reject(err);
+        }
+      }, "image/png");
     });
   } catch (err) {
     console.error("PNG download failed:", err);
     button.disabled = false;
     button.textContent = "Download failed";
+    alert("PNG download failed: " + err.message);
     setTimeout(() => { button.textContent = "Download as PNG"; }, 3000);
   }
 }
