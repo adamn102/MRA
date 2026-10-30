@@ -106,7 +106,7 @@ for rel in releases["releases"]:
                  f"{manifest['total_gzip_bytes']/1048576:.2f} MB gzipped, checksums match")
 
 # --- 6. no third-party code ----------------------------------------------------
-vendored = [p for p in (ROOT / "vendor").glob("*") if p.suffix in (".js", ".css", ".mjs")]
+vendored = [p for p in (ROOT / "vendor").rglob("*") if p.suffix in (".js", ".css", ".mjs")]
 notes.append(f"vendor/: {len(vendored)} third-party file(s)")
 
 

@@ -22,10 +22,12 @@ const PAGES = [
 
 export const PRIVACY_TEXT =
   "Sequences you paste or upload never leave your computer. This is a static site: " +
-  "there is no server, no database, no analytics, no telemetry, no error reporter and " +
-  "no third-party code. Alignment and all rate calculations run inside your browser. " +
-  "You can confirm this by opening your browser's network panel \u2014 after the page and " +
-  "its data files load, submitting a sequence produces no further requests \u2014 or by " +
+  "there is no server, no database, no analytics, no telemetry and no error reporter. " +
+  "Alignment and all rate calculations run inside your browser. The one piece of " +
+  "third-party code is html2canvas, which turns a chart into a PNG for download; it is " +
+  "served from this site rather than a CDN, and makes no network requests of its own. " +
+  "You can confirm all of this by opening your browser's network panel \u2014 after the page " +
+  "and its data files load, submitting a sequence produces no further requests \u2014 or by " +
   "disconnecting from the network and using the tool offline.";
 
 /** Build the header, nav and version controls; returns the resolved version. */
