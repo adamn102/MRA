@@ -160,6 +160,23 @@ export class MraEngine {
     const hit = table.get(nl43AaPosition);
     return hit === undefined ? null : hit;             // null = an NL4-3 insertion vs HXB2
   }
+  /**
+   * Reverse lookup: given an HXB2 position, find the NL4-3 position.
+   * Returns null if the HXB2 position doesn't exist in this protein.
+   */
+  nl43PositionFromHxb2(protein, hxb2AaPosition) {
+    const table = this.nl43ToHxb2[protein];
+    if (!table) return hxb2AaPosition;                 // identity mapping for proteins without HXB2
+    
+    // Reverse search: iterate through the forward mapping
+    for (const [nl43Pos, hxb2Pos] of table.entries()) {
+      if (hxb2Pos === hxb2AaPosition) {
+        return nl43Pos;
+      }
+    }
+    return null;                                       // HXB2 position not found
+  }
+
 
   /** Sub-protein and its own numbering, e.g. Pol 253 -> {abbrev: "RT", position: 103}. */
   subProteinFor(protein, aaPosition) {

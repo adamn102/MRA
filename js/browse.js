@@ -228,10 +228,24 @@ async function showPosition(key, ownPosition) {
 
 document.getElementById("go").addEventListener("click", () => {
   const key = select.value;
-  const pos = Number(document.getElementById("position").value);
-  if (!Number.isInteger(pos) || pos < 1) {
+  const posInput = Number(document.getElementById("position").value);
+  const coordSystem = document.getElementById("coord-system")?.value || "NL4-3";
+  
+  if (!Number.isInteger(posInput) || posInput < 1) {
     showError(document.getElementById("dashboard-head"), "Enter a positive integer position.");
     return;
+  }
+  
+  // Convert HXB2 to NL4-3 if needed
+  let pos = posInput;
+  if (coordSystem === "HXB2") {
+    // Reverse lookup: find NL4-3 position that maps to this HXB2 position
+    const nl43Pos = engine.nl43PositionFromHxb2(key, posInput);
+    if (nl43Pos === null) {
+      showError(document.getElementById("dashboard-head"), `HXB2 position ${posInput} not found in ${key}. Try NL4-3 numbering.`);
+      return;
+    }
+    pos = nl43Pos;
   }
   const url = new URL(window.location.href);
   url.searchParams.set("protein", key);
