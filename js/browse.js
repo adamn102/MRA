@@ -31,10 +31,10 @@ async function downloadDashboardPNG() {
       throw new Error("html2canvas library failed to load. Please refresh the page and try again.");
     }
     
-    // Collect the entire dashboard section: query info + chart
-    const dashboard = document.querySelector("main") || document.body;
+    // Collect only the Position Dashboard section (title through pie chart)
+    const dashboard = document.getElementById("dashboard-export");
     if (!dashboard) {
-      throw new Error("Dashboard element not found on page.");
+      throw new Error("Dashboard export section not found on page. Has the position been loaded?");
     }
     
     // Use html2canvas to render the dashboard as an image

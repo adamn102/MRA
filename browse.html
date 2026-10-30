@@ -5,16 +5,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://cdnjs.cloudflare.com; worker-src 'self'; base-uri 'self'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'none'">
 <title>Browse the atlas &mdash; HIV-1 Mutation Rate Atlas</title>
 <link rel="stylesheet" href="css/mra.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="vendor/html2canvas/html2canvas.min.js"></script>
 </head>
 <body>
 <main>
 <h1>Browse the published NL4-3 atlas</h1>
 <div id="scope-slot"></div>
 
+<div id="dashboard-export">
 <h2>Position dashboard</h2>
 <p>Pick a protein and a position. You get the reference amino acid and codon, and the
 mutability of every reachable amino-acid change, with its 95% interval, the minimum number of
@@ -44,6 +45,7 @@ nucleotide substitutions required and the number of paths.</p>
   <figcaption id="dashboard-caption"></figcaption>
   <div style="margin-top: 0.5em; text-align: center;"><button id="download-png" class="secondary" style="margin-top: 0.5em;">Download as PNG</button></div>
 </figure>
+</div>
 <div id="dashboard-table"></div>
 <h3 id="paths-heading" hidden>Individual codon paths at this position</h3>
 <div id="dashboard-paths"></div>
