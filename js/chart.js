@@ -173,6 +173,32 @@ export function genomeTrack(container, series, options = {}) {
                                "text-anchor": "middle",
                                transform: `rotate(-90 11 ${padTop + plotH / 2})` },
                      options.yLabel || "rate per site per replication"));
+
+  // Optional marker at a selected position, drawn last so it sits above the series.
+  if (Number.isFinite(options.marker) && options.marker >= x0 && options.marker <= x1) {
+    const mx = sx(options.marker);
+    svg.appendChild(el("line", { x1: mx, x2: mx, y1: padTop, y2: padTop + plotH,
+                                 stroke: "#b5485d", "stroke-width": 1.2,
+                                 "stroke-dasharray": "4 3" }));
+    svg.appendChild(el("text", { x: mx + 4, y: padTop + 10, "font-size": 9, fill: "#b5485d" },
+                       options.markerLabel || String(options.marker)));
+  }
+
+  // Optional click-to-select over the plot area. The overlay is transparent and sits on
+  // top, so a click anywhere in the plot maps to a reference position.
+  if (typeof options.onSelect === "function") {
+    const hit = el("rect", { x: padLeft, y: padTop, width: plotW, height: plotH,
+                             fill: "transparent", cursor: "crosshair" });
+    hit.addEventListener("click", (ev) => {
+      const box = svg.getBoundingClientRect();
+      // getBoundingClientRect is in CSS pixels; the SVG may be scaled by its viewBox.
+      const scale = box.width / width;
+      const px = (ev.clientX - box.left) / scale;
+      const pos = Math.round(x0 + ((px - padLeft) / plotW) * (x1 - x0));
+      options.onSelect(Math.min(Math.max(pos, x0), x1));
+    });
+    svg.appendChild(hit);
+  }
   container.appendChild(svg);
 }
 
