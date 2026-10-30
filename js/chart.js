@@ -224,3 +224,71 @@ export function dotPlot(container, rows, options = {}) {
                      options.xLabel || "log2 fold change vs NL4-3  (left = less accessible)"));
   container.appendChild(svg);
 }
+
+// ---------------------------------------------------------------------------------
+/**
+ * Pie chart of mutational supply across a set of amino-acid changes. Each slice is one
+ * target amino acid; the slice angle is its share of the total supply. A side legend
+ * carries the absolute rate and percentage, so the slices stay uncluttered.
+ *
+ * slices: [{label, value, highlight?}]  (value = mu_aa; non-positive values dropped)
+ */
+export function pieChart(container, slices, options = {}) {
+  container.innerHTML = "";
+  const data = slices.filter((s) => s.value > 0).sort((a, b) => b.value - a.value);
+  if (!data.length) {
+    container.appendChild(Object.assign(document.createElement("p"),
+      { className: "caveat", textContent: options.emptyMessage || "No changes to plot." }));
+    return;
+  }
+  const total = data.reduce((t, s) => t + s.value, 0);
+  const width = options.width || 680, height = options.height || 300;
+  const cx = 150, cy = height / 2, r = 110;
+
+  // A categorical palette; the highlighted slice (if any) takes the lead colour.
+  const palette = ["#0b5c8a", "#c2561a", "#1f7a3f", "#6b3fa0", "#8a6d1f", "#2f7fa8",
+                   "#a4262c", "#5c6670", "#c08a1e", "#3a7d5d", "#7a4ea0", "#1d6a8a"];
+  const colour = (i, s) => s.highlight ? "#c2561a" : palette[i % palette.length];
+
+  const svg = svgRoot(width, height, options.title);
+  if (options.title) svg.appendChild(el("text", { x: 0, y: 13, "font-size": 12 }, options.title));
+
+  let angle = -Math.PI / 2;   // start at 12 o'clock
+  data.forEach((s, i) => {
+    const frac = s.value / total;
+    const a0 = angle, a1 = angle + frac * 2 * Math.PI;
+    angle = a1;
+    const large = a1 - a0 > Math.PI ? 1 : 0;
+    const x0 = cx + r * Math.cos(a0), y0 = cy + r * Math.sin(a0);
+    const x1 = cx + r * Math.cos(a1), y1 = cy + r * Math.sin(a1);
+    // a single 100% slice can't be drawn as an arc (start==end); draw a full circle
+    if (data.length === 1) {
+      svg.appendChild(el("circle", { cx, cy, r, fill: colour(i, s), "fill-opacity": 0.85 }));
+    } else {
+      const d = `M ${cx} ${cy} L ${x0.toFixed(2)} ${y0.toFixed(2)} ` +
+                `A ${r} ${r} 0 ${large} 1 ${x1.toFixed(2)} ${y1.toFixed(2)} Z`;
+      svg.appendChild(el("path", { d, fill: colour(i, s), "fill-opacity": 0.85,
+                                   stroke: "#fff", "stroke-width": 1 }));
+    }
+    // label the slice with the amino acid if it is big enough to read
+    if (frac > 0.05) {
+      const mid = (a0 + a1) / 2;
+      const lx = cx + r * 0.62 * Math.cos(mid), ly = cy + r * 0.62 * Math.sin(mid);
+      svg.appendChild(el("text", { x: lx, y: ly + 3, "text-anchor": "middle", "font-size": 11,
+                                   fill: "#fff", "font-weight": 600 }, s.label));
+    }
+  });
+
+  // legend
+  const lx = cx + r + 40;
+  let ly = cy - data.length * 8;
+  data.forEach((s, i) => {
+    svg.appendChild(el("rect", { x: lx, y: ly - 8, width: 10, height: 10,
+                                 fill: colour(i, s), "fill-opacity": 0.85 }));
+    const pct = ((s.value / total) * 100).toFixed(1);
+    svg.appendChild(el("text", { x: lx + 15, y: ly, "font-size": 11, fill: "#1b1f23" },
+      `${s.label}  ${pct}%  (${s.value.toExponential(2)})`));
+    ly += 17;
+  });
+  container.appendChild(svg);
+}

@@ -250,8 +250,7 @@ async function showDetail(index, row, out, slot) {
   slot.appendChild(aaSlot);
   renderTable(aaSlot, {
     columns: [
-      { key: "hxb2_label", label: "HXB2", title: "Clinical / publication numbering" },
-      { key: "aa_change", label: "Change" },
+      { key: "hxb2_change", label: "Mutation (HXB2)", title: "Clinical / publication numbering" },
       { key: "codon", label: "Your codon", title: "Read from your sequence. This is what differs between viruses." },
       { key: "query_nt_start", label: "Your nt", type: "num", title: "1-based position in the sequence you submitted" },
       { key: "query_codon_number", label: "Your codon #", type: "num" },
@@ -259,6 +258,7 @@ async function showDetail(index, row, out, slot) {
       { key: "interval", label: "95% interval" },
       { key: "min_nt_changes", label: "min nt", type: "num" },
       { key: "n_paths", label: "paths", type: "num" },
+      { key: "aa_change", label: "NL4-3 aa change", title: "Same change in NL4-3 gene numbering" },
       { key: "position", label: "NL4-3 aa", type: "num", title: "Internal coordinate, for traceability" },
     ],
     rows: detail.aa.map((r) => ({ ...r,

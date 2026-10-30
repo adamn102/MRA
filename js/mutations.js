@@ -80,6 +80,7 @@ export function resolveMutation(line, { engine, proteins, lookup }) {
     line: trimmed,
     label: `${label} ${position}`,
     hxb2: engine.hxb2Label(protein, genePosition),
+    hxb2_change: engine.hxb2Mutation(protein, genePosition, observedRef, altAa),
     protein,
     gene_position: genePosition,
     aa_change: hit.aa_change,

@@ -10,7 +10,7 @@
 import { bootstrapPage, note, caveat, showError, exportProvenance, shareButton, NEF_NOTE } from "./page.js";
 import { loadSmallAssets, loadAminoAcidLayer, loadPathShard } from "./data.js";
 import { renderTable, formatRate } from "./table.js";
-import { barChart } from "./chart.js";
+import { barChart, pieChart } from "./chart.js";
 import { MraEngine } from "./mra_engine.js";
 import { resolveMutation } from "./mutations.js";
 
@@ -98,29 +98,40 @@ async function showPosition(key, ownPosition) {
     (target.offset ? ` (${key} ${ownPosition})` : "") +
     `; NL4-3 reference nucleotides ${refNt[0].toLocaleString()}\u2013${refNt[2].toLocaleString()}.</p>`;
 
-  // Bar chart: relative supply across alternatives, one-substitution changes first.
   const sorted = rows.slice().sort((a, b) => b.mu_aa - a.mu_aa);
-  barChart(chart, sorted.map((r) => ({
-    label: `${r.alt_aa}${r.synonymous ? " (syn)" : ""}`,
-    value: r.mu_aa, lo: r.mu_aa_lo95, hi: r.mu_aa_hi95,
-    highlight: r.min_nt_changes === 1,
-    note: `${r.min_nt_changes} nt`,
-  })), { title: `Mutational supply to each alternative amino acid at ${hxb2}`, width: 740 });
-  caption.innerHTML =
-    "Bars are mutability relative to the largest alternative at this position; whiskers are the " +
-    "95% interval. Highlighted bars are reachable by a <strong>single</strong> nucleotide " +
-    "substitution. &ldquo;syn&rdquo; marks a synonymous change. Absolute rates are printed at the right.";
+  // Pie of the ONE-nucleotide-accessible amino-acid changes: each slice is a reachable
+  // target amino acid, sized by its share of the single-step mutational supply at this
+  // position. One-step changes are the ones actually generated at appreciable rate, so
+  // the pie shows where supply goes when a single substitution occurs here.
+  const oneStep = sorted.filter((r) => r.min_nt_changes === 1);
+  if (oneStep.length) {
+    pieChart(chart, oneStep.map((r) => ({
+      label: `${r.alt_aa}${r.synonymous ? "*" : ""}`,
+      value: r.mu_aa, highlight: false,
+    })), { title: `Single-nucleotide amino-acid changes at ${hxb2}`, width: 680 });
+    caption.innerHTML =
+      "Each slice is an amino-acid change reachable from the reference codon by a " +
+      "<strong>single</strong> nucleotide substitution, sized by its share of the one-step " +
+      "mutational supply at this position. <code>*</code> marks a synonymous change. " +
+      "Two- and three-step changes are in the table below but not in the pie, because they " +
+      "are generated far more rarely. Values are read from the atlas, not recomputed.";
+  } else {
+    chart.innerHTML = "";
+    caption.innerHTML =
+      "No amino-acid change is reachable from this codon by a single nucleotide substitution; " +
+      "see the table below for the 2- and 3-step changes.";
+  }
 
   renderTable(tableSlot, {
     columns: [
-      { key: "hxb2", label: "HXB2", title: "Clinical / publication numbering" },
-      { key: "aa_change", label: "Change" },
+      { key: "hxb2_change", label: "Mutation (HXB2)", title: "Clinical / publication numbering" },
       { key: "alt_aa", label: "To" },
       { key: "mu_aa", label: "mu_aa", type: "rate", title: "Summed rate over all paths to this amino acid" },
       { key: "interval", label: "95% interval" },
       { key: "min_nt_changes", label: "min nt", type: "num" },
       { key: "n_paths", label: "paths", type: "num" },
       { key: "synonymous", label: "syn" },
+      { key: "aa_change", label: "NL4-3 aa change", title: "Same change in NL4-3 gene numbering" },
       { key: "ref_position", label: "NL4-3 nt", type: "num", title: "Internal coordinate, for traceability" },
     ],
     rows: sorted.map((r) => ({
@@ -219,8 +230,7 @@ function analyse() {
   renderTable(slot, {
     columns: [
       { key: "line", label: "Input" },
-      { key: "hxb2", label: "HXB2" },
-      { key: "aa_change", label: "Change" },
+      { key: "hxb2_change", label: "Mutation (HXB2)" },
       { key: "min_nt_changes", label: "min nt", type: "num",
         title: "Minimum number of nucleotide substitutions required" },
       { key: "mu_aa", label: "mu_aa", type: "rate" },

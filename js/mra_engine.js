@@ -182,6 +182,17 @@ export class MraEngine {
     return protein + " " + h;
   }
 
+  /** The mutation written in HXB2 convention, e.g. "RT K103N", "Env N160K", "PR M46I".
+   *  This is the clinical/publication form: the residue change on the HXB2-numbered
+   *  position, within the subunit for Gag/Pol. `refAa` is NL4-3's residue at the site. */
+  hxb2Mutation(protein, aaPosition, refAa, altAa) {
+    const sp = this.subProteinFor(protein, aaPosition);
+    if (sp) return sp.abbrev + " " + refAa + sp.position + altAa;
+    const h = this.hxb2Position(protein, aaPosition);
+    if (h === null) return protein + " " + refAa + "ins" + altAa;   // NL4-3 insertion vs HXB2
+    return protein + " " + refAa + h + altAa;
+  }
+
   /** Inverse of hxb2Label's sub-protein half: "RT", 103 -> {protein: "Pol", position: 253}. */
   resolveSubProtein(abbrevOrName, position) {
     const want = String(abbrevOrName).toUpperCase();
@@ -481,7 +492,8 @@ export class MraEngine {
       aa.push({
         ...acc,
         synonymous: acc.alt_aa === acc.ref_aa,
-        aa_change: acc.ref_aa + acc.position + acc.alt_aa,
+        aa_change: acc.ref_aa + acc.position + acc.alt_aa,        // NL4-3 gene numbering (traceability)
+        hxb2_change: this.hxb2Mutation(acc.protein, acc.position, acc.ref_aa, acc.alt_aa),
         accessible_class: acc.min_nt_changes,
         components: "codon+context" + (acc.position ? "+position" : ""),
       });

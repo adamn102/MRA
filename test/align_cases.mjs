@@ -180,6 +180,39 @@ section("8. multi-FASTA parsing");
         parseFasta("ACGTACGT")[0].sequence === "ACGTACGT");
 }
 
+// ---------------------------------------------------------------------------------
+section("9. a full LTR-to-LTR genome (query LONGER than the reference)");
+{
+  // 5' LTR + leader before gag, and 3' LTR after nef, neither in the gag-nef reference.
+  const rnd = (n, seed) => { let s = seed >>> 0, o = ""; const b = "ACGT";
+    for (let i = 0; i < n; i++) { s = (s * 1103515245 + 12345) >>> 0; o += b[s % 4]; } return o; };
+  const fivePrime = rnd(634, 7), threePrime = rnd(450, 99);
+  const genome = fivePrime + REF + threePrime;
+  const a = alignToReference(genome, REF);
+  check("a query longer than the reference still aligns", !a.unalignable,
+        a.unalignable ? a.reason : "");
+  check("the whole reference is covered (refSpan 1..n)",
+        a.refStart === 1 && a.refEnd === REF.length, `refSpan ${a.refStart}-${a.refEnd}`);
+  // the gag-nef core must map 1:1 onto the reference, in frame
+  let bad = 0;
+  for (let k = 1; k <= REF.length; k++) if (a.queryToRef[634 + k - 1] !== k) bad++;
+  check("the gag-nef core maps 1:1 to the reference", bad === 0, `${bad} positions off`);
+  check("the two LTR overhangs are reported as unaligned, not forced in",
+        a.unalignedSpans.length === 2 &&
+        a.unalignedSpans[0].queryStart === 1 && a.unalignedSpans[0].queryEnd === 634 &&
+        a.unalignedSpans[1].queryStart === 635 + REF.length,
+        JSON.stringify(a.unalignedSpans));
+  const out = engine.customAtlas({ name: "full genome", sequence: genome, alignment: a });
+  check("the engine returns the full covered atlas",
+        out.summary.codonsAnalysed === 2984 && out.nt.length === 8213 * 3,
+        `${out.summary.codonsAnalysed} codons, ${out.nt.length} nt rows`);
+  check("positions past 8,213 are dropped and counted",
+        out.summary.droppedOutsideRegion === REF.length - LAST,
+        `dropped ${out.summary.droppedOutsideRegion}`);
+  console.log(`       genome ${genome.length} bp -> aligned ${a.alignedCount}, ` +
+              `${out.summary.codonsAnalysed} codons, ${out.summary.droppedOutsideRegion} dropped past 8,213`);
+}
+
 console.log("\n" + "=".repeat(60));
 console.log(failures === 0 ? "ALL ALIGNMENT CASES PASSED" : `${failures} ALIGNMENT CASE(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);

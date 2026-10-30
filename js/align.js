@@ -16,11 +16,14 @@
 //      The band is widened and the alignment re-run if the optimal path touches a band
 //      edge, so a sequence with a large indel is not silently clipped.
 //
-// ALIGNMENT MODE: global in the query, free at both ends of the reference.
-//   A clinical pol fragment is the common case. It must align without being charged for
-//   the ~7 kb of reference it does not cover, so reference prefix and suffix gaps are
-//   free. The query, by contrast, is placed in full: every query base either maps to a
-//   reference position or is reported in an unaligned span. Nothing is quietly dropped.
+// ALIGNMENT MODE: banded LOCAL alignment (Smith-Waterman) with affine gaps.
+//   The reference is gag-to-nef (8,618 bp). A submitted sequence may be SHORTER (a
+//   clinical pol amplicon) or LONGER (a full LTR-to-LTR genome, ~9.7 kb, whose 5' LTR +
+//   leader and 3' LTR lie outside the reference). Local alignment handles both: it finds
+//   the best colinear match between the query and the reference and lets everything
+//   outside it -- unmatched reference for an amplicon, LTR overhangs for a full genome --
+//   fall away for free, reported as unaligned spans. Nothing in the aligned core is
+//   quietly dropped; the scope restriction to positions 1-8,213 happens afterwards.
 //
 // Both orientations are tried and the better-scoring one is returned, because users do
 // paste reverse-complemented sequences.
@@ -109,62 +112,68 @@ function voteDiagonal(query, reference, index, k) {
 const NEG = -1e9;
 
 /**
- * Banded affine-gap alignment, global in the query and free at both reference ends.
- * Returns the traceback as query->reference and reference->query maps.
+ * Banded local alignment (Smith-Waterman) with affine gaps, seeded on `diagonal`.
+ *
+ * Returns the single best-scoring colinear alignment between the query and the reference.
+ * Both the query and the reference may overhang the alignment at either end for free, so
+ * a query longer than the reference (a full genome with LTRs) works exactly as a shorter
+ * amplicon does. Returns the traceback as query->reference and reference->query maps.
  */
 function bandedAlign(query, reference, diagonal, band) {
   const m = query.length, n = reference.length;
   const width = 2 * band + 1;
 
-  // Column index within the band for reference position i at query position j.
+  // Reference column range in the band at query position j.
   const loFor = (j) => Math.max(1, j + diagonal - band);
   const hiFor = (j) => Math.min(n, j + diagonal + band);
 
-  // Three score rows (previous, current) for match/insert-in-query/delete-in-query.
   const size = width + 2;
   let Mprev = new Float64Array(size).fill(NEG);
   let Xprev = new Float64Array(size).fill(NEG);   // gap in the reference (query insertion)
   let Yprev = new Float64Array(size).fill(NEG);   // gap in the query (reference deletion)
   let Mcur = new Float64Array(size), Xcur = new Float64Array(size), Ycur = new Float64Array(size);
 
-  // Traceback: 2 bits of state per cell. 0 = from M, 1 = from X, 2 = from Y, 3 = start.
+  // Traceback state per cell: 0 = from M, 1 = from X, 2 = from Y, 3 = fresh start (score 0).
   const tbM = new Uint8Array((m + 1) * width);
   const tbX = new Uint8Array((m + 1) * width);
   const tbY = new Uint8Array((m + 1) * width);
 
-  // Row j = 0: a free reference prefix, so every reference position starts at score 0.
-  {
-    const lo = loFor(0), hi = hiFor(0);
-    for (let i = lo; i <= hi; i++) Mprev[i - lo + 1] = 0;
-    Mprev.loBase = lo;
-  }
-  let loPrev = loFor(0);
-
-  let touchedEdge = false;
+  let loPrev = 1;
+  let bestScore = 0, bestI = 0, bestJ = 0;   // 0,0,0 = empty alignment (SW floor)
+  let edgeAtBest = false;
 
   for (let j = 1; j <= m; j++) {
     const lo = loFor(j), hi = hiFor(j);
+    if (hi < lo) {
+      // The band lies entirely outside the reference: this query base is in an overhang
+      // (an LTR, say). No cells to compute; the previous row becomes empty so the next
+      // in-band row starts fresh.
+      Mprev.fill(NEG); Xprev.fill(NEG); Yprev.fill(NEG);
+      loPrev = Math.max(1, j + diagonal - band);
+      continue;
+    }
     Mcur.fill(NEG); Xcur.fill(NEG); Ycur.fill(NEG);
     const qb = query[j - 1];
     for (let i = lo; i <= hi; i++) {
       const c = i - lo + 1;                 // column in the current row
       const cPrevDiag = i - 1 - loPrev + 1;  // (i-1, j-1) in the previous row
       const cPrevSame = i - loPrev + 1;      // (i,   j-1) in the previous row
-
-      // M: query base j paired with reference base i
       const sub = qb === reference[i - 1] ? SCORES.match : SCORES.mismatch;
-      let bestM = NEG, fromM = 3;
+
+      // M: extend a previous M/X/Y diagonally, OR start fresh at 0. The fresh-start option
+      // is what frees BOTH leading overhangs (query and reference) at no cost, and the
+      // SW floor below frees the trailing ones.
+      let bestM = 0, fromM = 3;
       if (cPrevDiag >= 1 && cPrevDiag < size) {
         const cands = [Mprev[cPrevDiag], Xprev[cPrevDiag], Yprev[cPrevDiag]];
-        for (let s = 0; s < 3; s++) if (cands[s] > bestM) { bestM = cands[s]; fromM = s; }
+        for (let st = 0; st < 3; st++) if (cands[st] > bestM) { bestM = cands[st]; fromM = st; }
       }
-      if (j === 1) {                         // free reference prefix feeds M directly
-        if (0 > bestM) { bestM = 0; fromM = 3; }
-      }
-      Mcur[c] = bestM <= NEG / 2 ? NEG : bestM + sub;
+      let mval = bestM + sub;
+      if (mval < 0) { mval = 0; fromM = 3; }   // Smith-Waterman floor
+      Mcur[c] = mval;
       tbM[j * width + (c - 1)] = fromM;
 
-      // X: gap in the reference, i.e. a base present in the query only
+      // X: gap in the reference (a base present in the query only)
       let bestX = NEG, fromX = 3;
       if (cPrevSame >= 1 && cPrevSame < size) {
         const open = Mprev[cPrevSame] + SCORES.gapOpen + SCORES.gapExtend;
@@ -174,7 +183,7 @@ function bandedAlign(query, reference, diagonal, band) {
       Xcur[c] = bestX;
       tbX[j * width + (c - 1)] = fromX;
 
-      // Y: gap in the query, i.e. a reference position the query skips
+      // Y: gap in the query (a reference position the query skips)
       let bestY = NEG, fromY = 3;
       if (c - 1 >= 1) {
         const open = Mcur[c - 1] + SCORES.gapOpen + SCORES.gapExtend;
@@ -183,6 +192,11 @@ function bandedAlign(query, reference, diagonal, band) {
       }
       Ycur[c] = bestY;
       tbY[j * width + (c - 1)] = fromY;
+
+      if (Mcur[c] > bestScore) {
+        bestScore = Mcur[c]; bestI = i; bestJ = j;
+        edgeAtBest = (i === lo && lo > 1) || (i === hi && hi < n);
+      }
     }
     [Mprev, Mcur] = [Mcur, Mprev];
     [Xprev, Xcur] = [Xcur, Xprev];
@@ -190,32 +204,18 @@ function bandedAlign(query, reference, diagonal, band) {
     loPrev = lo;
   }
 
-  // Free reference suffix: the best cell anywhere along the last query row wins.
-  const lo = loFor(m), hi = hiFor(m);
-  let bestScore = NEG, bestI = -1, bestState = 0;
-  for (let i = lo; i <= hi; i++) {
-    const c = i - lo + 1;
-    const states = [Mprev[c], Xprev[c], Yprev[c]];
-    for (let s = 0; s < 3; s++) {
-      if (states[s] > bestScore) { bestScore = states[s]; bestI = i; bestState = s; }
-    }
-  }
-  // Only a band edge that is NOT also a reference edge means the band was too narrow.
-  // A query covering the whole reference legitimately ends at reference position 1 or n,
-  // and treating that as a clipped path sent the aligner through needless re-runs at
-  // ever wider bands -- 347 ms instead of 16 ms for a full-length genome.
-  if ((bestI === lo && lo > 1) || (bestI === hi && hi < n)) touchedEdge = true;
+  let touchedEdge = edgeAtBest;
 
-  // ---- traceback --------------------------------------------------------------
+  // ---- traceback from the global best cell until a fresh start -----------------
   const queryToRef = new Int32Array(m);
   const refToQuery = new Int32Array(n + 1);
   let matches = 0, alignedColumns = 0;
-  let i = bestI, j = m, state = bestState;
+  let i = bestI, j = bestJ, state = 0;
 
-  while (j >= 1 && i >= 1) {
+  while (j >= 1 && i >= 1 && bestScore > 0) {
     const loj = loFor(j);
     const c = i - loj + 1;
-    if (c < 1 || c > 2 * band + 1) { touchedEdge = true; break; }
+    if (c < 1 || c > width) { touchedEdge = true; break; }
     const idx = j * width + (c - 1);
     if (state === 0) {
       queryToRef[j - 1] = i;
@@ -223,8 +223,8 @@ function bandedAlign(query, reference, diagonal, band) {
       alignedColumns++;
       if (query[j - 1] === reference[i - 1]) matches++;
       const from = tbM[idx];
-      i -= 1; j -= 1; state = from === 3 ? 0 : from;
-      if (from === 3) break;
+      if (from === 3) break;                 // fresh start: alignment begins here
+      i -= 1; j -= 1; state = from;
     } else if (state === 1) {
       queryToRef[j - 1] = 0;                 // query base with no reference position
       const from = tbX[idx];
@@ -235,11 +235,11 @@ function bandedAlign(query, reference, diagonal, band) {
       i -= 1; state = from === 3 ? 0 : from;
       if (from === 3) break;
     }
-    const jj = Math.max(j, 1);
-    if ((i === loFor(jj) && loFor(jj) > 1) || (i === hiFor(jj) && hiFor(jj) < n)) touchedEdge = true;
+    if (j >= 1) {
+      const jj = j;
+      if ((i === loFor(jj) && loFor(jj) > 1) || (i === hiFor(jj) && hiFor(jj) < n)) touchedEdge = true;
+    }
   }
-  // Any query bases left before the traceback terminated are unaligned by definition.
-  for (let jj = 1; jj <= j; jj++) queryToRef[jj - 1] = 0;
 
   return { queryToRef, refToQuery, score: bestScore, matches, alignedColumns, touchedEdge };
 }

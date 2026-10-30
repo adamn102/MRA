@@ -1,7 +1,7 @@
 {
   "version": "v0.1",
   "tolerance": 0.01,
-  "published_source": "shipped assets in /Users/anitido/Bioinformatics/ERR-Seq_2/MutRatePaper/mra/portal/data/v0.1",
+  "published_source": "shipped assets in /Users/anitido/Bioinformatics/ERR-Seq_2/MutRatePaper/mra/Untitled/data/v0.1",
   "layers": {
     "nucleotide": {
       "row_counts": {

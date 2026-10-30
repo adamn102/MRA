@@ -190,7 +190,7 @@ function renderAccessibility() {
     if (!published) {
       // Reachable from your codon but absent from the published table for this position:
       // only possible when your codon differs, and worth showing as newly available.
-      rows.push({ hxb2_label: r.hxb2_label, aa_change: r.aa_change, alt_aa: r.alt_aa,
+      rows.push({ hxb2_label: r.hxb2_label, hxb2_change: r.hxb2_change, aa_change: r.aa_change, alt_aa: r.alt_aa,
                   your_codon: r.codon, ref_codon: refCodon, codon_differs: codonDiffers,
                   mu_custom: r.mu_aa, mu_nl43: null, log2fc: null,
                   min_nt_custom: r.min_nt_changes, min_nt_nl43: null,
@@ -199,7 +199,7 @@ function renderAccessibility() {
     }
     const log2fc = Math.log2(r.mu_aa / published.mu_aa);
     rows.push({
-      hxb2_label: r.hxb2_label, aa_change: r.aa_change, alt_aa: r.alt_aa,
+      hxb2_label: r.hxb2_label, hxb2_change: r.hxb2_change, aa_change: r.aa_change, alt_aa: r.alt_aa,
       your_codon: r.codon, ref_codon: refCodon, codon_differs: codonDiffers,
       mu_custom: r.mu_aa, mu_nl43: published.mu_aa, log2fc,
       min_nt_custom: r.min_nt_changes, min_nt_nl43: published.min_nt_changes,
@@ -226,8 +226,7 @@ function renderAccessibility() {
 
   renderTable(document.getElementById("access-table"), {
     columns: [
-      { key: "hxb2_label", label: "HXB2" },
-      { key: "aa_change", label: "Change" },
+      { key: "hxb2_change", label: "Mutation (HXB2)" },
       { key: "ref_codon", label: "NL4-3 codon" },
       { key: "your_codon", label: "Your codon" },
       { key: "mu_nl43", label: "mu_aa NL4-3", type: "rate" },
