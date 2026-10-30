@@ -161,6 +161,57 @@ export class MraEngine {
     return hit === undefined ? null : hit;             // null = an NL4-3 insertion vs HXB2
   }
   /**
+   * The selectable protein/subunit list: each gene, followed by its subunits indented.
+   * `offset` converts the subunit's own numbering to gene numbering (RT 103 -> Pol 253).
+   *
+   * @param {Map<string,{min:number,max:number}>} proteinSpans  from loadAminoAcidLayer
+   */
+  proteinTargets(proteinSpans) {
+    const targets = [];
+    for (const protein of [...proteinSpans.keys()].sort()) {
+      const span = proteinSpans.get(protein);
+      targets.push({ key: protein, label: `${protein}  (1\u2013${span.max})`, protein, offset: 0 });
+      for (const sp of this.subProteins[protein] || []) {
+        targets.push({ key: sp.abbrev, protein,
+                       label: `\u2003${sp.abbrev} \u2014 ${sp.name} (1\u2013${sp.lastGeneAa - sp.offset})`,
+                       offset: sp.offset, maxOwn: sp.lastGeneAa - sp.offset });
+      }
+    }
+    return targets;
+  }
+
+  /**
+   * A subunit position in its own numbering -> the gene's amino-acid position in NL4-3
+   * numbering, which is what the atlas is keyed on.
+   *
+   * For gag and pol the subunit's own numbering is already the clinical convention and maps
+   * to HXB2 by identity, so adding the offset is the whole job. Env and vpu are different:
+   * the number a reader quotes is HXB2, and NL4-3 differs from it by indels (HXB2 Env 460 is
+   * NL4-3 Env 458), so the figure has to go through the alignment. Returns null when the
+   * HXB2 position has no NL4-3 equivalent.
+   */
+  geneAaFromOwnPosition(target, ownPosition) {
+    const asGeneAa = ownPosition + (target.offset || 0);
+    if (this.nl43ToHxb2[target.protein]) {
+      return this.nl43PositionFromHxb2(target.protein, asGeneAa);
+    }
+    return asGeneAa;
+  }
+
+  /**
+   * The inverse of geneAaFromOwnPosition: a gene amino-acid position (NL4-3, the atlas's own
+   * key) back to the number a reader would quote for it. Round-tripping the two is what keeps
+   * the coordinate box showing back what was typed into it.
+   */
+  ownPositionFor(target, geneAa) {
+    if (this.nl43ToHxb2[target.protein]) {
+      const h = this.hxb2Position(target.protein, geneAa);
+      if (h !== null) return h - (target.offset || 0);
+    }
+    return geneAa - (target.offset || 0);
+  }
+
+  /**
    * Reverse lookup: given an HXB2 position, find the NL4-3 position.
    * Returns null if the HXB2 position doesn't exist in this protein.
    */

@@ -7,8 +7,9 @@
 // aggregation that silently shifts the track will fail here rather than ship.
 
 import fs from "node:fs";
-import { perSiteSupply, smoothSeries, buildFrameIndex, geneSegments, oneStepSlices }
-  from "../js/explore_core.js";
+import { MraEngine } from "../js/mra_engine.js";
+import { perSiteSupply, smoothSeries, buildFrameIndex, geneSegments, oneStepSlices,
+         targetFor } from "../js/explore_core.js";
 
 const vArg = process.argv.indexOf("--version");
 const V = vArg > 0 ? process.argv[vArg + 1] : "v0.1";
@@ -166,6 +167,127 @@ check("segments lie inside the modelled region",
 const gag = segs.find((s) => s.label === "Gag"), pol = segs.find((s) => s.label === "Pol");
 check("gag and pol overlap in the band", gag.end > pol.start,
       `gag ends ${gag.end}, pol starts ${pol.start}`);
+
+// --- 6. protein-based coordinate entry ----------------------------------------------
+// The number a user types is the subunit's own numbering -- the convention a paper or clinic
+// uses. These landmarks are the check that it lands on the right codon.
+const engine = new MraEngine({
+  bundle: J("mra_web_model.json"), reference, intervals: J("interval_ratios.json"),
+  hxb2: J("hxb2_align.json"),
+});
+const targets = engine.proteinTargets(new Map(
+  [...aaByPosition.keys()].reduce((m, k) => {
+    const [prot, pos] = k.split("|"); const n = Number(pos);
+    const cur = m.get(prot);
+    if (!cur) m.set(prot, { min: n, max: n });
+    else { cur.min = Math.min(cur.min, n); cur.max = Math.max(cur.max, n); }
+    return m;
+  }, new Map())));
+const byKey = new Map(targets.map((t) => [t.key, t]));
+
+check("the subunit list offers PR, RT, IN and the gag products",
+      ["PR", "RT", "IN", "p17", "p24", "Gag", "Pol", "Env"].every((k) => byKey.has(k)),
+      [...byKey.keys()].join(","));
+
+/** own-numbering position -> centre nucleotide of that codon, the path the Go button takes */
+function ntFor(key, ownPos) {
+  const t = byKey.get(key);
+  const geneAa = engine.geneAaFromOwnPosition(t, ownPos);
+  if (geneAa === null) return null;
+  const rec = reference.proteins[t.protein];
+  const idx = geneAa - rec.first_aa;
+  if (idx < 0 || idx >= rec.codon_nt.length) return null;
+  return { geneAa, nt: rec.codon_nt[idx][1], refAa: (aaByPosition.get(t.protein + "|" + geneAa) || [{}])[0].ref_aa };
+}
+
+// Each landmark names the wild-type residue, so a mis-resolved codon shows up as the wrong
+// amino acid rather than silently returning a plausible number.
+for (const [key, pos, wt, label] of [
+  ["PR", 46, "M", "M46I, a protease inhibitor mutation"],
+  ["RT", 103, "K", "K103N, an NNRTI mutation"],
+  ["RT", 184, "M", "M184V, the 3TC mutation"],
+  ["IN", 155, "N", "N155H, an INSTI mutation"],
+  ["Gag", 1, "M", "the gag start codon"],
+]) {
+  const got = ntFor(key, pos);
+  check(`${key} ${pos} resolves to wild-type ${wt} (${label})`,
+        got !== null && got.refAa === wt,
+        got ? `got ${got.refAa} at ${key.length > 2 ? key : key} ${pos} -> gene aa ${got.geneAa}, nt ${got.nt}`
+            : "unresolved");
+}
+
+// Env is the case where the typed number is HXB2 and NL4-3 differs by indels.
+for (const [hxb2Pos, wt, label] of [
+  [332, "N", "the 10-1074 / PGT121 glycan"],
+  [160, "N", "the V2-apex N160 glycan"],
+]) {
+  const got = ntFor("Env", hxb2Pos);
+  check(`Env ${hxb2Pos} (HXB2) resolves to wild-type ${wt} (${label})`,
+        got !== null && got.refAa === wt,
+        got ? `NL4-3 Env ${got.geneAa}, nt ${got.nt}, ref ${got.refAa}` : "unresolved");
+}
+check("Env HXB2 numbering is mapped, not taken literally",
+      ntFor("Env", 332).geneAa === 330,
+      `HXB2 332 -> NL4-3 ${ntFor("Env", 332).geneAa}`);
+
+// A subunit position past its length must be rejected rather than silently spilling into the
+// next subunit -- RT is 440 residues, so RT 500 is not an integrase position.
+check("subunit lengths are known, so an over-long position can be rejected",
+      byKey.get("RT").maxOwn === 440, `RT maxOwn ${byKey.get("RT").maxOwn}`);
+
+// --- 7. the merged page's selection round-trip --------------------------------------
+// Typing a position, reading the label back, and typing it again must land on the same codon.
+// If this drifts, the coordinate box silently renumbers a user's site between clicks.
+let rtChecked = 0, rtBad = [];
+for (const t of targets) {
+  const maxOwn = t.maxOwn || (aaLayer_max(t.protein) - (t.offset || 0));
+  for (const own of [1, 2, Math.floor(maxOwn / 2), maxOwn - 1, maxOwn]) {
+    if (!Number.isInteger(own) || own < 1) continue;
+    const geneAa = engine.geneAaFromOwnPosition(t, own);
+    if (geneAa === null) continue;                       // HXB2 insertion, no NL4-3 row
+    if (!aaByPosition.has(t.protein + "|" + geneAa)) continue;   // outside the modelled region
+    const back = engine.ownPositionFor(t, geneAa);
+    rtChecked++;
+    if (back !== own) rtBad.push(`${t.key} ${own} -> gene ${geneAa} -> ${back}`);
+  }
+}
+function aaLayer_max(protein) {
+  let m = 0;
+  for (const k of aaByPosition.keys()) {
+    const [p, pos] = k.split("|");
+    if (p === protein) m = Math.max(m, Number(pos));
+  }
+  return m;
+}
+check(`own-position round-trip holds at every subunit boundary (${rtChecked} positions)`,
+      rtBad.length === 0, rtBad.slice(0, 4).join("; "));
+
+// A pol position must report as its subunit, not as the gene -- this is what makes the
+// dashboard say "RT K103N" instead of "Pol K253N".
+for (const [protein, geneAa, wantKey, wantOwn] of [
+  ["Pol", 253, "RT", 103],
+  ["Pol", 97, "PR", 46],
+  ["Pol", 865, "IN", 155],
+  ["Gag", 1, "p17", 1],
+  ["Env", 330, "Env", 332],      // Env has no subunits; the own position is the HXB2 number
+]) {
+  const t = targetFor(targets, protein, geneAa);
+  const own = t ? engine.ownPositionFor(t, geneAa) : null;
+  check(`${protein} ${geneAa} reports as ${wantKey} ${wantOwn}`,
+        t && t.key === wantKey && own === wantOwn,
+        t ? `got ${t.key} ${own}` : "no target");
+}
+
+// Every frame the track can point at must map to a selectable target, or clicking the track
+// would land on a position the controls cannot express.
+const unmappable = [];
+for (const frames of frameAt.values()) {
+  for (const f of frames) {
+    if (!targetFor(targets, f.protein, f.geneAa)) unmappable.push(`${f.protein} ${f.geneAa}`);
+  }
+}
+check("every clickable frame maps to a selectable protein/subunit",
+      unmappable.length === 0, unmappable.slice(0, 4).join("; "));
 
 console.log("=".repeat(60));
 if (failures) { console.log(`${failures} CHECK(S) FAILED`); process.exit(1); }

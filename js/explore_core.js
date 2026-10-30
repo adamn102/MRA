@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: MIT
 //
-// explore_core.js -- the DOM-free logic behind the genome-explorer page.
+// explore_core.js -- the DOM-free logic behind the genome track on the browse page.
 //
-// Kept separate from explore.js so it can be exercised in node without a browser. Every
-// function here is pure: same inputs, same outputs, no module state.
+// Named for the "Explore the genome" tab it was written for; that tab has since been merged
+// into browse.html, and this module now backs the track there. Kept separate from the page
+// module so it can be exercised in node without a browser: every function here is pure --
+// same inputs, same outputs, no module state. Exercised by test/explore_cases.mjs.
 
 /**
  * Per-site substitution supply, summed over the substitution classes present at that site.
@@ -108,4 +110,18 @@ export function geneSegments(proteins, minWidth = 40) {
 /** One-step amino-acid changes at a codon, largest supply first -- the pie's slices. */
 export function oneStepSlices(rows) {
   return rows.filter((r) => r.min_nt_changes === 1).sort((a, b) => b.mu_aa - a.mu_aa);
+}
+
+/**
+ * The most specific selectable target for a gene position: the subunit containing it if there
+ * is one (so a pol position reports as RT 103 rather than Pol 253), otherwise the gene itself.
+ */
+export function targetFor(targets, protein, geneAa) {
+  let fallback = null;
+  for (const t of targets) {
+    if (t.protein !== protein) continue;
+    if (!t.maxOwn) { fallback = fallback || t; continue; }
+    if (geneAa > t.offset && geneAa <= t.offset + t.maxOwn) return t;
+  }
+  return fallback;
 }

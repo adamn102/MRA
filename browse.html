@@ -17,35 +17,72 @@
 
 <div id="dashboard-export">
 <h2>Position dashboard</h2>
-<p>Pick a protein and a position. You get the reference amino acid and codon, and the
-mutability of every reachable amino-acid change, with its 95% interval, the minimum number of
-nucleotide substitutions required and the number of paths.</p>
+<p>Pick a position three ways &mdash; click the track, drag the slider under it, or type a
+coordinate. You get the reference amino acid and codon, where a single substitution's supply
+goes, and the mutability of every reachable amino-acid change with its 95% interval, the
+minimum number of nucleotide substitutions required and the number of paths.</p>
+
 <div class="controls">
+  <div>
+    <label for="track-window">Smoothing window (nt)</label>
+    <input type="range" id="track-window" min="25" max="501" step="2" value="151">
+    <output id="track-window-out">151</output>
+  </div>
+  <div>
+    <label for="track-class">Supply shown</label>
+    <select id="track-class">
+      <option value="total">Total substitution supply</option>
+      <option value="nonga">non-G&rarr;A only</option>
+      <option value="ga">G&rarr;A only</option>
+    </select>
+  </div>
+</div>
+
+<figure class="chart"><div id="genome-track"></div>
+  <div class="track-slider">
+    <input type="range" id="track-slider" min="1" max="8213" step="1" value="1600"
+           aria-label="Genome position (NL4-3 nucleotide)">
+  </div>
+  <figcaption id="track-caption"></figcaption></figure>
+
+<div class="controls">
+  <div>
+    <label for="coord-system">Jump to</label>
+    <select id="coord-system">
+      <option value="protein">Protein position</option>
+      <option value="nt">NL4-3 nucleotide</option>
+    </select>
+  </div>
   <div>
     <label for="protein">Protein or subunit</label>
     <select id="protein"></select>
   </div>
   <div>
-    <label for="coord-system">Coordinate system:</label>
-    <select id="coord-system">
-      <option value="NL4-3">NL4-3 (internal)</option>
-      <option value="HXB2">HXB2 (clinical)</option>
-    </select>
-  </div>
-  <div>
-    <label for="position">Position (in that protein's own numbering)</label>
+    <label for="position">Position</label>
     <input type="number" id="position" min="1" value="46" size="8">
   </div>
-  <div><button id="go">Show position</button></div>
+  <div><button id="go">Go</button></div>
+  <div>
+    <label for="reading-frame">Reading frame here</label>
+    <select id="reading-frame"></select>
+  </div>
   <div><span id="share-slot"></span></div>
 </div>
+<p class="caveat">Protein positions are in each subunit's own numbering, which is the
+convention a paper or clinic uses &mdash; type <strong>RT</strong> 103 for K103N,
+<strong>PR</strong> 46 for M46I, <strong>IN</strong> 155 for N155H. For <em>env</em> and
+<em>vpu</em> the number is read as HXB2 and mapped through the alignment, so Env 332 finds the
+10-1074 glycan even though NL4-3 numbers it 330. &ldquo;Reading frame here&rdquo; lists every
+frame coding at the selected nucleotide; overlapping genes give more than one.</p>
+
 <div id="dashboard-status" class="caveat">Loading the atlas tables&hellip;</div>
 <div id="dashboard-head"></div>
 <figure class="chart"><div id="dashboard-chart"></div>
   <figcaption id="dashboard-caption"></figcaption>
-  <div style="margin-top: 0.5em; text-align: center;"><button id="download-png" class="secondary" style="margin-top: 0.5em;">Download as PNG</button></div>
+  <div style="margin-top: 0.5em;"><button id="download-png" class="secondary">Download as PNG</button></div>
 </figure>
 </div>
+
 <div id="dashboard-table"></div>
 <h3 id="paths-heading" hidden>Individual codon paths at this position</h3>
 <div id="dashboard-paths"></div>

@@ -1,18 +1,29 @@
 // SPDX-License-Identifier: MIT
 //
-// browse.js -- the position dashboard and the paste-a-list table analysis.
+// browse.js -- the genome track, the position dashboard, and the paste-a-list analysis.
 //
-// Everything shown here is READ from a shipped data file. Nothing published is
-// recomputed in JavaScript: mu_aa, its interval, min_nt_changes and n_paths all come
-// straight out of data/<version>/aa_level_supply.csv, and the individual path rates out
-// of the per-protein shard. The only arithmetic is turning a rate into a bar length.
+// One page, one selected position. The track is the spatial view and the navigator: click it,
+// drag the slider, or type a coordinate, and all three converge on the same codon, whose
+// dashboard appears below. (The track and the dashboard used to be separate tabs.)
+//
+// Everything shown here is READ from a shipped data file. Nothing published is recomputed in
+// JavaScript: mu_aa, its interval, min_nt_changes and n_paths all come straight out of
+// data/<version>/aa_level_supply.csv, and the individual path rates out of the per-protein
+// shard. The only arithmetic is the track's running mean and turning a rate into a slice angle.
+//
+// COORDINATES. The track's x-axis is the NL4-3 nucleotide, because that is what the atlas is
+// indexed on and it is continuous across the genome. Everything reported back is in HXB2
+// amino-acid numbering, which is what a clinical or publication reader expects, with the NL4-3
+// figures kept alongside for traceability.
 
 import { bootstrapPage, note, caveat, showError, exportProvenance, shareButton, NEF_NOTE } from "./page.js";
-import { loadSmallAssets, loadAminoAcidLayer, loadPathShard } from "./data.js";
+import { loadSmallAssets, loadAminoAcidLayer, loadNucleotideLayer, loadPathShard } from "./data.js";
 import { renderTable, formatRate } from "./table.js";
-import { barChart, pieChart } from "./chart.js";
+import { barChart, pieChart, genomeTrack } from "./chart.js";
 import { MraEngine } from "./mra_engine.js";
 import { resolveMutation } from "./mutations.js";
+import { perSiteSupply, smoothSeries, buildFrameIndex, geneSegments, oneStepSlices,
+         targetFor as targetForIn } from "./explore_core.js";
 
 
 /**
@@ -82,11 +93,14 @@ async function downloadDashboardPNG() {
     setTimeout(() => { button.textContent = "Download as PNG"; }, 3000);
   }
 }
+
 const page = await bootstrapPage("browse.html");
 const region = page.release.modelled_region;
+const FIRST = region.first_position, LAST = region.last_position;
 document.getElementById("scope-slot").appendChild(note(
-  `Positions ${region.first_position.toLocaleString()}&ndash;${region.last_position.toLocaleString()} ` +
-  `of the NL4-3 reference. ` + NEF_NOTE));
+  `Positions ${FIRST.toLocaleString()}&ndash;${LAST.toLocaleString()} of the NL4-3 reference. ` +
+  NEF_NOTE + " The track shows mutational <em>supply</em> &mdash; how often a change is " +
+  "generated &mdash; not how often it is observed in patients."));
 
 const status = document.getElementById("dashboard-status");
 let assets, aaLayer, engine;
@@ -105,22 +119,161 @@ try {
 // Gene products come from the atlas itself; the subunits (PR, RT, RNase, IN and the Gag
 // cleavage products) come from the workbook's alignment sheet, in amino-acid units.
 const select = document.getElementById("protein");
-const targets = [];
-for (const protein of [...aaLayer.proteins.keys()].sort()) {
-  const span = aaLayer.proteins.get(protein);
-  targets.push({ key: protein, label: `${protein}  (1\u2013${span.max})`, protein, offset: 0 });
-  for (const sp of engine.subProteins[protein] || []) {
-    targets.push({ key: sp.abbrev, protein,
-                   label: `\u2003${sp.abbrev} \u2014 ${sp.name} (1\u2013${sp.lastGeneAa - sp.offset})`,
-                   offset: sp.offset, maxOwn: sp.lastGeneAa - sp.offset });
-  }
-}
+const targets = engine.proteinTargets(aaLayer.proteins);
 for (const t of targets) {
   const opt = document.createElement("option");
   opt.value = t.key; opt.textContent = t.label;
   select.appendChild(opt);
 }
 const targetByKey = new Map(targets.map((t) => [t.key, t]));
+
+// Frames are indexed off the amino-acid layer, so the track can only ever point at codons
+// the atlas can answer for.
+const frameAt = buildFrameIndex(assets.reference.proteins, aaLayer.byPosition);
+const GENE_SEGMENTS = geneSegments(assets.reference.proteins);
+
+const targetFor = (protein, geneAa) => targetForIn(targets, protein, geneAa);
+const ownPositionFor = (target, geneAa) => engine.ownPositionFor(target, geneAa);
+
+// --- selection state --------------------------------------------------------------
+let selected = null;          // {target, geneAa, codonIndex, codonNt}
+let markerNt = 1600;          // where the track's marker sits
+
+// --- the genome track ---------------------------------------------------------------
+// The nucleotide layer is several megabytes, so it loads AFTER the dashboard has painted.
+// Until it arrives the track slot shows a note and its controls stay disabled.
+let perSite = null, SITES = null;
+const elWin = document.getElementById("track-window");
+const elWinOut = document.getElementById("track-window-out");
+const elClass = document.getElementById("track-class");
+const elSlider = document.getElementById("track-slider");
+elSlider.min = String(FIRST); elSlider.max = String(LAST);
+for (const el of [elWin, elClass, elSlider]) el.disabled = true;
+
+const CLASS_LABEL = { total: "total substitution supply", nonga: "non-G\u2192A supply", ga: "G\u2192A supply" };
+const CLASS_COLOUR = { total: "#2f4b7c", nonga: "#3f8f7a", ga: "#c2561a" };
+
+function drawTrack() {
+  if (!perSite) return;
+  const win = Number(elWin.value), cls = elClass.value;
+  elWinOut.textContent = String(win);
+  const pts = smoothSeries(SITES, perSite, cls, win);
+  genomeTrack(document.getElementById("genome-track"), [
+    { label: CLASS_LABEL[cls], colour: CLASS_COLOUR[cls], points: pts, width: 1.1 },
+  ], {
+    title: `Smoothed ${CLASS_LABEL[cls]} along the genome`,
+    xMin: FIRST, xMax: LAST, geneBand: GENE_SEGMENTS,
+    width: 1020, height: 300, yLabel: "supply per site per replication",
+    marker: markerNt,
+    markerLabel: selected ? engine.hxb2Label(selected.target.protein, selected.geneAa) : String(markerNt),
+    onSelect: (pos) => selectNucleotide(pos),
+  });
+
+  const vals = pts.map((p) => p[1]).sort((a, b) => a - b);
+  const med = vals[Math.floor(vals.length / 2)];
+  const at = pts.find((p) => p[0] >= markerNt);
+  const site = perSite.get(markerNt);
+  document.getElementById("track-caption").innerHTML =
+    `Centred running mean of the per-site rate over a ${win} nt window, summed across ` +
+    `substitution classes${cls === "total" ? "" : " and restricted to " + CLASS_LABEL[cls]}. ` +
+    `Insertions and deletions are excluded. The band above the plot shows coding segments; ` +
+    `overlapping reading frames sit on separate rows, and spliced genes (tat, rev) appear as ` +
+    `one box per exon, with the gene holding the marker filled solid. Genome median ` +
+    `${formatRate(med)}` + (at ? `, value at the marker ${formatRate(at[1])}` : "") +
+    (site ? `, of which G\u2192A is ${(100 * site.ga / site.total).toFixed(0)}% at this exact site` : "") +
+    `. <strong>G\u2192A carries most of the total supply</strong>, so the total track partly ` +
+    `traces G density &mdash; use &ldquo;Supply shown&rdquo; to separate the two.`;
+}
+
+async function loadTrack() {
+  const slot = document.getElementById("genome-track");
+  slot.innerHTML = "<p class=\"caveat\">Loading the nucleotide layer for the track\u2026</p>";
+  try {
+    const ntLayer = await loadNucleotideLayer(page.version);
+    perSite = perSiteSupply(ntLayer.byPosition);
+    SITES = [...perSite.keys()].sort((a, b) => a - b);
+    for (const el of [elWin, elClass, elSlider]) el.disabled = false;
+    drawTrack();
+  } catch (err) {
+    showError(slot, "Could not load the nucleotide layer, so the track is unavailable: " +
+                    err.message + " The dashboard below still works.");
+  }
+}
+
+// --- choosing a position -------------------------------------------------------------
+/** From a nucleotide: resolve the reading frames there and show the first (or the one we are
+ *  already in, if it still codes there -- so dragging along gag/pol does not flip frames). */
+function selectNucleotide(nt) {
+  nt = Math.min(Math.max(Math.round(nt), FIRST), LAST);
+  const frames = frameAt.get(nt) || [];
+  if (!frames.length) {
+    markerNt = nt;
+    elSlider.value = String(nt);
+    if (document.getElementById("coord-system").value === "nt") {
+      document.getElementById("position").value = String(nt);
+    }
+    drawTrack();
+    showError(document.getElementById("dashboard-head"),
+      `NL4-3 nucleotide ${nt.toLocaleString()} is not inside a modelled codon. ` +
+      `The atlas covers ${FIRST.toLocaleString()}\u2013${LAST.toLocaleString()}, and nef is ` +
+      `modelled only to 8,213.`);
+    return;
+  }
+  const keep = selected && frames.find((f) => f.protein === selected.target.protein);
+  const frame = keep || frames[0];
+  applySelection(frame.protein, frame.geneAa, nt);
+}
+
+/** The single place that moves the selection. Everything else routes through here. */
+function applySelection(protein, geneAa, preferNt) {
+  const target = targetFor(protein, geneAa);
+  if (!target) return;
+  const rec = assets.reference.proteins[protein];
+  const codonIndex = geneAa - rec.first_aa;
+  const codonNt = rec.codon_nt[codonIndex];
+  selected = { target, geneAa, codonIndex, codonNt };
+  markerNt = (preferNt && codonNt.includes(preferNt)) ? preferNt : codonNt[1];
+
+  elSlider.value = String(markerNt);
+  refreshFrameSelector();
+  syncCoordinateBox();
+  drawTrack();
+  showPosition(target, geneAa);
+  const url = new URL(window.location.href);
+  url.searchParams.set("protein", target.key);
+  url.searchParams.set("pos", String(ownPositionFor(target, geneAa)));
+  url.searchParams.set("nt", String(markerNt));
+  url.searchParams.set("v", page.version.replace(/^v/, ""));
+  window.history.replaceState({}, "", url);
+  refreshShare();
+}
+
+function refreshFrameSelector() {
+  const el = document.getElementById("reading-frame");
+  const frames = frameAt.get(markerNt) || [];
+  el.innerHTML = "";
+  for (const f of frames) {
+    const o = document.createElement("option");
+    o.value = f.protein + "|" + f.geneAa;
+    o.textContent = `${engine.hxb2Label(f.protein, f.geneAa)}  (${f.protein} ${f.geneAa})`;
+    el.appendChild(o);
+  }
+  if (selected) el.value = selected.target.protein + "|" + selected.geneAa;
+  el.disabled = frames.length < 2;
+}
+
+function syncCoordinateBox() {
+  if (!selected) return;
+  const protMode = document.getElementById("coord-system").value === "protein";
+  select.disabled = !protMode;
+  if (protMode) {
+    select.value = selected.target.key;
+    document.getElementById("position").value =
+      String(ownPositionFor(selected.target, selected.geneAa));
+  } else {
+    document.getElementById("position").value = String(markerNt);
+  }
+}
 
 // --- the dashboard ---------------------------------------------------------------
 const shardCache = new Map();
@@ -129,8 +282,10 @@ async function shardFor(protein) {
   return shardCache.get(protein);
 }
 
-async function showPosition(key, ownPosition) {
-  const target = targetByKey.get(key);
+/** Render the dashboard for a gene position. `target` only affects how it is labelled. */
+async function showPosition(target, genePosition) {
+  const key = target.key;
+  const ownPosition = ownPositionFor(target, genePosition);
   const head = document.getElementById("dashboard-head");
   const chart = document.getElementById("dashboard-chart");
   const caption = document.getElementById("dashboard-caption");
@@ -140,7 +295,6 @@ async function showPosition(key, ownPosition) {
   tableSlot.innerHTML = ""; pathSlot.innerHTML = "";
   document.getElementById("paths-heading").hidden = true;
 
-  const genePosition = ownPosition + target.offset;
   const rows = aaLayer.byPosition.get(target.protein + "|" + genePosition);
   if (!rows) {
     const span = aaLayer.proteins.get(target.protein);
@@ -158,20 +312,24 @@ async function showPosition(key, ownPosition) {
   const refAa = rows[0].ref_aa;
   const hxb2 = engine.hxb2Label(target.protein, genePosition);
   const refNt = protRec.codon_nt[genePosition - protRec.first_aa];
+  const site = perSite ? perSite.get(markerNt) : null;
 
   head.innerHTML =
     `<p><strong>${hxb2}</strong> &mdash; reference amino acid <strong>${refAa}</strong>, ` +
     `codon <code>${codon}</code>. ` +
     `${target.protein} position ${genePosition}` +
     (target.offset ? ` (${key} ${ownPosition})` : "") +
-    `; NL4-3 reference nucleotides ${refNt[0].toLocaleString()}\u2013${refNt[2].toLocaleString()}.</p>`;
+    `; NL4-3 reference nucleotides ${refNt[0].toLocaleString()}\u2013${refNt[2].toLocaleString()}` +
+    (site ? `. Selected nucleotide ${markerNt.toLocaleString()} is codon base ` +
+            `${refNt.indexOf(markerNt) + 1}, per-site supply ${formatRate(site.total)}` : "") +
+    `.</p>`;
 
   const sorted = rows.slice().sort((a, b) => b.mu_aa - a.mu_aa);
   // Pie of the ONE-nucleotide-accessible amino-acid changes: each slice is a reachable
   // target amino acid, sized by its share of the single-step mutational supply at this
   // position. One-step changes are the ones actually generated at appreciable rate, so
   // the pie shows where supply goes when a single substitution occurs here.
-  const oneStep = sorted.filter((r) => r.min_nt_changes === 1);
+  const oneStep = oneStepSlices(rows);
   if (oneStep.length) {
     pieChart(chart, oneStep.map((r) => ({
       label: `${r.alt_aa}${r.synonymous ? "*" : ""}`,
@@ -180,9 +338,10 @@ async function showPosition(key, ownPosition) {
     caption.innerHTML =
       "Each slice is an amino-acid change reachable from the reference codon by a " +
       "<strong>single</strong> nucleotide substitution, sized by its share of the one-step " +
-      "mutational supply at this position. <code>*</code> marks a synonymous change. " +
-      "Two- and three-step changes are in the table below but not in the pie, because they " +
-      "are generated far more rarely. Values are read from the atlas, not recomputed.";
+      "mutational supply at this position. <code>*</code> marks a synonymous change. The " +
+      "shares are a property of the whole codon, not of the single nucleotide marked on the " +
+      "track. Two- and three-step changes are in the table below but not in the pie, because " +
+      "they are generated far more rarely. Values are read from the atlas, not recomputed.";
   } else {
     chart.innerHTML = "";
     caption.innerHTML =
@@ -248,48 +407,73 @@ async function showPosition(key, ownPosition) {
   }
 }
 
-document.getElementById("go").addEventListener("click", () => {
-  const key = select.value;
-  const posInput = Number(document.getElementById("position").value);
-  const coordSystem = document.getElementById("coord-system")?.value || "NL4-3";
-  
-  if (!Number.isInteger(posInput) || posInput < 1) {
-    showError(document.getElementById("dashboard-head"), "Enter a positive integer position.");
+// --- coordinate entry ---------------------------------------------------------------
+/** Resolve whatever is in the boxes and move the selection there. */
+function jumpFromBoxes() {
+  const head = document.getElementById("dashboard-head");
+  const raw = Number(document.getElementById("position").value);
+  if (!Number.isInteger(raw) || raw < 1) {
+    showError(head, "Enter a positive whole number.");
     return;
   }
-  
-  // Convert HXB2 to NL4-3 if needed
-  let pos = posInput;
-  if (coordSystem === "HXB2") {
-    // Reverse lookup: find NL4-3 position that maps to this HXB2 position
-    const nl43Pos = engine.nl43PositionFromHxb2(key, posInput);
-    if (nl43Pos === null) {
-      showError(document.getElementById("dashboard-head"), `HXB2 position ${posInput} not found in ${key}. Try NL4-3 numbering.`);
+  if (document.getElementById("coord-system").value === "nt") {
+    if (raw < FIRST || raw > LAST) {
+      showError(head, `Nucleotide ${raw.toLocaleString()} is outside the modelled region ` +
+                      `${FIRST.toLocaleString()}\u2013${LAST.toLocaleString()}.`);
       return;
     }
-    pos = nl43Pos;
+    selectNucleotide(raw);
+    return;
   }
-  const url = new URL(window.location.href);
-  url.searchParams.set("protein", key);
-  url.searchParams.set("pos", String(pos));
-  url.searchParams.set("v", page.version.replace(/^v/, ""));
-  window.history.replaceState({}, "", url);
-  showPosition(key, pos);
-});
-document.getElementById("download-png")?.addEventListener("click", downloadDashboardPNG);
+  const target = targetByKey.get(select.value);
+  if (!target) { showError(head, "Pick a protein or subunit."); return; }
+  if (target.maxOwn && raw > target.maxOwn) {
+    showError(head, `${target.key} is ${target.maxOwn} residues long, so position ${raw} ` +
+                    `does not exist.`);
+    return;
+  }
+  const geneAa = engine.geneAaFromOwnPosition(target, raw);
+  if (geneAa === null) {
+    showError(head, `${target.key} ${raw} is an HXB2 position with no NL4-3 equivalent ` +
+                    `(an insertion relative to HXB2), so the atlas has no row for it.`);
+    return;
+  }
+  const rec = assets.reference.proteins[target.protein];
+  const idx = geneAa - rec.first_aa;
+  if (idx < 0 || idx >= rec.codon_nt.length ||
+      !aaLayer.byPosition.has(target.protein + "|" + geneAa)) {
+    showPosition(target, geneAa);         // renders the specific out-of-region message
+    return;
+  }
+  applySelection(target.protein, geneAa, null);
+}
+
+document.getElementById("go").addEventListener("click", jumpFromBoxes);
 document.getElementById("position").addEventListener("keydown",
-  (e) => { if (e.key === "Enter") document.getElementById("go").click(); });
+  (e) => { if (e.key === "Enter") jumpFromBoxes(); });
+select.addEventListener("change", jumpFromBoxes);
+document.getElementById("coord-system").addEventListener("change", syncCoordinateBox);
+document.getElementById("reading-frame").addEventListener("change", (e) => {
+  const [protein, geneAa] = e.target.value.split("|");
+  applySelection(protein, Number(geneAa), markerNt);
+});
+elSlider.addEventListener("input", () => selectNucleotide(Number(elSlider.value)));
+elWin.addEventListener("input", () => { elWinOut.textContent = elWin.value; });
+elWin.addEventListener("change", drawTrack);
+elClass.addEventListener("change", drawTrack);
+document.getElementById("download-png")?.addEventListener("click", downloadDashboardPNG);
 
 // A shareable link reproduces the exact view, including the atlas version.
-const refreshShare = () => {
+function refreshShare() {
   const slot = document.getElementById("share-slot");
   slot.innerHTML = "";
   slot.appendChild(shareButton({ version: page.version,
-    extra: { protein: select.value, pos: document.getElementById("position").value } }));
-};
-select.addEventListener("change", refreshShare);
-document.getElementById("position").addEventListener("input", refreshShare);
-refreshShare();
+    extra: selected
+      ? { protein: selected.target.key,
+          pos: String(ownPositionFor(selected.target, selected.geneAa)),
+          nt: String(markerNt) }
+      : {} }));
+}
 
 // --- table analysis ---------------------------------------------------------------
 // The parser lives in js/mutations.js so it can be tested without a DOM; see
@@ -350,15 +534,23 @@ document.getElementById("file-input").addEventListener("change", async (e) => {
 });
 
 // --- open on whatever the URL asked for -------------------------------------------
+// `nt` is the unambiguous coordinate and wins when present. `protein`+`pos` is kept for
+// links made before the track existed; `pos` is read in the subunit's own numbering.
 const qs = new URLSearchParams(window.location.search);
+const wantNt = Number(qs.get("nt"));
 const wantProtein = qs.get("protein");
 const wantPos = Number(qs.get("pos"));
-if (wantProtein && targetByKey.has(wantProtein) && wantPos > 0) {
+if (Number.isInteger(wantNt) && wantNt >= FIRST && wantNt <= LAST && frameAt.has(wantNt)) {
+  selectNucleotide(wantNt);
+} else if (wantProtein && targetByKey.has(wantProtein) && wantPos > 0) {
   select.value = wantProtein;
   document.getElementById("position").value = String(wantPos);
-  showPosition(wantProtein, wantPos);
+  jumpFromBoxes();
 } else {
   select.value = "PR";
-  showPosition("PR", 46);
+  document.getElementById("position").value = "46";
+  jumpFromBoxes();
 }
-refreshShare();
+
+// The track is heavy, so it comes last -- the dashboard is already usable by now.
+loadTrack();

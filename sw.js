@@ -26,7 +26,7 @@ const SHELL = [
   "./download.html", "./drm.html", "./explore.html", "./css/mra.css", "./vendor/html2canvas/html2canvas.min.js",
   "./js/version.js", "./js/page.js", "./js/data.js", "./js/table.js", "./js/chart.js",
   "./js/mra_engine.js", "./js/align.js", "./js/align.worker.js", "./js/analysis.js",
-  "./js/mutations.js", "./js/index.js", "./js/browse.js", "./js/explore.js", "./js/sequence.js",
+  "./js/mutations.js", "./js/index.js", "./js/browse.js", "./js/explore_redirect.js", "./js/sequence.js",
   "./js/compare.js", "./js/download.js", "./js/drm.js",
   "./js/codon_sensitivity.js",
   "./data/releases.json",
