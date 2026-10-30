@@ -49,7 +49,7 @@ changes that codon's supply goes to.</p>
     <label for="explore-coord-system">Coordinate system</label>
     <select id="explore-coord-system">
       <option value="nt">NL4-3 nucleotide</option>
-      <option value="hxb2">HXB2 amino acid</option>
+      <option value="hxb2">HXB2 amino acid (gene numbering)</option>
     </select>
   </div>
   <div>
@@ -63,6 +63,11 @@ changes that codon's supply goes to.</p>
   <div><span id="share-slot"></span></div>
 </div>
 
+<p class="caveat">Amino-acid coordinates are gene-wide (Pol 1&ndash;1003), not sub-protein
+(PR 1&ndash;99, RT 1&ndash;560). The reading-frame selector shows the clinical label for whatever
+you land on &mdash; Pol 97 reads as <strong>PR 46</strong> &mdash; so use it to confirm the site.
+To go straight to a sub-protein position such as RT 103, use the position dashboard on
+<a href="browse.html">Browse the atlas</a>.</p>
 <div id="explore-status" class="caveat">Loading the atlas tables&hellip;</div>
 <div id="explore-head"></div>
 <figure class="chart"><div id="explore-pie"></div>
