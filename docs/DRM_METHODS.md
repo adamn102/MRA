@@ -109,4 +109,5 @@ summary of circulating virus, not a second mutation-rate estimate.
 Resistance positions are reported in standard protein numbering (PR, RT, IN, CA); bNAb
 positions in HXB2 Env numbering, resolved to NL4-3 through the position-by-position Env
 lookup. Every exported file carries the atlas version, the model name and the retrieval
-date, and bNAb exports are marked provisional.
+date. bNAb exports additionally record the inclusion standard and note that rows
+without a rate are those where NL4-3 does not carry the published wild-type residue.

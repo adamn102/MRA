@@ -173,15 +173,22 @@ export async function loadLanlCodonFrequencies(version) {
   });
 }
 
-/** The provisional bNAb catalog and the glycan sequon list. */
+/** The curated bNAb escape catalog and the glycan sequon list. */
 export async function loadBnabCatalog(version) {
   return once(version + "/bnab", async () => {
     const [cat, sequons] = await Promise.all([
       getCsv(version, "bnab_catalog.csv", (r) => {
         r.hxb2_position = Number(r.hxb2_position);
         r.nl43_env_position = num(r.nl43_env_position);
-        r.provisional = r.provisional === "True";
-        r.nl43_matches_expected = r.nl43_matches_expected === "True";
+        // applies_to_nl43 is False where NL4-3 does not carry the published wild-type residue.
+        // Those rows keep their annotation and citation but must not show a rate: the atlas
+        // can only rate a change that starts from the NL4-3 codon.
+        r.applies_to_nl43 = String(r.applies_to_nl43) === "True";
+        r.mu_aa = num(r.mu_aa);
+        r.mu_aa_lo95 = num(r.mu_aa_lo95);
+        r.mu_aa_hi95 = num(r.mu_aa_hi95);
+        r.min_nt_changes = num(r.min_nt_changes);
+        r.n_star = num(r.n_star);
       }),
       getJson(version, "glycan_sequons.json"),
     ]);

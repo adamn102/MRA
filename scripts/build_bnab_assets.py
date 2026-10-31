@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
 """
-build_bnab_assets.py -- the provisional bNAb escape catalog and the Env glycan sequons.
+build_bnab_assets.py -- the bNAb escape catalog and the Env glycan sequons.
 
 Imported by build_web_assets.py so a from-scratch rebuild regenerates them.
 
@@ -9,11 +9,14 @@ TWO KINDS OF CONTENT, DIFFERENT SOURCES
     glycan_sequons.json is DERIVED: every N-X-S/T motif in the modelled region of NL4-3
     Env, computed from the reference sequence. It is reproducible and authoritative.
 
-    bnab_catalog.csv is HAND-AUTHORED: the escape annotations in the ANNOTATIONS table
-    below are a reading of the primary bNAb literature, not a database export. This script
-    IS their source of truth -- edit the table here and rebuild. Every row is written with
-    provisional=TRUE and an empty citation. See docs/BNAB_PROVENANCE.md before clearing the
-    provisional flag.
+    bnab_catalog.csv is CURATED SOURCE DATA, copied through from
+    data/source/bnab_catalog_curated.csv. There is no upstream database to export from:
+    the rows are a curation of the primary literature, each citing a study that measured
+    an effect on neutralisation, so the committed CSV *is* the source.
+
+    This script previously authored the catalog from a table held here. It no longer does.
+    Generating it would silently overwrite the curation on any rebuild -- edit the source
+    CSV instead, and see docs/BNAB_PROVENANCE.md for the inclusion standard.
 """
 import argparse, csv, json, pathlib, sys
 import pandas as pd
@@ -31,32 +34,9 @@ GENETIC_CODE = {
 
 # antibody, epitope_class, antibody_class, mechanism, hxb2_position, wt_aa, escape_aa, note
 # mechanism: contact | glycan_sequon | conformational. escape_aa "" for a glycan sequon.
-ANNOTATIONS = [
-    ("VRC01","CD4bs","3BNC117/VRC01-class","contact",368,"D","R","CD4bs contact Asp368; also impairs CD4 binding."),
-    ("VRC01","CD4bs","3BNC117/VRC01-class","contact",279,"N","K","Loop D change reducing CD4bs bNAb binding."),
-    ("VRC01","CD4bs","3BNC117/VRC01-class","glycan_sequon",197,"N","","N197 glycan modulates CD4bs bNAb access."),
-    ("3BNC117","CD4bs","3BNC117/VRC01-class","contact",458,"G","S","Loop V5/CD4bs periphery; 3BNC117 escape."),
-    ("3BNC117","CD4bs","3BNC117/VRC01-class","contact",471,"G","E","CD4bs periphery reducing 3BNC117 neutralisation."),
-    ("N6","CD4bs","VRC01-class (broad)","contact",279,"N","D","Loop D; modulates even the broad N6."),
-    ("10-1074","V3-glycan","PGT121/10-1074","glycan_sequon",332,"N","","N332 glycan required for 10-1074."),
-    ("10-1074","V3-glycan","PGT121/10-1074","contact",325,"D","N","GDIR/324-327 V3 base."),
-    ("PGT121","V3-glycan","PGT121/10-1074","glycan_sequon",332,"N","","N332 glycan dependence."),
-    ("PGT128","V3-glycan","PGT128","glycan_sequon",301,"N","","N301 glycan contributes to PGT128."),
-    ("PGT128","V3-glycan","PGT128","glycan_sequon",332,"N","","N332 glycan dependence."),
-    ("PG9","V2-apex","PG9/PG16","glycan_sequon",160,"N","","N160 glycan central to V2 apex; N160K classic escape."),
-    ("PG9","V2-apex","PG9/PG16","contact",169,"K","E","C-strand (166-171) cationic contact."),
-    ("PGT145","V2-apex","PGT145","glycan_sequon",160,"N","","N160 glycan dependence."),
-    ("CAP256-VRC26","V2-apex","CAP256-VRC26","contact",166,"R","S","C-strand contact."),
-    ("CAP256-VRC26","V2-apex","CAP256-VRC26","glycan_sequon",160,"N","","N160 glycan dependence."),
-    ("10E8","MPER","10E8","contact",672,"W","A","Core MPER contact Trp672."),
-    ("10E8","MPER","10E8","contact",680,"W","S","MPER helix 680."),
-    ("4E10","MPER","4E10","contact",672,"W","A","Trp672 MPER contact."),
-    ("4E10","MPER","4E10","contact",673,"F","A","Phe673 MPER contact."),
-    ("PGT151","interface","PGT151","glycan_sequon",611,"N","","N611 glycan at the gp120-gp41 interface."),
-    ("VRC34","fusion-peptide","VRC34.01","contact",512,"A","E","Fusion-peptide N-terminus (512)."),
-    ("VRC34","fusion-peptide","VRC34.01","glycan_sequon",88,"N","","N88 glycan flanks the fusion peptide."),
-]
-
+# The ANNOTATIONS table that used to live here authored the retired provisional
+# catalog. It was removed when the catalog became curated source data; see the
+# module docstring.
 
 def build_bnab(outdir, reference, hxb2, verbose=True):
     env = reference["proteins"]["Env"]
@@ -74,29 +54,46 @@ def build_bnab(outdir, reference, hxb2, verbose=True):
                             "motif": env_aa[i:i+3],
                             "codon_nt": [env["codon_nt"][i+k] for k in range(3)]})
 
-    # --- bNAb catalog (hand-authored) ---
-    rows, flagged = [], []
-    bnab_sequon_hxb2 = {h for *_, m, h, _, _, _ in ANNOTATIONS if m == "glycan_sequon"}
-    for ab, ec, cls, mech, hpos, wt, esc, note in ANNOTATIONS:
+    # --- bNAb catalog (curated source, copied through and validated) ---
+    source = pathlib.Path(__file__).resolve().parent.parent / "data/source/bnab_catalog_curated.csv"
+    if not source.exists():
+        sys.exit(f"ERROR: curated bNAb catalog missing at {source}. It is source data, not "
+                 f"generated; restore it from version control rather than rebuilding it.")
+    with open(source, newline="") as fh:
+        rows = list(csv.DictReader(fh))
+    REQUIRED = {"antibody", "epitope_class", "hxb2_position", "wt_aa", "escape_aa",
+                "applies_to_nl43", "evidence_strength", "citation", "citation_doi"}
+    missing = REQUIRED - set(rows[0].keys() if rows else [])
+    if missing:
+        sys.exit(f"ERROR: curated bNAb catalog is missing columns: {sorted(missing)}")
+    uncited = [r for r in rows if not r.get("citation_doi", "").startswith("10.")]
+    if uncited:
+        sys.exit(f"ERROR: {len(uncited)} bNAb row(s) lack a DOI; every row must cite a source.")
+
+    # A row may only carry a rate if NL4-3 holds the published wild type. Re-derive that here
+    # rather than trusting the flag, so a hand edit to the source cannot ship a wrong rate.
+    flagged = []
+    for r in rows:
+        hpos = int(r["hxb2_position"])
         nl = h2nl.get(hpos)
         nl_aa = env_aa[nl-1] if nl else None
-        matches = nl_aa == wt
-        if not matches:
-            flagged.append((ab, hpos, wt, nl_aa))
-        rows.append({"antibody": ab, "epitope_class": ec, "antibody_class": cls,
-                     "mechanism": mech, "hxb2_position": hpos, "wt_aa": wt, "escape_aa": esc,
-                     "nl43_env_position": nl, "nl43_wt_aa": nl_aa,
-                     "nl43_matches_expected": matches,
-                     "evidence_type": "literature_provisional", "citation": "",
-                     "provisional": True, "note": note})
-    for s in sequons:
-        s["bnab_dependent"] = s["hxb2_position"] in bnab_sequon_hxb2
+        applies = (nl_aa == r["wt_aa"])
+        if applies != (str(r["applies_to_nl43"]) == "True"):
+            sys.exit(f"ERROR: {r['antibody']} {r['wt_aa']}{hpos}{r['escape_aa']} claims "
+                     f"applies_to_nl43={r['applies_to_nl43']} but NL4-3 carries {nl_aa}.")
+        if not applies:
+            flagged.append((r["antibody"], hpos, r["wt_aa"], nl_aa))
+            if r.get("mu_aa"):
+                sys.exit(f"ERROR: {r['antibody']} {r['wt_aa']}{hpos} does not apply to NL4-3 "
+                         f"but carries a rate. Such rows must have no rate.")
 
-    cols = ["antibody","epitope_class","antibody_class","mechanism","hxb2_position","wt_aa",
-            "escape_aa","nl43_env_position","nl43_wt_aa","nl43_matches_expected",
-            "evidence_type","citation","provisional","note"]
-    with open(outdir / "bnab_catalog.csv", "w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=cols); w.writeheader()
+    bnab_sequon_hxb2 = {int(r["hxb2_position"]) for r in rows}
+    for s_ in sequons:
+        s_["bnab_dependent"] = s_["hxb2_position"] in bnab_sequon_hxb2
+
+    cols = list(rows[0].keys())
+    with open(outdir / "bnab_catalog.csv", "w", newline="\n") as fh:
+        w = csv.DictWriter(fh, fieldnames=cols, lineterminator="\n"); w.writeheader()
         for r in rows: w.writerow(r)
     (outdir / "glycan_sequons.json").write_text(json.dumps({
         "note": ("N-X-S/T sequons (X != P) in modelled NL4-3 Env, from the reference sequence. "
@@ -106,7 +103,7 @@ def build_bnab(outdir, reference, hxb2, verbose=True):
         "env_modelled_range_nl43": [env["first_aa"], env["last_aa"]],
         "sequons": sequons}, indent=1))
     if verbose:
-        print(f"    bNAb catalog: {len(rows)} provisional annotations, "
+        print(f"    bNAb catalog: {len(rows)} curated annotations, "
               f"{len(set(r['antibody'] for r in rows))} antibodies, "
               f"{len(set(r['epitope_class'] for r in rows))} epitope classes")
         print(f"    glycan sequons: {len(sequons)} ({sum(s['bnab_dependent'] for s in sequons)} bNAb-dependent)")

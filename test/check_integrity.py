@@ -57,7 +57,14 @@ for html in sorted(ROOT.glob("*.html")):
 # The privacy guarantee is that nothing a user pastes can leave the machine, and that
 # merely using the tool is not reported anywhere. A single CDN script tag or analytics
 # beacon would break it, so this check is a release gate, not a style preference.
-ALLOWED_URL_CONTEXTS = ("creativecommons.org", "www.w3.org")   # licence link, SVG namespace
+# doi.org joins the list for the same reason as the licence link: it appears only as the href
+# of an <a> the reader may choose to click, never as a fetch, script or image source. Nothing
+# is requested unless the reader navigates, the pages carry <meta name="referrer"
+# content="no-referrer"> and the links carry rel="noopener noreferrer", so following one
+# reveals the DOI alone and nothing about the session or any submitted sequence. The separate
+# fetch/XMLHttpRequest/sendBeacon checks below still apply and are what enforce the guarantee.
+ALLOWED_URL_CONTEXTS = ("creativecommons.org", "www.w3.org",    # licence link, SVG namespace
+                        "doi.org")                             # citation links (anchors only)
 for path in sorted(list(ROOT.glob("*.html")) + list(ROOT.glob("js/*.js")) + list(ROOT.glob("*.js")) + list(ROOT.glob("css/*.css"))):
     for url in re.findall(r'https?://[^\s"\'()<>]+', path.read_text()):
         if any(a in url for a in ALLOWED_URL_CONTEXTS):

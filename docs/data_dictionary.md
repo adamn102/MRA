@@ -192,18 +192,37 @@ amino-acid layer. One row per (mutation, treatment stratum).
 The class→stratum selector tree, with per-class mutation counts, position ranges and the
 source SDRD file. `freq_pseudocount` and the subtype list are recorded here.
 
-## `bnab_catalog.csv` — 23 rows — PROVISIONAL
+## `bnab_catalog.csv` — 24 rows
 
-Hand-authored bNAb escape annotations; **not a database export**. See
-`docs/BNAB_PROVENANCE.md`. `provisional` is `True` on every row and `citation` is empty.
+Curated bNAb escape mutations. A row is included only where a cited study reports a measured
+effect on neutralisation; structural contacts and glycan positions without a measured effect
+are excluded, as are substitutions a source names but reports as not conferring resistance
+alone. See `docs/BNAB_PROVENANCE.md` for the inclusion standard and coverage gaps.
+
+6 antibodies (PGDM1400, VRC07-523LS, PGT121, 10-1074, 3BNC117, N6) across 4 epitope classes,
+from 5 papers. 20 of the 24 rows carry a rate.
 
 | Column | Meaning |
 |---|---|
-| `antibody`, `epitope_class`, `antibody_class` | e.g. `PG9`, `V2-apex`, `PG9/PG16`. |
-| `mechanism` | `contact`, `glycan_sequon` or `conformational`. |
-| `hxb2_position`, `wt_aa`, `escape_aa` | HXB2 Env position and the change; `escape_aa` empty for a glycan sequon (any destroying change). |
-| `nl43_env_position`, `nl43_wt_aa`, `nl43_matches_expected` | Resolved to NL4-3; `False` where NL4-3's residue is not the canonical epitope wild type. |
-| `evidence_type`, `citation`, `provisional`, `note` | `citation` deliberately blank until sign-off. |
+| `antibody`, `epitope_class` | e.g. `PGDM1400`, `V2-apex`. |
+| `hxb2_position`, `wt_aa`, `escape_aa` | The published escape mutation, in HXB2 Env numbering. |
+| `nl43_env_position`, `nl43_wt_aa` | Resolved to NL4-3 numbering; blank where the row does not apply. |
+| `applies_to_nl43` | `False` where NL4-3 does not carry the published wild-type residue. Such rows keep their annotation and citation but carry **no rate**, and `note` begins `NOT APPLICABLE:` with the reason. |
+| `evidence_type` | `in_vivo_selection`, `clinical_rebound` or `literature_reported`. |
+| `evidence_strength` | `primary` (reduces neutralisation on its own), `secondary` (no effect alone; escapes only with a partner mutation), `clinical` (emerged in a treated participant and attributed there). |
+| `effect` | One line on what the cited study observed. |
+| `citation`, `citation_doi` | Author-year and DOI. Rendered as a link on the page. |
+| `mu_aa`, `mu_aa_lo95`, `mu_aa_hi95` | Per-replication probability of the substitution from the NL4-3 codon, with its 95% interval. Blank where `applies_to_nl43` is `False`. |
+| `min_nt_changes` | Nucleotide changes required from the NL4-3 codon. |
+| `n_star` | `1/mu_aa` — replication events for one expected de novo copy. |
+| `note` | Caveats, including the `NOT APPLICABLE:` reason where relevant. |
+
+Rows are **one mutation each**. No genotype-level rates are published, even where a source
+reports two changes are needed together: combining them would assume sequential accumulation
+within a single lineage, which recombination can bypass.
+
+`test/bnab_cases.mjs` checks the schema, that every row cites a resolvable DOI, that the
+applicability rule holds, and that every shipped rate equals a live engine recomputation.
 
 ## `glycan_sequons.json`
 

@@ -110,12 +110,18 @@ numbers — but it means a byte-exact comparison against the production tables w
   variant is generated. Clinical frequency, shown alongside, is supply filtered through
   selection, treatment history, sampling and founder effects. Do not read a high supply as
   a prediction of high prevalence, or the reverse.
-- **bNAb annotations are provisional.** They are a literature draft, not a database export,
-  marked provisional on every row with citations unfilled. See `docs/BNAB_PROVENANCE.md`.
-  The rates are computed by the validated engine; the *annotations* are what await sign-off.
-- **NL4-3 is not a neutral Env reference.** It is lab-adapted with an atypical V1/V2/V3, and
-  at several bNAb and one integrase DRM position its residue differs from consensus. Those
-  rows are flagged; the rate is from NL4-3's residue, not the canonical wild type.
+- **bNAb escape rows are supply, not outcome.** Each cites a study that measured an effect on
+  neutralisation, but the rate says only how often the change is generated. Path choice also
+  depends on fitness cost and resistance benefit: the dominant VRC07-523LS escape (D279A) has
+  the *lowest* one-step rate in the catalog. See `docs/BNAB_PROVENANCE.md`.
+- **NL4-3 is not a neutral Env reference.** It is lab-adapted with an atypical V1/V2/V3, and at
+  several bNAb positions its residue differs from the published epitope wild type — at HXB2 190
+  and 325 it already carries the escape residue. Those rows keep their annotation and citation
+  but show **no rate**, because the atlas can only rate a change starting from the NL4-3 codon.
+  The rate is never silently recomputed from a different starting residue.
+- **One mutation per row.** No combined multi-mutation rates, even where a source reports two
+  changes are needed together: that would assume sequential accumulation in one lineage, and
+  recombination can bypass it. Recombination is not modelled anywhere in this resource.
 - **Indel-coded DRMs have no rate.** In-frame codon insertions/deletions (Stanford `~`/`#`)
   are real resistance but not substitutions, so no `mu_aa` is given and the per-nucleotide
   indel rate — a frameshift, a different event — is not substituted for it.

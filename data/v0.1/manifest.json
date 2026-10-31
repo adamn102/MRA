@@ -5,7 +5,7 @@
   "model": "mra_joint_control_wt_nb_ga2_sub1_ga3_sum0_bio_splines",
   "generated_by": "scripts/build_web_assets.py",
   "sigfigs_for_rates": 6,
-  "total_gzip_bytes": 6675005,
+  "total_gzip_bytes": 6675875,
   "assets": {
     "aa_level_supply.csv": {
       "sha256": "0193042750c2a84c41004f337a9cf358282fb39f413d45d7a5c734372fd7d6f6",
@@ -58,9 +58,9 @@
       "gzip_bytes": 115528
     },
     "bnab_catalog.csv": {
-      "sha256": "ac52c4bb6fa88b72359ab60964c0c8541dec084867317391880d13677cad88c3",
-      "bytes": 2875,
-      "gzip_bytes": 866
+      "sha256": "7141c8f9b142963e10b05b1cfd160737494108401d5c575c48e661cdd19a1f6d",
+      "bytes": 5605,
+      "gzip_bytes": 1736
     },
     "citation.json": {
       "sha256": "fbd66539a033e594801bb22ed153bbb4cfc5be8ffde24aee41f95f0e98493a54",

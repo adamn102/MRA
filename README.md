@@ -64,8 +64,10 @@ dev script is a convenience, not a dependency.
    drug-resistance mutations.
 3. `drm.html` — the resistance & escape page. Pick a drug class (try **INI**), then
    click **codon sensitivity** on a glycine DRM such as **IN G140R** to see the 68× spread
-   across synonymous codons with NL4-3's marked. The bNAb section below carries a
-   provisional banner; its glycan rows show summed sequon-loss.
+   across synonymous codons with NL4-3's marked. The bNAb section below lists 24 curated
+   escape mutations across 6 antibodies, each citing a study that measured an effect on
+   neutralisation; rows where NL4-3 lacks the published wild type keep the citation but
+   show no rate.
 4. `sequence.html` — press **Load NL4-3 (worked example)** then **Compute custom atlas**.
    This is the round-trip test running in your browser: 2,984 codons, 62,518 amino-acid
    rows, 0 positions needing the spline fallback, 405 dropped for lying past 8,213.
@@ -91,7 +93,7 @@ python scripts/build_web_assets.py \
     --sdrd  /path/to/MutRatePaper/data/mutation_supply/SDRD
 ```
 
-`--sdrd` adds the drug-resistance catalog and the provisional bNAb assets; omit it to build
+`--sdrd` adds the drug-resistance catalog and the bNAb escape assets; omit it to build
 the browse/sequence portal alone.
 
 This runs `scripts/extract_mra_web_model.py` (the single authority on model extraction, whose

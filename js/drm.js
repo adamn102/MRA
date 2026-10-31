@@ -4,7 +4,8 @@
 //
 // Two catalogs, one engine. The DRM half is a database join: every number is read from
 // drm_catalog.csv, which was rebuilt from the Stanford SDRD exports and joined to the
-// published atlas. The bNAb half is PROVISIONAL and marked so on every row. Clicking any
+// published atlas. The bNAb half is curated from primary literature, every row citing a
+// study that measured an effect on neutralisation. Clicking any
 // row runs the codon-sensitivity engine live, in the browser, on the small model bundle.
 //
 // The page is careful about three distinctions that are easy to blur:
@@ -170,12 +171,20 @@ function refreshShare() {
 }
 
 // --- bNAb selector ----------------------------------------------------------------
-document.getElementById("bnab-provisional").appendChild(note(
-  "<strong>Provisional.</strong> These antibody-escape annotations are a literature draft, " +
-  "not a database export, and are not yet signed off. Positions and glycan dependencies are " +
-  "the well-known ones, but every row is marked provisional and the citations are not yet " +
-  "filled in. See <code>docs/BNAB_PROVENANCE.md</code>. The mutation rates themselves are " +
-  "computed by the same validated engine as everything else."));
+document.getElementById("bnab-note").appendChild(note(
+  "<strong>Curated from primary literature.</strong> Every row records a substitution for " +
+  "which a cited study measured an effect on neutralisation \u2014 escape selected in vivo, " +
+  "a rebound virus in a treated participant, or a reported resistance assignment. Structural " +
+  "contacts and glycan positions without a measured effect are deliberately excluded. " +
+  "<strong>Evidence</strong> distinguishes <em>primary</em> (the substitution was shown to " +
+  "reduce neutralisation on its own), <em>secondary</em> (no effect alone; confers escape " +
+  "only alongside a partner mutation) and <em>clinical</em> (emerged in a treated " +
+  "participant and was attributed there). Escape mutations are published in HXB2 numbering " +
+  "against varied viral backgrounds; where NL4-3 does not carry the published wild-type " +
+  "residue the row is kept with its citation but no rate is shown, because the atlas can " +
+  "only rate a change starting from the NL4-3 codon. Rows are one mutation each: a combined " +
+  "rate for a multi-mutation genotype would assume sequential accumulation in a single " +
+  "lineage, which recombination can bypass."));
 
 const bnabSel = document.getElementById("bnab-class");
 const bnabClasses = [...new Set(bnab.records.map((r) => r.epitope_class))].sort();
@@ -191,63 +200,76 @@ function renderBnab() {
   const sequonByHxb2 = new Map(bnab.sequons.map((s) => [s.hxb2_position, s]));
   const rows = [];
   for (const r of inClass) {
-    const base = {
-      antibody: r.antibody, mechanism: r.mechanism,
-      position: "Env " + r.hxb2_position + (r.wt_aa ? " (" + r.wt_aa + ")" : ""),
-      nl43_ok: r.nl43_matches_expected,
-      note: r.nl43_matches_expected ? "" : `NL4-3 has ${r.nl43_wt_aa}, not ${r.wt_aa}`,
-      _row: r,
-    };
-    if (r.mechanism === "glycan_sequon") {
-      const sq = sequonByHxb2.get(r.hxb2_position);
-      const loss = sq ? sequonLossRate(engine, sq) : null;
-      rows.push({ ...base,
-        change: `lose N${r.hxb2_position} glycan`,
-        mu: loss ? loss.mu_sequon_loss : null,
-        interval: loss ? `${formatRate(loss.lo95)} \u2013 ${formatRate(loss.hi95)}` : "\u2014",
-        kind: "sequon loss (3 codons)",
-        _sequon: sq, _loss: loss });
-    } else {
-      // specific contact change: compute its mu_aa directly if NL4-3 carries the WT
-      const nl = r.nl43_env_position;
-      let mu = null, interval = "\u2014", minnt = null;
-      if (nl && r.escape_aa) {
-        const s = codonSensitivity(engine, { gene: "Env", genePosition: nl,
-          refAa: r.wt_aa, altAa: r.escape_aa });
-        if (s.applicable && s.nl43_rate) { mu = s.nl43_rate; minnt = s.min_nt_changes; }
-      }
-      rows.push({ ...base,
-        change: r.wt_aa + r.hxb2_position + (r.escape_aa || "?"),
-        mu, interval, kind: "specific change",
-        min_nt_changes: minnt });
+    // The rate is recomputed live from the engine rather than read from the CSV column, so
+    // the table and the codon-sensitivity drill-down can never disagree. The CSV value is
+    // the same number; test/bnab_cases.mjs asserts the two agree.
+    let mu = null, lo = null, hi = null, minnt = null;
+    if (r.applies_to_nl43 && r.nl43_env_position && r.escape_aa) {
+      const s2 = codonSensitivity(engine, { gene: "Env", genePosition: r.nl43_env_position,
+        refAa: r.wt_aa, altAa: r.escape_aa });
+      if (s2.applicable && s2.nl43_rate) { mu = s2.nl43_rate; minnt = s2.min_nt_changes; }
     }
+    if (mu === null && r.applies_to_nl43) { mu = r.mu_aa; minnt = r.min_nt_changes; }
+    if (r.applies_to_nl43) { lo = r.mu_aa_lo95; hi = r.mu_aa_hi95; }
+    rows.push({
+      antibody: r.antibody,
+      change: `${r.wt_aa}${r.hxb2_position}${r.escape_aa}`,
+      evidence: r.evidence_strength,
+      effect: r.effect,
+      mu,
+      interval: (lo && hi) ? `${formatRate(lo)} \u2013 ${formatRate(hi)}` : "\u2014",
+      steps: minnt,
+      n_star: mu ? Math.round(1 / mu) : null,
+      nl43: r.applies_to_nl43 ? `Env ${r.nl43_env_position}` : "\u2014",
+      citation: r.citation,
+      doi: r.citation_doi,
+      note: r.note || "",
+      _row: r,
+      _sequon: sequonByHxb2.get(r.hxb2_position) || null,
+    });
   }
 
   renderTable(document.getElementById("bnab-table"), {
     columns: [
       { key: "antibody", label: "Antibody" },
-      { key: "change", label: "Escape" },
-      { key: "kind", label: "Kind" },
+      { key: "change", label: "Escape (HXB2)" },
+      { key: "evidence", label: "Evidence" },
       { key: "mu", label: "escape rate", type: "rate",
-        title: "specific change: mu_aa; sequon loss: summed over all three codons" },
+        title: "mu_aa for this substitution from the NL4-3 codon; blank where NL4-3 " +
+               "does not carry the published wild-type residue" },
       { key: "interval", label: "95% interval" },
-      { key: "position", label: "Env (HXB2)" },
+      { key: "steps", label: "nt steps" },
+      { key: "n_star", label: "N* for one copy",
+        title: "replication events for one expected de novo copy, 1/rate" },
+      { key: "nl43", label: "NL4-3" },
+      { key: "citation", label: "Source",
+        render: (r) => {
+          const a = document.createElement("a");
+          a.href = "https://doi.org/" + r.doi;
+          a.textContent = r.citation;
+          a.target = "_blank"; a.rel = "noopener noreferrer";
+          return a;
+        } },
+      { key: "effect", label: "Reported effect" },
       { key: "note", label: "Note" },
       { key: "antibody", label: "",
         render: (r) => {
           const b = document.createElement("button");
           b.className = "secondary"; b.textContent = "codon sensitivity";
-          b.addEventListener("click", () => drillBnab(r._row, r._sequon, r._loss));
+          b.disabled = !r._row.applies_to_nl43;
+          b.addEventListener("click", () => drillBnab(r._row, r._sequon));
           return b;
         } },
     ],
     rows: rows.sort((a, b) => (b.mu || 0) - (a.mu || 0)),
     sort: { key: "mu", dir: "desc" },
     filterPlaceholder: false,
-    downloadName: `mra_${page.version}_bNAb_${cls}_PROVISIONAL.csv`,
+    downloadName: `mra_${page.version}_bNAb_escape_${cls}.csv`,
     provenance: exportProvenance(page.release, [
-      `PROVISIONAL bNAb escape, epitope class ${cls}. Not signed off; see BNAB_PROVENANCE.md.`,
-      "Glycan rows report summed sequon-loss rate over three codons.",
+      `bNAb escape, epitope class ${cls}. Curated from primary literature; every row cites a`,
+      "study that measured an effect on neutralisation. See docs/BNAB_PROVENANCE.md.",
+      "Rows without a rate: NL4-3 does not carry the published wild-type residue.",
+      "One mutation per row; no combined multi-mutation rates (recombination not modelled).",
     ]),
   });
 }
@@ -259,13 +281,17 @@ function drillDrm(row) {
     refAa: row.ref_aa, altAa: row.alt_aa });
   showDrill(`${row.protein} ${row.ref_aa}${row.protein_position}${row.alt_aa}`, s, null);
 }
-function drillBnab(row, sequon, loss) {
-  if (row.mechanism === "glycan_sequon" && loss) {
-    showSequonDrill(row, loss);
-  } else if (row.nl43_env_position && row.escape_aa) {
-    const s = codonSensitivity(engine, { gene: "Env", genePosition: row.nl43_env_position,
-      refAa: row.wt_aa, altAa: row.escape_aa });
-    showDrill(`${row.antibody}: Env ${row.wt_aa}${row.hxb2_position}${row.escape_aa}`, s, null);
+function drillBnab(row, sequon) {
+  if (!row.applies_to_nl43 || !row.nl43_env_position || !row.escape_aa) return;
+  const s = codonSensitivity(engine, { gene: "Env", genePosition: row.nl43_env_position,
+    refAa: row.wt_aa, altAa: row.escape_aa });
+  showDrill(`${row.antibody}: Env ${row.wt_aa}${row.hxb2_position}${row.escape_aa}`, s, null);
+  // Several escape substitutions work by destroying an N-linked glycan sequon. Where this
+  // position carries one, also show the total supply for losing that glycan by ANY route --
+  // a larger number than the single substitution, because three codons can destroy it.
+  if (sequon) {
+    const loss = sequonLossRate(engine, sequon);
+    if (loss) showSequonDrill(row, loss);
   }
 }
 
