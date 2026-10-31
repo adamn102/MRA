@@ -138,3 +138,49 @@ export function groupByPosition(rows, key = "ref_position") {
   }
   return out;
 }
+
+/**
+ * De novo emergence of one amino-acid change, as a function of how much the virus replicates.
+ *
+ * THE MODEL. One replication cycle produces N new genomes from wild-type templates. Each is an
+ * independent trial that yields this specific amino-acid change with probability mu, so the
+ * number of new mutant genomes is Binomial(N, mu) and
+ *
+ *     P(at least one generated) = 1 - (1 - mu)^N        E[copies] = N * mu
+ *
+ * Against log10(N) the probability is a sigmoid: flat while N << 1/mu, rising steeply around
+ * N* = 1/mu, saturating at 1. N* is where ONE copy is expected, which is a 63% chance of
+ * seeing at least one -- not a guarantee.
+ *
+ * WHAT N IS. A count of replication events per cycle, not a fraction and not a viral load:
+ * N = (population size) x (fraction replicating this cycle). It is dimensionless only in the
+ * sense that it counts genomes; it is not bounded by 1.
+ *
+ * WHAT THIS IS NOT. Generation, not establishment. A variant that is generated may still be
+ * lost to drift, purged by selection, or never sampled; this function speaks only to
+ * mutational supply. It is also per cycle, so it understates cumulative supply over an
+ * infection. It applies to single-nucleotide changes, where one replication event suffices;
+ * a multi-step change is not a single-cycle event and must not be read off this curve.
+ *
+ * @param {object} r  an atlas row with mu_aa and, optionally, its 95% bounds
+ */
+export function emergenceStats(r) {
+  const mu = r.mu_aa;
+  if (!(mu > 0)) return { mu: 0, nStar: null, nLo: null, nHi: null, pAtNStar: null };
+  return {
+    mu,
+    nStar: 1 / mu,
+    nLo: r.mu_aa_hi95 > 0 ? 1 / r.mu_aa_hi95 : null,   // upper rate -> lower population
+    nHi: r.mu_aa_lo95 > 0 ? 1 / r.mu_aa_lo95 : null,
+    pAtNStar: 1 - Math.exp(-1),
+  };
+}
+
+/** P(at least one copy generated) in N replication events. Exact binomial, not Poisson. */
+export function emergenceProbability(mu, n) {
+  if (!(mu > 0) || !(n > 0)) return 0;
+  return 1 - Math.pow(1 - mu, n);
+}
+
+/** Expected de novo copies of a change in N replication events, one cycle. */
+export function expectedCopies(mu, n) { return mu * n; }

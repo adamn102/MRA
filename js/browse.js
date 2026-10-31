@@ -20,6 +20,7 @@ import { bootstrapPage, note, caveat, showError, exportProvenance, shareButton, 
 import { loadSmallAssets, loadAminoAcidLayer, loadNucleotideLayer, loadPathShard } from "./data.js";
 import { renderTable, formatRate } from "./table.js";
 import { drawSupplyTrack, drawPositionPie } from "./track_view.js";
+import { trackSliderGeometry } from "./chart.js";
 import { MraEngine } from "./mra_engine.js";
 import { resolveMutation } from "./mutations.js";
 import { perSiteSupply, smoothSeries, buildFrameIndex, geneSegments, oneStepSlices,
@@ -148,6 +149,7 @@ const elWinOut = document.getElementById("track-window-out");
 const elClass = document.getElementById("track-class");
 const elSlider = document.getElementById("track-slider");
 elSlider.min = String(FIRST); elSlider.max = String(LAST);
+Object.assign(elSlider.style, trackSliderGeometry());   // align the thumb with the plot area
 for (const el of [elWin, elClass, elSlider]) el.disabled = true;
 
 function drawTrack() {

@@ -9,6 +9,8 @@
 import fs from "node:fs";
 import { MraEngine } from "../js/mra_engine.js";
 import { trackStats } from "../js/track_view.js";
+import { LAYOUT, trackSliderGeometry } from "../js/chart.js";
+import { emergenceStats, expectedCopies, emergenceProbability } from "../js/explore_core.js";
 import { perSiteSupply, smoothSeries, buildFrameIndex, geneSegments, oneStepSlices,
          targetFor } from "../js/explore_core.js";
 
@@ -343,6 +345,109 @@ check("every clickable frame maps to a selectable protein/subunit",
                             marker: 1600, refBase: "T" })[3];
   check("a 0% G->A row says why it is zero", nonG.value === "0%" && /not G/.test(nonG.note),
         `${nonG.value} -- ${nonG.note}`);
+}
+
+// --- 9. de novo emergence vs population size -----------------------------------------
+// E[copies] = N * mu, so N* = 1/mu. The axis on the chart runs 1 to 1e6, so the thing worth
+// asserting is that real one-step changes actually resolve on it, and that the interval is
+// inverted the right way round -- a FASTER change needs a SMALLER population, and getting
+// that backwards would invert every confidence bound the panel shows.
+{
+  const e = emergenceStats({ mu_aa: 1e-5, mu_aa_lo95: 5e-6, mu_aa_hi95: 2e-5 });
+  check("N* is the reciprocal of the rate", Math.abs(e.nStar - 1e5) < 1,
+        `${e.nStar}`);
+  check("the population interval inverts the rate interval",
+        Math.abs(e.nLo - 5e4) < 1 && Math.abs(e.nHi - 2e5) < 1,
+        `nLo ${e.nLo}, nHi ${e.nHi}`);
+  check("a faster change needs a smaller population", e.nLo < e.nStar && e.nStar < e.nHi);
+  check("one expected copy is a 63% chance, not a certainty",
+        Math.abs(e.pAtNStar - 0.6321) < 1e-3, e.pAtNStar.toFixed(4));
+  check("expected copies are linear in N",
+        expectedCopies(1e-5, 2e5) === 2 && expectedCopies(1e-5, 1e5) === 1);
+  check("a zero rate yields no threshold rather than Infinity",
+        emergenceStats({ mu_aa: 0 }).nStar === null);
+
+  // The curve is the EXACT binomial. Poisson is close but the two must not be confused:
+  // the exact form is what the caption claims, so assert the exact form is what is computed.
+  check("P is the exact binomial, not the Poisson approximation",
+        Math.abs(emergenceProbability(2e-3, 1000) - (1 - Math.pow(1 - 2e-3, 1000))) < 1e-15 &&
+        Math.abs(emergenceProbability(2e-3, 1000) - (1 - Math.exp(-2))) > 1e-5,
+        `binom ${emergenceProbability(2e-3, 1000).toFixed(6)} vs poisson ${(1 - Math.exp(-2)).toFixed(6)}`);
+  check("P is a probability: monotone in N, within [0,1], zero at N=0",
+        emergenceProbability(1e-5, 0) === 0 &&
+        emergenceProbability(1e-5, 1e3) < emergenceProbability(1e-5, 1e4) &&
+        emergenceProbability(1e-5, 1e9) <= 1);
+  check("P at N* is 63%, matching one expected copy",
+        Math.abs(emergenceProbability(1e-5, 1e5) - 0.6321) < 1e-3,
+        emergenceProbability(1e-5, 1e5).toFixed(4));
+  // The S-shape: most of the rise must happen within about two decades around N*, or the
+  // plotted sigmoid would not look like one.
+  const pLo = emergenceProbability(1e-5, 1e4), pHi = emergenceProbability(1e-5, 1e6);
+  check("the curve is sigmoid: low a decade below N*, saturated a decade above",
+        pLo < 0.15 && pHi > 0.99, `${pLo.toFixed(3)} -> ${pHi.toFixed(3)}`);
+
+  // Against the real atlas: every one-step change must have a positive, finite N*, and the
+  // 1..1e6 axis has to be the right choice for the great majority of them.
+  const oneStepAll = [];
+  for (const rows of aaByPosition.values()) {
+    for (const r of rows) if (r.min_nt_changes === 1 && r.mu_aa > 0) oneStepAll.push(r);
+  }
+  const stats = oneStepAll.map(emergenceStats);
+  check("every one-step change has a finite positive N*",
+        stats.every((x) => x.nStar > 0 && Number.isFinite(x.nStar)),
+        `${oneStepAll.length} changes`);
+  const onAxis = stats.filter((x) => x.nStar <= 1e6).length;
+  check("the 1-to-1e6 axis resolves N* for the great majority of changes",
+        onAxis / stats.length > 0.99,
+        `${onAxis} of ${stats.length} (${(100 * onAxis / stats.length).toFixed(1)}%)`);
+  const ns = stats.map((x) => x.nStar).sort((a, b) => a - b);
+  check("the median change needs a population of order 1e4-1e5",
+        ns[Math.floor(ns.length / 2)] > 1e4 && ns[Math.floor(ns.length / 2)] < 1e6,
+        `median N* ${ns[Math.floor(ns.length / 2)].toExponential(2)}`);
+
+  // The reason the axis runs to 1e8: at 1e6 a tenth of one-step changes are still mid-rise,
+  // while by 1e7 every one of them is effectively certain. That contrast is the biological
+  // point of the panel, so it is asserted rather than left to the caption.
+  const frac = (n, p) => oneStepAll.filter((r) => emergenceProbability(r.mu_aa, n) > p).length
+                         / oneStepAll.length;
+  check("at N = 1e6 a meaningful minority of changes are still not assured",
+        frac(1e6, 0.95) > 0.8 && frac(1e6, 0.95) < 0.95,
+        `${(100 * frac(1e6, 0.95)).toFixed(1)}% above P=0.95`);
+  check("at N = 1e7 every one-step change is effectively certain to be generated",
+        frac(1e7, 0.95) === 1, `${(100 * frac(1e7, 0.95)).toFixed(1)}%`);
+}
+
+// --- 10. figure layout ----------------------------------------------------------------
+// The genome track and the codon panel below it must share one left and right edge. The
+// split is computed from LAYOUT, so this asserts the arithmetic actually closes -- a rounding
+// error here shows up as a panel that is a few pixels narrower than the track above it.
+{
+  const PIE_W = Math.round((LAYOUT.width - LAYOUT.gap) * 0.56);
+  const CURVE_W = LAYOUT.width - LAYOUT.gap - PIE_W;
+  check("the pie and the curve together span exactly the track width",
+        PIE_W + LAYOUT.gap + CURVE_W === LAYOUT.width,
+        `${PIE_W} + ${LAYOUT.gap} + ${CURVE_W} = ${PIE_W + LAYOUT.gap + CURVE_W}, want ${LAYOUT.width}`);
+  check("both figures get a usable share of the width",
+        PIE_W > 400 && CURVE_W > 400, `pie ${PIE_W}, curve ${CURVE_W}`);
+
+  // The pie radius is derived from the box, so a wider figure must give a bigger circle --
+  // it was once hardcoded at 110, which made resizing add white space instead.
+  const radius = (w, h, legendW = 215) =>
+    Math.max(80, Math.min((h - 58) / 2, (w - legendW - 56) / 2));
+  check("a bigger pie box gives a bigger circle",
+        radius(PIE_W, 460) > radius(590, 420) && radius(590, 420) > 110,
+        `${radius(PIE_W, 460).toFixed(0)} vs ${radius(590, 420).toFixed(0)} vs 110`);
+
+  // The slider must sit under the plot area, whatever the track width is.
+  const g = trackSliderGeometry();
+  const ml = parseFloat(g.marginLeft), w = parseFloat(g.width);
+  check("the slider aligns with the track plot area",
+        Math.abs(ml - 100 * LAYOUT.padLeft / LAYOUT.width) < 1e-3 &&
+        Math.abs(w - 100 * (LAYOUT.width - LAYOUT.padLeft - LAYOUT.padRight) / LAYOUT.width) < 1e-3,
+        `${g.marginLeft} + ${g.width}`);
+  check("the slider ends inside the figure",
+        ml + w + 100 * LAYOUT.padRight / LAYOUT.width <= 100.001,
+        `${(ml + w).toFixed(2)}% used`);
 }
 
 console.log("=".repeat(60));

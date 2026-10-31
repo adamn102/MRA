@@ -107,14 +107,11 @@ pre.citation { background: var(--panel); border: 1px solid var(--rule); padding:
 @media (max-width: 900px) { .controls { flex-direction: column; align-items: stretch; } }
 
 /* --- genome-track position slider ---------------------------------------- */
-/* Aligned to the track's plot area rather than the figure: the SVG is 1020 units wide with
-   62 of left padding and 840 of plot, and it scales by viewBox, so these percentages keep
-   the thumb over the matching x-axis position at any container width. */
-.track-slider { max-width: 1020px; margin: 2px 0 0; }
+/* The offsets that align the thumb with the track's plot area are set in JS from
+   chart.js's LAYOUT, so they cannot drift when the figure width changes. */
+.track-slider { margin: 2px 0 0; }
 .track-slider input[type="range"] {
   display: block;
-  margin-left: 6.0784%;                /* 62 / 1020  */
-  width: 82.3529%;                     /* 840 / 1020 */
   accent-color: #b5485d;               /* same hue as the marker line on the track */
   cursor: pointer;
 }
@@ -122,7 +119,15 @@ pre.citation { background: var(--panel); border: 1px solid var(--rule); padding:
 /* --- the quantity table under a genome track ----------------------------- */
 /* Shares table.data's look but is a readout, not a sortable data table: it should size to its
    content and its header must not invite a click that does nothing. */
-table.data.track-stats { width: auto; max-width: 1020px; margin: 2px 0 10px; font-size: 12.5px; }
+table.data.track-stats { width: auto; max-width: 1140px; margin: 2px 0 10px; font-size: 12.5px; }
 table.data.track-stats th { cursor: default; position: static; }
 table.data.track-stats td:last-child { color: var(--muted); white-space: normal; }
 table.data.track-stats tbody tr:hover { background: transparent; }
+
+/* --- pie + emergence curve, side by side --------------------------------- */
+/* Wraps on a narrow screen rather than shrinking the SVGs, because both carry axis text
+   that stops being readable well before the layout runs out of room. */
+.panel-row { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start;
+             max-width: 1140px; }
+.panel-row > div { min-width: 0; }     /* flex basis and max-width are set in JS */
+.panel-row svg { display: block; width: 100%; }

@@ -21,6 +21,7 @@ import { MraEngine } from "./mra_engine.js";
 import { perSiteSupply, groupByPosition, buildFrameIndex, geneSegments, targetFor }
   from "./explore_core.js";
 import { drawSupplyTrack, drawPositionPie } from "./track_view.js";
+import { trackSliderGeometry } from "./chart.js";
 
 const page = await bootstrapPage("sequence.html");
 const region = page.release.modelled_region;
@@ -300,6 +301,7 @@ function renderInteractiveView(slot, detail, row) {
   elSlider.type = "range"; elSlider.step = "1";
   elSlider.min = String(SITES[0]); elSlider.max = String(SITES[SITES.length - 1]);
   elSlider.setAttribute("aria-label", "Genome position (NL4-3 nucleotide)");
+  Object.assign(elSlider.style, trackSliderGeometry());
   sliderWrap.appendChild(elSlider);
   const figCap = document.createElement("figcaption");
   fig.append(trackSlot, sliderWrap, figCap);

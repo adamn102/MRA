@@ -48,6 +48,30 @@ const supLabel = (e) => "10" + String(e).replace(/-/g, "\u2212").split("").map(
  *
  * rows: [{label, value, lo, hi, highlight?, note?}]
  */
+// ---------------------------------------------------------------------------------
+/**
+ * One layout width for every full-width figure, so the genome track and the codon panel
+ * below it line up instead of drifting apart whenever one of them is resized.
+ *
+ * 1140 is the content box of `main` (max-width 1180 less 20px padding each side). The SVGs
+ * carry width:100% with this as their max-width, so they fill it on a wide screen and scale
+ * down on a narrow one.
+ */
+export const LAYOUT = {
+  width: 1140,          // full figure width, shared by the track and the codon panel
+  padLeft: 62,          // track plot-area insets, needed to align the position slider
+  padRight: 118,
+  gap: 16,              // gap between the pie and the emergence curve
+};
+
+/** Percentage offsets that place a slider exactly under the track's plot area. */
+export function trackSliderGeometry(width = LAYOUT.width) {
+  const plotW = width - LAYOUT.padLeft - LAYOUT.padRight;
+  return { marginLeft: `${(100 * LAYOUT.padLeft / width).toFixed(4)}%`,
+           width: `${(100 * plotW / width).toFixed(4)}%`,
+           maxWidth: `${width}px` };
+}
+
 export function barChart(container, rows, options = {}) {
   container.innerHTML = "";
   if (!rows.length) {
@@ -111,8 +135,8 @@ export function barChart(container, rows, options = {}) {
  */
 export function genomeTrack(container, series, options = {}) {
   container.innerHTML = "";
-  const width = options.width || 1020, height = options.height || 260;
-  const padLeft = 62, padRight = 118, padBottom = 40;
+  const width = options.width || LAYOUT.width, height = options.height || 260;
+  const padLeft = LAYOUT.padLeft, padRight = LAYOUT.padRight, padBottom = 40;
   const x0 = options.xMin || 1, x1 = options.xMax || 8213;
 
   // An explicit gene band (labelled boxes above the plot) is opt-in via `geneBand`, so the
@@ -322,12 +346,37 @@ export function pieChart(container, slices, options = {}) {
   }
   const total = data.reduce((t, s) => t + s.value, 0);
   const width = options.width || 680, height = options.height || 300;
-  const cx = 150, cy = height / 2, r = 110;
+  // The circle is sized from the box rather than fixed, so asking for a bigger figure makes
+  // the pie bigger instead of just adding white space to the right of it.
+  const legendW = options.legendWidth || 215;
+  const r = options.radius ||
+            Math.max(80, Math.min((height - 58) / 2, (width - legendW - 56) / 2));
+  const cx = 26 + r;
+  const cy = Math.max(r + 26, height / 2);
+  const fsSlice = r >= 130 ? 13 : 11;
+  const fsLegend = r >= 130 ? 12.5 : 11;
+  const legendStep = r >= 130 ? 19 : 17;
 
   // A categorical palette; the highlighted slice (if any) takes the lead colour.
   const palette = ["#0b5c8a", "#c2561a", "#1f7a3f", "#6b3fa0", "#8a6d1f", "#2f7fa8",
                    "#a4262c", "#5c6670", "#c08a1e", "#3a7d5d", "#7a4ea0", "#1d6a8a"];
   const colour = (i, s) => s.highlight ? "#c2561a" : palette[i % palette.length];
+  // Slice selection: `options.onSelect(label)` makes the wedges and legend rows clickable,
+  // and `options.selected` names the one drawn as chosen.
+  const pick = options.onSelect;
+  const isSel = (s) => options.selected != null && s.label === options.selected;
+  const wire = (node, s) => {
+    if (!pick) return node;
+    node.style.cursor = "pointer";
+    node.addEventListener("click", () => pick(s.label));
+    node.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(s.label); }
+    });
+    node.setAttribute("tabindex", "0");
+    node.setAttribute("role", "button");
+    node.setAttribute("aria-label", `Select ${s.label}`);
+    return node;
+  };
 
   const svg = svgRoot(width, height, options.title);
   if (options.title) svg.appendChild(el("text", { x: 0, y: 13, "font-size": 12 }, options.title));
@@ -342,32 +391,171 @@ export function pieChart(container, slices, options = {}) {
     const x1 = cx + r * Math.cos(a1), y1 = cy + r * Math.sin(a1);
     // a single 100% slice can't be drawn as an arc (start==end); draw a full circle
     if (data.length === 1) {
-      svg.appendChild(el("circle", { cx, cy, r, fill: colour(i, s), "fill-opacity": 0.85 }));
+      svg.appendChild(wire(el("circle", { cx, cy, r, fill: colour(i, s),
+        "fill-opacity": isSel(s) ? 1 : 0.85,
+        stroke: isSel(s) ? "#1b1f23" : "none", "stroke-width": isSel(s) ? 2 : 0 }), s));
     } else {
       const d = `M ${cx} ${cy} L ${x0.toFixed(2)} ${y0.toFixed(2)} ` +
                 `A ${r} ${r} 0 ${large} 1 ${x1.toFixed(2)} ${y1.toFixed(2)} Z`;
-      svg.appendChild(el("path", { d, fill: colour(i, s), "fill-opacity": 0.85,
-                                   stroke: "#fff", "stroke-width": 1 }));
+      svg.appendChild(wire(el("path", { d, fill: colour(i, s),
+        "fill-opacity": isSel(s) ? 1 : 0.85,
+        stroke: isSel(s) ? "#1b1f23" : "#fff", "stroke-width": isSel(s) ? 2 : 1 }), s));
     }
     // label the slice with the amino acid if it is big enough to read
     if (frac > 0.05) {
       const mid = (a0 + a1) / 2;
       const lx = cx + r * 0.62 * Math.cos(mid), ly = cy + r * 0.62 * Math.sin(mid);
-      svg.appendChild(el("text", { x: lx, y: ly + 3, "text-anchor": "middle", "font-size": 11,
+      svg.appendChild(el("text", { x: lx, y: ly + 3, "text-anchor": "middle",
+                                   "font-size": fsSlice,
                                    fill: "#fff", "font-weight": 600 }, s.label));
     }
   });
 
   // legend
-  const lx = cx + r + 40;
-  let ly = cy - data.length * 8;
+  const lx = cx + r + 32;
+  let ly = cy - data.length * legendStep / 2 + legendStep / 2;
   data.forEach((s, i) => {
-    svg.appendChild(el("rect", { x: lx, y: ly - 8, width: 10, height: 10,
-                                 fill: colour(i, s), "fill-opacity": 0.85 }));
+    const g = el("g", {});
+    if (isSel(s)) {
+      g.appendChild(el("rect", { x: lx - 4, y: ly - legendStep + 5, width: legendW - 10,
+                                 height: legendStep, rx: 2, fill: "#eef4f8" }));
+    }
+    g.appendChild(el("rect", { x: lx, y: ly - 8, width: 10, height: 10,
+                               fill: colour(i, s), "fill-opacity": 0.85 }));
     const pct = ((s.value / total) * 100).toFixed(1);
-    svg.appendChild(el("text", { x: lx + 15, y: ly, "font-size": 11, fill: "#1b1f23" },
+    g.appendChild(el("text", { x: lx + 15, y: ly, "font-size": fsLegend, fill: "#1b1f23",
+                               "font-weight": isSel(s) ? 600 : 400 },
       `${s.label}  ${pct}%  (${s.value.toExponential(2)})`));
-    ly += 17;
+    svg.appendChild(wire(g, s));
+    ly += legendStep;
   });
   container.appendChild(svg);
+}
+
+// ---------------------------------------------------------------------------------
+/**
+ * Probability of GENERATING a variant de novo, against how much the virus replicates.
+ *
+ * Each of N replication events is an independent trial that produces this amino-acid change
+ * with probability mu, so the count of new mutant genomes is Binomial(N, mu) and
+ *
+ *     P(at least one) = 1 - (1 - mu)^N
+ *
+ * The exact binomial is used rather than the Poisson approximation; over the plotted range the
+ * two differ by at most 3e-4, but the exact form costs nothing and needs no caveat.
+ *
+ * Expected copy number E = N * mu is linear in N and so has no shape to read -- it is a
+ * straight line on any axes. The probability is the S-shaped quantity, and it is the one that
+ * answers "would this variant actually be generated?". E and N* appear in the table beneath.
+ *
+ * N is a COUNT of replication events per cycle -- population size times the fraction
+ * replicating -- not a fraction and not a viral load.
+ *
+ * @param {object} o  mu, lo95, hi95, change, nMin, nMax, width, height
+ */
+export function emergenceCurve(container, o) {
+  container.innerHTML = "";
+  const width = o.width || 430, height = o.height || 300;
+  const padLeft = 46, padRight = 14, padTop = 26, padBottom = 44;
+  const plotW = width - padLeft - padRight, plotH = height - padTop - padBottom;
+  const nMin = o.nMin || 1, nMax = o.nMax || 1e6;
+  const mu = o.mu;
+  const lo = o.lo95 > 0 ? o.lo95 : mu, hi = o.hi95 > 0 ? o.hi95 : mu;
+
+  const e0 = Math.log10(nMin), e1 = Math.log10(nMax);
+  const lx = (n) => padLeft + (Math.log10(n) - e0) / (e1 - e0) * plotW;
+  const ly = (prob) => padTop + plotH - prob * plotH;          // linear 0..1
+  const pAt = (rate, n) => 1 - Math.pow(1 - rate, n);    // exact binomial
+
+  const svg = svgRoot(width, height, o.title || "Probability of de novo emergence");
+  svg.appendChild(el("text", { x: 0, y: 13, "font-size": 12 },
+    o.title || `Probability of generating ${o.change || "this change"} de novo`));
+
+  // y gridlines, as probabilities
+  for (const prob of [0, 0.25, 0.5, 0.75, 1]) {
+    const y = ly(prob);
+    svg.appendChild(el("line", { x1: padLeft, x2: padLeft + plotW, y1: y, y2: y,
+                                 stroke: "#e6ebf0", "stroke-width": 1 }));
+    svg.appendChild(el("text", { x: padLeft - 6, y: y + 3, "text-anchor": "end",
+                                 "font-size": 9, fill: "#5c6670" }, prob.toFixed(2)));
+  }
+  for (let e = e0; e <= e1 + 1e-9; e++) {
+    const x = lx(Math.pow(10, e));
+    svg.appendChild(el("line", { x1: x, x2: x, y1: padTop, y2: padTop + plotH,
+                                 stroke: "#f0f3f6", "stroke-width": 1 }));
+    svg.appendChild(el("text", { x, y: padTop + plotH + 13, "text-anchor": "middle",
+                                 "font-size": 9, fill: "#5c6670" }, `1e${e}`));
+  }
+
+  // Sample the curve evenly in log N so the steep part is drawn smoothly.
+  const STEPS = 240;
+  const path = (rate) => {
+    const pts = [];
+    for (let i = 0; i <= STEPS; i++) {
+      const n = Math.pow(10, e0 + (e1 - e0) * i / STEPS);
+      pts.push(`${lx(n).toFixed(2)} ${ly(pAt(rate, n)).toFixed(2)}`);
+    }
+    return pts;
+  };
+
+  // 95% band: the same sigmoid shifted left (faster) and right (slower).
+  if (hi !== lo) {
+    const up = path(hi), down = path(lo).reverse();
+    svg.appendChild(el("path", { d: `M ${up.join(" L ")} L ${down.join(" L ")} Z`,
+                                 fill: "#0b5c8a", "fill-opacity": 0.13 }));
+  }
+
+  // Where a chronic untreated infection actually sits. This is an order-of-magnitude
+  // reference from the HIV dynamics literature, NOT a quantity measured by this atlas, and it
+  // is what turns the curve into a conclusion: at these N every one-step change is generated.
+  if (o.inVivo !== false && nMax >= 1e7) {
+    const bx0 = lx(1e7), bx1 = lx(Math.min(1e8, nMax));
+    svg.appendChild(el("rect", { x: bx0, y: padTop, width: Math.max(bx1 - bx0, 1), height: plotH,
+                                 fill: "#3f8f7a", "fill-opacity": 0.10 }));
+    svg.appendChild(el("text", { x: (bx0 + bx1) / 2, y: padTop + 11, "text-anchor": "middle",
+                                 "font-size": 8.5, fill: "#2f6b5c" }, "typical in vivo"));
+  }
+
+  // Certainty, and the point where one copy is expected.
+  svg.appendChild(el("line", { x1: padLeft, x2: padLeft + plotW, y1: ly(1), y2: ly(1),
+                               stroke: "#1b1f23", "stroke-width": 1.2, "stroke-dasharray": "5 4" }));
+  svg.appendChild(el("text", { x: padLeft + plotW - 2, y: ly(1) - 4, "text-anchor": "end",
+                               "font-size": 9.5, fill: "#1b1f23" }, "certainty (P = 1)"));
+
+  svg.appendChild(el("path", { d: `M ${path(mu).join(" L ")}`, fill: "none",
+                               stroke: "#0b5c8a", "stroke-width": 1.9 }));
+
+  const nStar = 1 / mu;
+  if (nStar >= nMin && nStar <= nMax) {
+    const y63 = ly(1 - Math.exp(-1));
+    svg.appendChild(el("line", { x1: padLeft, x2: lx(nStar), y1: y63, y2: y63,
+                                 stroke: "#b5485d", "stroke-width": 1, "stroke-dasharray": "4 3" }));
+    svg.appendChild(el("line", { x1: lx(nStar), x2: lx(nStar), y1: y63, y2: padTop + plotH,
+                                 stroke: "#b5485d", "stroke-width": 1.2, "stroke-dasharray": "4 3" }));
+    svg.appendChild(el("circle", { cx: lx(nStar), cy: y63, r: 3.4, fill: "#b5485d" }));
+    const anchor = lx(nStar) > padLeft + plotW * 0.6 ? "end" : "start";
+    svg.appendChild(el("text", { x: lx(nStar) + (anchor === "end" ? -6 : 6), y: y63 - 6,
+                                 "text-anchor": anchor, "font-size": 10, fill: "#b5485d",
+                                 "font-weight": 600 },
+                       `N* = ${formatCount(nStar)}  (P = 0.63)`));
+  } else {
+    svg.appendChild(el("text", { x: padLeft + plotW / 2, y: padTop + plotH / 2,
+                                 "text-anchor": "middle", "font-size": 10, fill: "#b5485d" },
+                       `N* = ${formatCount(nStar)} \u2014 beyond this axis`));
+  }
+
+  svg.appendChild(el("text", { x: padLeft + plotW / 2, y: height - 16, "text-anchor": "middle",
+                               "font-size": 10, fill: "#5c6670" },
+                     "replication events per cycle, N  (population \u00d7 fraction replicating)"));
+  svg.appendChild(el("text", { x: 11, y: padTop + plotH / 2, "font-size": 10, fill: "#5c6670",
+                               "text-anchor": "middle",
+                               transform: `rotate(-90 11 ${padTop + plotH / 2})` },
+                     "P(variant generated)"));
+  container.appendChild(svg);
+}
+
+/** Population sizes read better as 8.4e4 than as 84000.00 */
+function formatCount(n) {
+  if (!Number.isFinite(n)) return "\u2014";
+  return n >= 1e4 ? n.toExponential(1) : Math.round(n).toLocaleString();
 }
