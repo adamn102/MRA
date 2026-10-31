@@ -33,6 +33,8 @@ const CLASS_COLOUR = { total: "#2f4b7c", nonga: "#3f8f7a", ga: "#c2561a" };
  *   first,last x-axis bounds (the modelled region, not the covered span)
  *   marker     selected nucleotide
  *   markerLabel
+ *   refBase    optional base at the marker, so a 0% G→A row can explain itself
+ *   statsEl    optional element to receive the quantity table
  *   variants   optional array of positions differing from NL4-3
  *   onSelect   callback(position)
  *   source     short phrase naming where the rates came from
@@ -61,17 +63,44 @@ export function drawSupplyTrack(container, o) {
     ? ` Only ${covered.toLocaleString()} of ${(o.last - o.first + 1).toLocaleString()} ` +
       `reference positions are covered by this sequence; the rest of the axis is blank.`
     : "";
+  // The three figures that used to run on as a sentence. A table because they are read as
+  // values, not as prose: a reader comparing the marker against the window median wants them
+  // aligned under each other, not separated by commas.
+  if (o.statsEl) {
+    renderTrackStats(o.statsEl, [
+      { label: `Median over the plotted window`,
+        value: med === null ? "\u2014" : formatRate(med),
+        note: `${CLASS_LABEL[o.cls]}, ${o.win} nt window` },
+      { label: `Value at the marker`,
+        value: at ? formatRate(at[1]) : "\u2014",
+        note: `smoothed window centred on nt ${o.marker.toLocaleString()}` },
+      { label: `G\u2192A share at this exact site`,
+        value: site ? `${(100 * site.ga / site.total).toFixed(0)}%` : "\u2014",
+        // A non-G base cannot have G->A supply, so 0% there is a property of the base rather
+        // than a small measurement. Saying which base it is stops that reading as a bug.
+        note: !site ? "site not covered"
+          : o.refBase && o.refBase !== "G"
+            ? `0 by definition — the base here is ${o.refBase}, not G`
+            : `unsmoothed, nt ${o.marker.toLocaleString()} only` },
+    ]);
+  }
+
   return `Centred running mean of the per-site rate over a ${o.win} nt window, summed across ` +
     `substitution classes${o.cls === "total" ? "" : " and restricted to " + CLASS_LABEL[o.cls]}. ` +
     `Rates are ${o.source}. Insertions and deletions are excluded. The band above the plot ` +
     `shows coding segments; overlapping reading frames sit on separate rows, and spliced ` +
     `genes (tat, rev) appear as one box per exon, with the gene holding the marker filled ` +
-    `solid.` + spanNote +
-    (med ? ` Median over the plotted window ${formatRate(med)}` : "") +
-    (at ? `, value at the marker ${formatRate(at[1])}` : "") +
-    (site ? `, of which G\u2192A is ${(100 * site.ga / site.total).toFixed(0)}% at this exact site` : "") +
-    `. <strong>G\u2192A carries most of the total supply</strong>, so the total track partly ` +
-    `traces G density \u2014 use the class selector to separate the two.`;
+    `solid.` + spanNote;
+}
+
+/** The small quantity table under the track. */
+function renderTrackStats(el, rows) {
+  el.innerHTML =
+    '<table class="data track-stats"><thead><tr>' +
+    "<th>Quantity</th><th>Value</th><th>Basis</th></tr></thead><tbody>" +
+    rows.map((r) => `<tr><td>${r.label}</td><td class="num">${r.value}</td>` +
+                    `<td>${r.note}</td></tr>`).join("") +
+    "</tbody></table>";
 }
 
 /**

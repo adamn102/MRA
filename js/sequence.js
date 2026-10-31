@@ -304,6 +304,8 @@ function renderInteractiveView(slot, detail, row) {
   const figCap = document.createElement("figcaption");
   fig.append(trackSlot, sliderWrap, figCap);
   slot.appendChild(fig);
+  const statsSlot = document.createElement("div");
+  slot.appendChild(statsSlot);
 
   const head = document.createElement("div");
   const pieFig = document.createElement("figure");
@@ -328,6 +330,8 @@ function renderInteractiveView(slot, detail, row) {
       variants,
       title: `Smoothed supply along ${row.name}`,
       source: "computed from the codons and 3\u2032 context in your sequence, not from NL4-3",
+      statsEl: statsSlot,
+      refBase: baseAt.get(markerNt),      // the base in YOUR sequence, not NL4-3
       onSelect: (pos) => selectNt(pos),
     });
   }

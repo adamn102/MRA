@@ -161,6 +161,8 @@ function drawTrack() {
       markerLabel: selected
         ? engine.hxb2Label(selected.target.protein, selected.geneAa) : String(markerNt),
       source: "read from the published NL4-3 atlas",
+      statsEl: document.getElementById("track-stats"),
+      refBase: assets.reference.sequence[markerNt - 1],
       onSelect: (pos) => selectNucleotide(pos),
     });
 }

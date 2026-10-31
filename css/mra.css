@@ -118,3 +118,11 @@ pre.citation { background: var(--panel); border: 1px solid var(--rule); padding:
   accent-color: #b5485d;               /* same hue as the marker line on the track */
   cursor: pointer;
 }
+
+/* --- the quantity table under a genome track ----------------------------- */
+/* Shares table.data's look but is a readout, not a sortable data table: it should size to its
+   content and its header must not invite a click that does nothing. */
+table.data.track-stats { width: auto; max-width: 1020px; margin: 2px 0 10px; font-size: 12.5px; }
+table.data.track-stats th { cursor: default; position: static; }
+table.data.track-stats td:last-child { color: var(--muted); white-space: normal; }
+table.data.track-stats tbody tr:hover { background: transparent; }
