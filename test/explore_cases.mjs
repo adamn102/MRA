@@ -8,6 +8,7 @@
 
 import fs from "node:fs";
 import { MraEngine } from "../js/mra_engine.js";
+import { trackStats } from "../js/track_view.js";
 import { perSiteSupply, smoothSeries, buildFrameIndex, geneSegments, oneStepSlices,
          targetFor } from "../js/explore_core.js";
 
@@ -288,6 +289,61 @@ for (const frames of frameAt.values()) {
 }
 check("every clickable frame maps to a selectable protein/subunit",
       unmappable.length === 0, unmappable.slice(0, 4).join("; "));
+
+// --- 8. the quantity table under the track -------------------------------------------
+// The median is taken over the WHOLE track, so it must not move with the marker -- it is the
+// fixed reference the marker is compared against. The relative row is the one that moves.
+// A caption once called the median "over the plotted window", which read as if it were local;
+// these two assertions are what stop that confusion coming back as a wrong number.
+{
+  const pts = smoothSeries(sites, perSite, "total", 151);
+  const vals = pts.map((p) => p[1]).sort((a, b) => a - b);
+  const med = vals[Math.floor(vals.length / 2)];
+  const rowsAt = (nt) => trackStats({
+    vals, med, at: pts.find((p) => p[0] >= nt), site: perSite.get(nt),
+    cls: "total", win: 151, marker: nt, refBase: null,
+  });
+  const MARKERS = [1600, 3000, 6804, 8000];
+  const medians = MARKERS.map((m) => rowsAt(m)[0].value);
+  check("the track median is identical at every marker (it is a fixed reference)",
+        new Set(medians).size === 1, medians.join(" / "));
+
+  const relative = MARKERS.map((m) => rowsAt(m)[2].value);
+  check("the marker-relative row DOES change as the marker moves",
+        new Set(relative).size === MARKERS.length, relative.join(" / "));
+
+  const markerVals = MARKERS.map((m) => rowsAt(m)[1].value);
+  check("the value-at-marker row changes with the marker",
+        new Set(markerVals).size > 1, markerVals.join(" / "));
+
+  // The median must change with the supply class, or the class selector would be cosmetic.
+  const byClass = ["total", "nonga", "ga"].map((c) => {
+    const p2 = smoothSeries(sites, perSite, c, 151);
+    const v2 = p2.map((x) => x[1]).sort((x, y) => x - y);
+    return trackStats({ vals: v2, med: v2[Math.floor(v2.length / 2)],
+                        at: p2.find((x) => x[0] >= 3000), site: perSite.get(3000),
+                        cls: c, win: 151, marker: 3000, refBase: null })[0].value;
+  });
+  check("the track median changes with the supply class",
+        new Set(byClass).size === 3, byClass.join(" / "));
+
+  // Percentile must be consistent with the ordering of the underlying values.
+  const pctOf = (nt) => Number(rowsAt(nt)[2].note.match(/^(\d+)/)[1]);
+  const valOf = (nt) => pts.find((p) => p[0] >= nt)[1];
+  const hi = 3000, lo = 6804;                       // 1.75e-4 vs 9.75e-5
+  check("a higher-supply marker gets the higher percentile",
+        valOf(hi) > valOf(lo) && pctOf(hi) > pctOf(lo),
+        `nt ${hi}: ${pctOf(hi)}th, nt ${lo}: ${pctOf(lo)}th`);
+  check("percentiles stay within 0-100",
+        MARKERS.every((m) => pctOf(m) >= 0 && pctOf(m) <= 100));
+
+  // A non-G site must explain its 0%, rather than leaving a bare zero to look like a failure.
+  const nonG = trackStats({ vals, med, at: pts.find((p) => p[0] >= 1600),
+                            site: perSite.get(1600), cls: "total", win: 151,
+                            marker: 1600, refBase: "T" })[3];
+  check("a 0% G->A row says why it is zero", nonG.value === "0%" && /not G/.test(nonG.note),
+        `${nonG.value} -- ${nonG.note}`);
+}
 
 console.log("=".repeat(60));
 if (failures) { console.log(`${failures} CHECK(S) FAILED`); process.exit(1); }

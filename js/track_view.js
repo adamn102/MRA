@@ -63,27 +63,9 @@ export function drawSupplyTrack(container, o) {
     ? ` Only ${covered.toLocaleString()} of ${(o.last - o.first + 1).toLocaleString()} ` +
       `reference positions are covered by this sequence; the rest of the axis is blank.`
     : "";
-  // The three figures that used to run on as a sentence. A table because they are read as
-  // values, not as prose: a reader comparing the marker against the window median wants them
-  // aligned under each other, not separated by commas.
-  if (o.statsEl) {
-    renderTrackStats(o.statsEl, [
-      { label: `Median over the plotted window`,
-        value: med === null ? "\u2014" : formatRate(med),
-        note: `${CLASS_LABEL[o.cls]}, ${o.win} nt window` },
-      { label: `Value at the marker`,
-        value: at ? formatRate(at[1]) : "\u2014",
-        note: `smoothed window centred on nt ${o.marker.toLocaleString()}` },
-      { label: `G\u2192A share at this exact site`,
-        value: site ? `${(100 * site.ga / site.total).toFixed(0)}%` : "\u2014",
-        // A non-G base cannot have G->A supply, so 0% there is a property of the base rather
-        // than a small measurement. Saying which base it is stops that reading as a bug.
-        note: !site ? "site not covered"
-          : o.refBase && o.refBase !== "G"
-            ? `0 by definition — the base here is ${o.refBase}, not G`
-            : `unsmoothed, nt ${o.marker.toLocaleString()} only` },
-    ]);
-  }
+  if (o.statsEl) renderTrackStats(o.statsEl, trackStats({
+    vals, med, at, site, cls: o.cls, win: o.win, marker: o.marker, refBase: o.refBase,
+  }));
 
   return `Centred running mean of the per-site rate over a ${o.win} nt window, summed across ` +
     `substitution classes${o.cls === "total" ? "" : " and restricted to " + CLASS_LABEL[o.cls]}. ` +
@@ -91,6 +73,52 @@ export function drawSupplyTrack(container, o) {
     `shows coding segments; overlapping reading frames sit on separate rows, and spliced ` +
     `genes (tat, rev) appear as one box per exon, with the gene holding the marker filled ` +
     `solid.` + spanNote;
+}
+
+/**
+ * The quantity rows shown under a track. Pure, so test/explore_cases.mjs can assert what each
+ * one is supposed to do -- in particular that the median is a FIXED reference across the whole
+ * track while the relative row MOVES with the marker. An earlier version labelled the median
+ * "over the plotted window", which read as if it were local to the marker; it never was.
+ *
+ * @param {object} a
+ *   vals     every plotted value, sorted ascending
+ *   med      the median of vals
+ *   at       [position, value] at the marker, or undefined
+ *   site     {total, ga, nonga} at the exact marker position, or undefined
+ *   cls, win, marker, refBase
+ */
+export function trackStats(a) {
+  let rank = null;
+  if (a.at && a.vals.length) {
+    let below = 0;
+    for (const v of a.vals) { if (v <= a.at[1]) below++; else break; }   // vals is sorted
+    rank = 100 * below / a.vals.length;
+  }
+  return [
+    // Deliberately NOT a median of the window around the marker: it is taken over every
+    // plotted point, so it is a fixed reference line for the chosen class and window and
+    // does not move when the marker does. That is what makes the row below meaningful.
+    { label: "Median across the whole track",
+      value: a.med === null || a.med === undefined ? "\u2014" : formatRate(a.med),
+      note: `all ${a.vals.length.toLocaleString()} plotted positions, ${CLASS_LABEL[a.cls]}, ` +
+            `${a.win} nt window \u2014 fixed while you move the marker` },
+    { label: "Value at the marker",
+      value: a.at ? formatRate(a.at[1]) : "\u2014",
+      note: `smoothed window centred on nt ${a.marker.toLocaleString()}` },
+    { label: "Marker relative to the track",
+      value: rank === null ? "\u2014" : `${(a.at[1] / a.med).toFixed(2)}\u00d7`,
+      note: rank === null ? "no value at this position"
+        : `${rank.toFixed(0)}th percentile of the plotted track` },
+    { label: "G\u2192A share at this exact site",
+      value: a.site ? `${(100 * a.site.ga / a.site.total).toFixed(0)}%` : "\u2014",
+      // A non-G base cannot have G->A supply, so 0% there is a property of the base rather
+      // than a small measurement. Saying which base it is stops that reading as a bug.
+      note: !a.site ? "site not covered"
+        : a.refBase && a.refBase !== "G"
+          ? `0 by definition \u2014 the base here is ${a.refBase}, not G`
+          : `unsmoothed, nt ${a.marker.toLocaleString()} only` },
+  ];
 }
 
 /** The small quantity table under the track. */
