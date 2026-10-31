@@ -24,7 +24,7 @@ const CACHE = "mra-portal-v1";
 const SHELL = [
   "./", "./index.html", "./browse.html", "./sequence.html", "./compare.html",
   "./download.html", "./drm.html", "./explore.html", "./css/mra.css", "./vendor/html2canvas/html2canvas.min.js",
-  "./js/version.js", "./js/page.js", "./js/data.js", "./js/table.js", "./js/chart.js",
+  "./js/version.js", "./js/page.js", "./js/data.js", "./js/table.js", "./js/chart.js", "./js/track_view.js", "./js/explore_core.js",
   "./js/mra_engine.js", "./js/align.js", "./js/align.worker.js", "./js/analysis.js",
   "./js/mutations.js", "./js/index.js", "./js/browse.js", "./js/explore_redirect.js", "./js/sequence.js",
   "./js/compare.js", "./js/download.js", "./js/drm.js",

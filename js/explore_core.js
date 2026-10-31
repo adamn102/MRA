@@ -13,15 +13,17 @@
  * different denominator, and folding them into a "substitution supply" figure misreports both.
  *
  * @param {Map<number, Array>} byPosition  nt position -> atlas rows
+ * @param {string} rateField  the per-row rate column: "bio_rate_mean" in the published
+ *        tables, "rate" in a custom atlas built from a submitted sequence
  * @returns {Map<number, {total:number, ga:number, nonga:number}>}
  */
-export function perSiteSupply(byPosition) {
+export function perSiteSupply(byPosition, rateField = "bio_rate_mean") {
   const out = new Map();
   for (const [pos, rows] of byPosition) {
     let total = 0, ga = 0;
     for (const r of rows) {
       if (!r.mut_type.includes("->")) continue;
-      const v = r.bio_rate_mean;
+      const v = r[rateField];
       if (!(v > 0)) continue;
       total += v;
       if (r.mut_type === "G->A") ga += v;
@@ -124,4 +126,15 @@ export function targetFor(targets, protein, geneAa) {
     if (geneAa > t.offset && geneAa <= t.offset + t.maxOwn) return t;
   }
   return fallback;
+}
+
+/** Group flat atlas rows into the position map perSiteSupply expects. */
+export function groupByPosition(rows, key = "ref_position") {
+  const out = new Map();
+  for (const r of rows) {
+    let list = out.get(r[key]);
+    if (!list) out.set(r[key], (list = []));
+    list.push(r);
+  }
+  return out;
 }

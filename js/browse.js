@@ -19,7 +19,7 @@
 import { bootstrapPage, note, caveat, showError, exportProvenance, shareButton, NEF_NOTE } from "./page.js";
 import { loadSmallAssets, loadAminoAcidLayer, loadNucleotideLayer, loadPathShard } from "./data.js";
 import { renderTable, formatRate } from "./table.js";
-import { barChart, pieChart, genomeTrack } from "./chart.js";
+import { drawSupplyTrack, drawPositionPie } from "./track_view.js";
 import { MraEngine } from "./mra_engine.js";
 import { resolveMutation } from "./mutations.js";
 import { perSiteSupply, smoothSeries, buildFrameIndex, geneSegments, oneStepSlices,
@@ -150,39 +150,19 @@ const elSlider = document.getElementById("track-slider");
 elSlider.min = String(FIRST); elSlider.max = String(LAST);
 for (const el of [elWin, elClass, elSlider]) el.disabled = true;
 
-const CLASS_LABEL = { total: "total substitution supply", nonga: "non-G\u2192A supply", ga: "G\u2192A supply" };
-const CLASS_COLOUR = { total: "#2f4b7c", nonga: "#3f8f7a", ga: "#c2561a" };
-
 function drawTrack() {
   if (!perSite) return;
-  const win = Number(elWin.value), cls = elClass.value;
+  const win = Number(elWin.value);
   elWinOut.textContent = String(win);
-  const pts = smoothSeries(SITES, perSite, cls, win);
-  genomeTrack(document.getElementById("genome-track"), [
-    { label: CLASS_LABEL[cls], colour: CLASS_COLOUR[cls], points: pts, width: 1.1 },
-  ], {
-    title: `Smoothed ${CLASS_LABEL[cls]} along the genome`,
-    xMin: FIRST, xMax: LAST, geneBand: GENE_SEGMENTS,
-    width: 1020, height: 300, yLabel: "supply per site per replication",
-    marker: markerNt,
-    markerLabel: selected ? engine.hxb2Label(selected.target.protein, selected.geneAa) : String(markerNt),
-    onSelect: (pos) => selectNucleotide(pos),
-  });
-
-  const vals = pts.map((p) => p[1]).sort((a, b) => a - b);
-  const med = vals[Math.floor(vals.length / 2)];
-  const at = pts.find((p) => p[0] >= markerNt);
-  const site = perSite.get(markerNt);
-  document.getElementById("track-caption").innerHTML =
-    `Centred running mean of the per-site rate over a ${win} nt window, summed across ` +
-    `substitution classes${cls === "total" ? "" : " and restricted to " + CLASS_LABEL[cls]}. ` +
-    `Insertions and deletions are excluded. The band above the plot shows coding segments; ` +
-    `overlapping reading frames sit on separate rows, and spliced genes (tat, rev) appear as ` +
-    `one box per exon, with the gene holding the marker filled solid. Genome median ` +
-    `${formatRate(med)}` + (at ? `, value at the marker ${formatRate(at[1])}` : "") +
-    (site ? `, of which G\u2192A is ${(100 * site.ga / site.total).toFixed(0)}% at this exact site` : "") +
-    `. <strong>G\u2192A carries most of the total supply</strong>, so the total track partly ` +
-    `traces G density &mdash; use &ldquo;Supply shown&rdquo; to separate the two.`;
+  document.getElementById("track-caption").innerHTML = drawSupplyTrack(
+    document.getElementById("genome-track"), {
+      perSite, sites: SITES, win, cls: elClass.value, segments: GENE_SEGMENTS,
+      first: FIRST, last: LAST, marker: markerNt,
+      markerLabel: selected
+        ? engine.hxb2Label(selected.target.protein, selected.geneAa) : String(markerNt),
+      source: "read from the published NL4-3 atlas",
+      onSelect: (pos) => selectNucleotide(pos),
+    });
 }
 
 async function loadTrack() {
@@ -325,29 +305,7 @@ async function showPosition(target, genePosition) {
     `.</p>`;
 
   const sorted = rows.slice().sort((a, b) => b.mu_aa - a.mu_aa);
-  // Pie of the ONE-nucleotide-accessible amino-acid changes: each slice is a reachable
-  // target amino acid, sized by its share of the single-step mutational supply at this
-  // position. One-step changes are the ones actually generated at appreciable rate, so
-  // the pie shows where supply goes when a single substitution occurs here.
-  const oneStep = oneStepSlices(rows);
-  if (oneStep.length) {
-    pieChart(chart, oneStep.map((r) => ({
-      label: `${r.alt_aa}${r.synonymous ? "*" : ""}`,
-      value: r.mu_aa, highlight: false,
-    })), { title: `Single-nucleotide amino-acid changes at ${hxb2}`, width: 680 });
-    caption.innerHTML =
-      "Each slice is an amino-acid change reachable from the reference codon by a " +
-      "<strong>single</strong> nucleotide substitution, sized by its share of the one-step " +
-      "mutational supply at this position. <code>*</code> marks a synonymous change. The " +
-      "shares are a property of the whole codon, not of the single nucleotide marked on the " +
-      "track. Two- and three-step changes are in the table below but not in the pie, because " +
-      "they are generated far more rarely. Values are read from the atlas, not recomputed.";
-  } else {
-    chart.innerHTML = "";
-    caption.innerHTML =
-      "No amino-acid change is reachable from this codon by a single nucleotide substitution; " +
-      "see the table below for the 2- and 3-step changes.";
-  }
+  drawPositionPie(chart, caption, rows, hxb2, { custom: false });
 
   renderTable(tableSlot, {
     columns: [

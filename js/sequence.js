@@ -17,6 +17,10 @@ import { loadSmallAssets } from "./data.js";
 import { Analysis, progressRow, MAX_BATCH_SEQUENCES } from "./analysis.js";
 import { parseFasta } from "./align.js";
 import { renderTable, formatRate, toCsv, downloadText } from "./table.js";
+import { MraEngine } from "./mra_engine.js";
+import { perSiteSupply, groupByPosition, buildFrameIndex, geneSegments, targetFor }
+  from "./explore_core.js";
+import { drawSupplyTrack, drawPositionPie } from "./track_view.js";
 
 const page = await bootstrapPage("sequence.html");
 const region = page.release.modelled_region;
@@ -27,11 +31,13 @@ document.getElementById("batch-note").textContent =
   `Up to ${MAX_BATCH_SEQUENCES} sequences per batch.`;
 
 const statusSlot = document.getElementById("run-status");
-let assets, analysis;
+let assets, analysis, engine;
 try {
   // The sequence tool runs on the small assets alone -- about 360 KB gzipped. The
   // multi-megabyte browse tables are never fetched on this page.
   assets = await loadSmallAssets(page.version);
+  engine = new MraEngine({ bundle: assets.bundle, reference: assets.reference,
+                           intervals: assets.intervals, hxb2: assets.hxb2 });
   analysis = new Analysis(assets);
   const inWorker = await analysis.start();
   statusSlot.appendChild(caveat(
@@ -200,6 +206,259 @@ const COMPONENT_FLAGS = (r) => {
   return flags.join(" ");
 };
 
+
+/**
+ * The interactive genome view for one submitted sequence: the same track and pie as the
+ * published atlas, but every number comes from THIS sequence's custom atlas rather than from
+ * NL4-3. Ticks along the baseline mark where the submission differs from the reference, so
+ * the genome can be scanned for variants and each one opened.
+ *
+ * Elements are built as local references rather than by id, because a batch renders one of
+ * these per sequence and ids would collide.
+ */
+function renderInteractiveView(slot, detail, row) {
+  const heading = document.createElement("h4");
+  heading.textContent = "Scan the genome";
+  slot.appendChild(heading);
+
+  // --- per-site supply, from this sequence's own rates -----------------------------
+  const perSite = perSiteSupply(groupByPosition(detail.nt), "rate");
+  const SITES = [...perSite.keys()].sort((a, b) => a - b);
+  if (!SITES.length) {
+    slot.appendChild(caveat("No modelled nucleotide position was covered, so there is " +
+                            "nothing to plot for this sequence."));
+    return;
+  }
+
+  // --- where this sequence differs from NL4-3 --------------------------------------
+  // The custom atlas stores the SUBMITTED base at each aligned reference position, so a
+  // mismatch against the reference string is exactly a substitution in the submission.
+  // Indels are not included: they have no single reference position to mark.
+  const refSeq = assets.reference.sequence;
+  const baseAt = new Map();
+  for (const r of detail.nt) if (!baseAt.has(r.ref_position)) baseAt.set(r.ref_position, r.ref_nucleotide);
+  const variants = [...baseAt.entries()]
+    .filter(([pos, base]) => base !== refSeq[pos - 1]).map(([pos]) => pos).sort((a, b) => a - b);
+
+  // --- codon lookup for this sequence ----------------------------------------------
+  const aaByPosition = new Map();
+  for (const r of detail.aa) {
+    const k = r.protein + "|" + r.position;
+    let list = aaByPosition.get(k);
+    if (!list) aaByPosition.set(k, (list = []));
+    list.push(r);
+  }
+  const proteinSpans = new Map();
+  for (const r of detail.aa) {
+    const cur = proteinSpans.get(r.protein);
+    if (!cur) proteinSpans.set(r.protein, { min: r.position, max: r.position });
+    else { cur.min = Math.min(cur.min, r.position); cur.max = Math.max(cur.max, r.position); }
+  }
+  const frameAt = buildFrameIndex(assets.reference.proteins, aaByPosition);
+  const SEGMENTS = geneSegments(assets.reference.proteins);
+  const targets = engine.proteinTargets(proteinSpans);
+  const targetByKey = new Map(targets.map((t) => [t.key, t]));
+
+  // --- controls ---------------------------------------------------------------------
+  const ctrl = document.createElement("div");
+  ctrl.className = "controls";
+  ctrl.innerHTML =
+    `<div><label>Smoothing window (nt)</label>` +
+    `<input type="range" class="sq-win" min="25" max="501" step="2" value="151">` +
+    `<output class="sq-win-out">151</output></div>` +
+    `<div><label>Supply shown</label><select class="sq-class">` +
+    `<option value="total">Total substitution supply</option>` +
+    `<option value="nonga">non-G&rarr;A only</option>` +
+    `<option value="ga">G&rarr;A only</option></select></div>` +
+    `<div><label>Jump to</label><select class="sq-sys">` +
+    `<option value="protein">Protein position</option>` +
+    `<option value="nt">NL4-3 nucleotide</option>` +
+    `<option value="variant">Difference from NL4-3</option></select></div>` +
+    `<div><label>Protein or subunit</label><select class="sq-target"></select></div>` +
+    `<div><label>Position</label><input type="number" class="sq-pos" min="1" size="8"></div>` +
+    `<div><button class="sq-go">Go</button></div>` +
+    `<div><label>Reading frame here</label><select class="sq-frame"></select></div>`;
+  slot.appendChild(ctrl);
+
+  const elWin = ctrl.querySelector(".sq-win"), elWinOut = ctrl.querySelector(".sq-win-out");
+  const elClass = ctrl.querySelector(".sq-class"), elSys = ctrl.querySelector(".sq-sys");
+  const elTarget = ctrl.querySelector(".sq-target"), elPos = ctrl.querySelector(".sq-pos");
+  const elFrame = ctrl.querySelector(".sq-frame");
+  for (const t of targets) {
+    const o = document.createElement("option");
+    o.value = t.key; o.textContent = t.label;
+    elTarget.appendChild(o);
+  }
+
+  // --- figure ------------------------------------------------------------------------
+  const fig = document.createElement("figure");
+  fig.className = "chart";
+  const trackSlot = document.createElement("div");
+  const sliderWrap = document.createElement("div");
+  sliderWrap.className = "track-slider";
+  const elSlider = document.createElement("input");
+  elSlider.type = "range"; elSlider.step = "1";
+  elSlider.min = String(SITES[0]); elSlider.max = String(SITES[SITES.length - 1]);
+  elSlider.setAttribute("aria-label", "Genome position (NL4-3 nucleotide)");
+  sliderWrap.appendChild(elSlider);
+  const figCap = document.createElement("figcaption");
+  fig.append(trackSlot, sliderWrap, figCap);
+  slot.appendChild(fig);
+
+  const head = document.createElement("div");
+  const pieFig = document.createElement("figure");
+  pieFig.className = "chart";
+  const pieSlot = document.createElement("div");
+  const pieCap = document.createElement("figcaption");
+  pieFig.append(pieSlot, pieCap);
+  slot.append(head, pieFig);
+
+  // --- state ---------------------------------------------------------------------------
+  let selected = null, markerNt = variants.length ? variants[0] : SITES[0];
+  let variantIdx = 0;
+
+  function draw() {
+    const win = Number(elWin.value);
+    elWinOut.textContent = String(win);
+    figCap.innerHTML = drawSupplyTrack(trackSlot, {
+      perSite, sites: SITES, win, cls: elClass.value, segments: SEGMENTS,
+      first: region.first_position, last: region.last_position,
+      marker: markerNt,
+      markerLabel: selected ? engine.hxb2Label(selected.protein, selected.geneAa) : String(markerNt),
+      variants,
+      title: `Smoothed supply along ${row.name}`,
+      source: "computed from the codons and 3\u2032 context in your sequence, not from NL4-3",
+      onSelect: (pos) => selectNt(pos),
+    });
+  }
+
+  function selectNt(nt) {
+    const frames = frameAt.get(Math.round(nt)) || [];
+    markerNt = Math.round(nt);
+    elSlider.value = String(markerNt);
+    if (elSys.value === "nt") elPos.value = String(markerNt);
+    if (!frames.length) {
+      selected = null;
+      head.innerHTML = "";
+      showError(head, `NL4-3 nucleotide ${markerNt.toLocaleString()} is covered by your ` +
+                      `sequence but is not inside a codon this atlas models.`);
+      pieSlot.innerHTML = ""; pieCap.textContent = "";
+      draw();
+      return;
+    }
+    const keep = selected && frames.find((f) => f.protein === selected.protein);
+    apply((keep || frames[0]).protein, (keep || frames[0]).geneAa, markerNt);
+  }
+
+  function apply(protein, geneAa, preferNt) {
+    const rec = assets.reference.proteins[protein];
+    const codonNt = rec.codon_nt[geneAa - rec.first_aa];
+    selected = { protein, geneAa };
+    markerNt = (preferNt && codonNt.includes(preferNt)) ? preferNt : codonNt[1];
+    elSlider.value = String(markerNt);
+
+    elFrame.innerHTML = "";
+    for (const f of (frameAt.get(markerNt) || [])) {
+      const o = document.createElement("option");
+      o.value = f.protein + "|" + f.geneAa;
+      o.textContent = `${engine.hxb2Label(f.protein, f.geneAa)}  (${f.protein} ${f.geneAa})`;
+      elFrame.appendChild(o);
+    }
+    elFrame.value = protein + "|" + geneAa;
+    elFrame.disabled = (frameAt.get(markerNt) || []).length < 2;
+
+    const t = targetFor(targets, protein, geneAa);
+    if (t && elSys.value === "protein") {
+      elTarget.value = t.key;
+      elPos.value = String(engine.ownPositionFor(t, geneAa));
+    }
+
+    const rows = aaByPosition.get(protein + "|" + geneAa) || [];
+    const label = engine.hxb2Label(protein, geneAa);
+    const yourCodon = rows.length ? rows[0].codon : "?";
+    const refCodon = rec.codon_seq[geneAa - rec.first_aa];
+    const differs = yourCodon !== refCodon;
+    head.innerHTML =
+      `<p><strong>${label}</strong> &mdash; your codon <code>${yourCodon}</code>` +
+      (differs ? ` <strong>(NL4-3 has <code>${refCodon}</code>)</strong>` : " (same as NL4-3)") +
+      `, amino acid <strong>${rows.length ? rows[0].ref_aa : "?"}</strong>. ` +
+      `${protein} position ${geneAa}; NL4-3 nucleotides ` +
+      `${codonNt[0].toLocaleString()}\u2013${codonNt[2].toLocaleString()}; ` +
+      `selected nucleotide ${markerNt.toLocaleString()} is codon base ` +
+      `${codonNt.indexOf(markerNt) + 1}.</p>`;
+    drawPositionPie(pieSlot, pieCap, rows, label, { custom: true });
+    draw();
+  }
+
+  function jump() {
+    head.innerHTML = "";
+    if (elSys.value === "variant") {
+      if (!variants.length) { showError(head, "This sequence matches NL4-3 at every modelled position."); return; }
+      const want = Number(elPos.value);
+      variantIdx = Number.isInteger(want) && want >= 1 && want <= variants.length
+        ? want - 1 : (variantIdx + 1) % variants.length;
+      elPos.value = String(variantIdx + 1);
+      selectNt(variants[variantIdx]);
+      return;
+    }
+    const raw = Number(elPos.value);
+    if (!Number.isInteger(raw) || raw < 1) { showError(head, "Enter a positive whole number."); return; }
+    if (elSys.value === "nt") {
+      if (!perSite.has(raw)) {
+        showError(head, `NL4-3 nucleotide ${raw.toLocaleString()} is not covered by this ` +
+                        `sequence. It covers ${SITES[0].toLocaleString()}\u2013` +
+                        `${SITES[SITES.length - 1].toLocaleString()} of the reference.`);
+        return;
+      }
+      selectNt(raw);
+      return;
+    }
+    const t = targetByKey.get(elTarget.value);
+    if (!t) { showError(head, "Pick a protein or subunit."); return; }
+    const geneAa = engine.geneAaFromOwnPosition(t, raw);
+    if (geneAa === null || !aaByPosition.has(t.protein + "|" + geneAa)) {
+      const span = proteinSpans.get(t.protein);
+      showError(head, `${t.key} ${raw} is not covered by this sequence` +
+        (span ? ` \u2014 ${t.protein} ${span.min}\u2013${span.max} was analysed.` : "."));
+      return;
+    }
+    apply(t.protein, geneAa, null);
+  }
+
+  elWin.addEventListener("input", () => { elWinOut.textContent = elWin.value; });
+  elWin.addEventListener("change", draw);
+  elClass.addEventListener("change", draw);
+  elSlider.addEventListener("input", () => selectNt(Number(elSlider.value)));
+  ctrl.querySelector(".sq-go").addEventListener("click", jump);
+  elPos.addEventListener("keydown", (e) => { if (e.key === "Enter") jump(); });
+  elTarget.addEventListener("change", jump);
+  elFrame.addEventListener("change", (e) => {
+    const [p, g] = e.target.value.split("|");
+    apply(p, Number(g), markerNt);
+  });
+  elSys.addEventListener("change", () => {
+    const mode = elSys.value;
+    elTarget.disabled = mode !== "protein";
+    elPos.value = mode === "nt" ? String(markerNt)
+      : mode === "variant" ? String(variantIdx + 1)
+      : (selected ? String(engine.ownPositionFor(targetFor(targets, selected.protein, selected.geneAa), selected.geneAa)) : "1");
+  });
+
+  slot.appendChild(caveat(
+    variants.length
+      ? `<strong>${variants.length.toLocaleString()} position(s)</strong> in the modelled region ` +
+        `differ from NL4-3; each is a red tick on the baseline. Set &ldquo;Jump to&rdquo; to ` +
+        `&ldquo;Difference from NL4-3&rdquo; and press Go to step through them. A tick marks a ` +
+        `substitution, not an indel \u2014 an indel has no single reference position to mark. ` +
+        `These are differences in <em>your</em> sequence, not predictions: the track shows how ` +
+        `readily each site mutates, which is a separate question from whether it already has.`
+      : "This sequence matches NL4-3 at every modelled position, so there are no difference " +
+        "ticks. The track still shows how readily each site mutates."));
+
+  elTarget.disabled = false;
+  selectNt(markerNt);
+}
+
 async function showDetail(index, row, out, slot) {
   slot.innerHTML = "";
   slot.appendChild(Object.assign(document.createElement("h3"),
@@ -241,6 +500,9 @@ async function showDetail(index, row, out, slot) {
       `3&prime; 2-mer could not be read \u2014 a G&rarr;A rate is not defined by this model without it. ` +
       `This happens at the very end of a submitted sequence.`));
   }
+
+  // --- interactive genome view ------------------------------------------------------
+  renderInteractiveView(slot, detail, row);
 
   // --- amino-acid layer ----------------------------------------------------------
   const aaHeading = document.createElement("h4");

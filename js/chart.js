@@ -178,6 +178,20 @@ export function genomeTrack(container, series, options = {}) {
     }
   }
 
+  // Variant ticks: where a submitted sequence differs from NL4-3. Drawn on the baseline
+  // rather than over the curve, so a dense cluster reads as a band without hiding the rates.
+  if (options.variants && options.variants.length) {
+    const vy = padTop + plotH;
+    for (const v of options.variants) {
+      if (v < x0 || v > x1) continue;
+      svg.appendChild(el("line", { x1: sx(v), x2: sx(v), y1: vy - 6, y2: vy,
+                                   stroke: "#b5485d", "stroke-width": 0.8, "stroke-opacity": 0.75 }));
+    }
+    svg.appendChild(el("text", { x: padLeft + plotW + 6, y: vy, "font-size": 8.5,
+                                 fill: "#b5485d" },
+                       `${options.variants.length} difference${options.variants.length === 1 ? "" : "s"}`));
+  }
+
   for (const e of niceLogTicks(yLo, yHi)) {
     const y = sy(Math.pow(10, e));
     svg.appendChild(el("line", { x1: padLeft, x2: padLeft + plotW, y1: y, y2: y,
