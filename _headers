@@ -17,9 +17,19 @@
   Cross-Origin-Opener-Policy: same-origin
   Permissions-Policy: geolocation=(), microphone=(), camera=(), interest-cohort=()
 
-# Immutable release directories: a release is never overwritten, so cache hard.
+# Immutable release directories: the model outputs are never overwritten, so cache hard.
 /data/v*/*
   Cache-Control: public, max-age=31536000, immutable
+
+# Curated annotation overlays are the exception: they live under a version directory but are
+# revised as the literature accrues (new antibodies, corrected DRM calls), so they must NOT be
+# frozen. no-cache keeps a stored copy but forces revalidation, so an edit appears on the next
+# load instead of being pinned for a year by the immutable rule above. These more-specific
+# paths override the /data/v*/* rule. Keep this list in step with MUTABLE_OVERLAYS in sw.js.
+/data/v*/bnab_catalog.csv
+  Cache-Control: no-cache
+/data/v*/drm_catalog.csv
+  Cache-Control: no-cache
 
 # The release index and all code/pages change on deploy: never serve a stale copy.
 /data/releases.json

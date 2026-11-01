@@ -7,10 +7,14 @@
 // requirement rather than a nicety.
 //
 // CACHING STRATEGY, and why it is split
-//   data/<version>/...   CACHE FIRST, forever. A release directory is immutable by
-//                        design: nothing is ever overwritten in place, a new release is
-//                        a new directory. So a cached asset can never be stale, and
-//                        serving it from cache costs no correctness.
+//   data/<version>/...   CACHE FIRST, forever -- for the MODEL OUTPUTS only. Those are
+//                        immutable by design: nothing is overwritten in place, a new
+//                        release is a new directory, so a cached copy can never be stale.
+//   the catalog overlays NETWORK FIRST, HTTP cache bypassed. bnab_catalog.csv and
+//                        drm_catalog.csv live under a version directory but are curated
+//                        layers that get revised, so they are explicitly NOT frozen
+//                        (see MUTABLE_OVERLAYS). Editing one in place and treating the
+//                        directory as immutable is what served a stale table before.
 //   data/releases.json   NETWORK FIRST. It is the one file that changes when a new
 //                        release is cut, so a cached copy would hide the new version.
 //   everything else      NETWORK FIRST, cache as fallback. Page and code updates should
@@ -19,7 +23,15 @@
 // This worker never caches anything a user submits: submitted sequences are not fetched
 // over the network at all, so they never pass through here.
 
-const CACHE = "mra-portal-v1";
+// Bumped v1 -> v2 when the bNAb/DRM catalogs became mutable overlays: the activate handler
+// deletes every cache whose key is not this one, so the bump purges the old frozen copies that
+// were pinned under the previous cache-first-forever rule.
+const CACHE = "mra-portal-v2";
+
+// Curated annotation overlays: under a version directory, but revised over time rather than
+// frozen. Served network-first with the HTTP cache bypassed, so an edit is never masked by an
+// old "immutable" copy. Keep this in step with the /data/v*/*.csv rules in _headers.
+const MUTABLE_OVERLAYS = /\/(bnab_catalog|drm_catalog)\.csv$/;
 
 const SHELL = [
   "./", "./index.html", "./browse.html", "./sequence.html", "./compare.html",
@@ -62,8 +74,11 @@ self.addEventListener("fetch", (event) => {
 
   const isVersionedAsset = /\/data\/v[0-9.]+\//.test(url.pathname);
   const isReleases = url.pathname.endsWith("/data/releases.json");
+  const isMutableOverlay = MUTABLE_OVERLAYS.test(url.pathname);
 
-  if (isVersionedAsset && !isReleases) {
+  // Frozen model outputs under a release directory: cache first, forever. The mutable overlays
+  // are excluded here and fall through to the network-first branch below.
+  if (isVersionedAsset && !isReleases && !isMutableOverlay) {
     event.respondWith((async () => {
       const cache = await caches.open(CACHE);
       const hit = await cache.match(req);
@@ -78,7 +93,11 @@ self.addEventListener("fetch", (event) => {
   event.respondWith((async () => {
     const cache = await caches.open(CACHE);
     try {
-      const resp = await fetch(req);
+      // Overlays bypass the HTTP cache (cache: "reload"), so a browser that stored the old copy
+      // as "immutable" before this change is not pinned to it; everything else is a normal fetch.
+      const resp = isMutableOverlay
+        ? await fetch(url.href, { cache: "reload" })
+        : await fetch(req);
       if (resp.ok) cache.put(req, resp.clone());
       return resp;
     } catch (err) {
