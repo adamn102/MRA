@@ -15,13 +15,13 @@ import { bootstrapPage, privacyPanel, note, caveat, showError, exportProvenance,
          CUSTOM_CAVEAT, NEF_NOTE } from "./page.js";
 import { loadSmallAssets } from "./data.js";
 import { Analysis, progressRow, MAX_BATCH_SEQUENCES } from "./analysis.js";
-import { parseFasta } from "./align.js";
+import { parseFasta, alignToReference } from "./align.js";
 import { renderTable, formatRate, toCsv, downloadText } from "./table.js";
-import { MraEngine } from "./mra_engine.js";
-import { perSiteSupply, groupByPosition, buildFrameIndex, geneSegments, targetFor }
-  from "./explore_core.js";
+import { MraEngine, GENETIC_CODE } from "./mra_engine.js";
+import { perSiteSupply, groupByPosition, buildFrameIndex, geneSegments, targetFor,
+         codonDifferences, accessibilityRows } from "./explore_core.js";
 import { drawSupplyTrack, drawPositionPie } from "./track_view.js";
-import { trackSliderGeometry } from "./chart.js";
+import { trackSliderGeometry, dotPlot } from "./chart.js";
 
 const page = await bootstrapPage("sequence.html");
 const region = page.release.modelled_region;
@@ -465,6 +465,129 @@ function renderInteractiveView(slot, detail, row) {
   selectNt(markerNt);
 }
 
+// --- comparison to NL4-3 ----------------------------------------------------------
+// The accessibility view needs the NL4-3 rate at each position. Rather than fetch the heavy
+// published amino-acid layer (which would break this page's "small assets only" design), build
+// it once from the reference's OWN custom atlas: the round-trip guarantee makes that identical
+// to the published layer, and it is computed in-browser from assets already loaded. Cached so a
+// batch of sequences pays the cost once.
+let _refByPosition = null;
+function refByPosition() {
+  if (_refByPosition) return _refByPosition;
+  const seq = assets.reference.sequence;
+  const refAtlas = engine.customAtlas({
+    name: "NL4-3", sequence: seq, alignment: alignToReference(seq, seq) });
+  const m = new Map();
+  for (const r of refAtlas.aa) {
+    const key = r.protein + "|" + r.position;
+    let list = m.get(key);
+    if (!list) m.set(key, (list = []));
+    list.push(r);
+  }
+  _refByPosition = m;
+  return m;
+}
+
+/** "Where your codons differ from NL4-3" -- reachability reshaped by codon identity. */
+function renderCodonDifferences(slot, detail, row, geom) {
+  const rows = codonDifferences(detail.aa, assets.reference.proteins, GENETIC_CODE);
+  const heading = document.createElement("h4");
+  heading.textContent = "Where your codons differ from NL4-3";
+  slot.appendChild(heading);
+  if (!rows.length) {
+    slot.appendChild(caveat("Every analysed codon in this sequence is identical to NL4-3, so " +
+      "there is nothing to compare here. (The worked NL4-3 example lands here.)"));
+    return;
+  }
+  const syn = rows.filter((r) => r.kind === "synonymous codon change").length;
+  const reshaped = rows.filter((r) => r.kind === "synonymous codon change" && (r.n_gained || r.n_lost)).length;
+  slot.appendChild(note(
+    `<strong>${rows.length.toLocaleString()} analysed codons differ from NL4-3</strong>, of which ` +
+    `${syn.toLocaleString()} encode the <em>same amino acid</em> by a different codon. ` +
+    `<strong>${reshaped.toLocaleString()} of those synonymous differences change which amino acids are ` +
+    `reachable in a single nucleotide substitution.</strong> Those rows are the codon-identity effect ` +
+    `in its purest form: the protein sequence is unchanged, and the set of accessible next steps is not. ` +
+    `Gained and lost are computed from the genetic code alone and do not depend on any rate estimate.`));
+  const tableSlot = document.createElement("div");
+  slot.appendChild(tableSlot);
+  renderTable(tableSlot, {
+    columns: [
+      { key: "hxb2_label", label: "HXB2" },
+      { key: "query_nt_start", label: "Your nt", type: "num" },
+      { key: "ref_codon", label: "NL4-3 codon" },
+      { key: "your_codon", label: "Your codon" },
+      { key: "ref_aa", label: "NL4-3 aa" },
+      { key: "your_aa", label: "Your aa" },
+      { key: "kind", label: "Kind" },
+      { key: "gained", label: "Newly reachable in 1 nt",
+        title: "Amino acids reachable from your codon in one substitution but not from the NL4-3 codon" },
+      { key: "lost", label: "No longer reachable in 1 nt" },
+    ],
+    rows,
+    sort: { key: "n_gained", dir: "desc" },
+    filterPlaceholder: "filter by protein, codon, amino acid\u2026",
+    downloadName: `mra_${page.version}_${safeName(row.name)}_codon_differences.csv`,
+    provenance: customProvenance(row, row.summary, geom),
+  });
+}
+
+/** "What has become more or less accessible" -- log2 FC of each AA change vs NL4-3. */
+function renderAccessibility(slot, detail, row, geom) {
+  const rows = accessibilityRows(detail.aa, refByPosition(), assets.reference.proteins, GENETIC_CODE);
+  const heading = document.createElement("h4");
+  heading.textContent = "What has become more or less accessible";
+  slot.appendChild(heading);
+  const withFc = rows.filter((r) => r.log2fc !== null && Number.isFinite(r.log2fc));
+  if (!withFc.length) {
+    slot.appendChild(caveat("No amino-acid change at a covered position differs in accessibility " +
+      "from NL4-3 \u2014 expected when the sequence is identical to the reference."));
+    return;
+  }
+  const chartSlot = document.createElement("div");
+  const fig = document.createElement("figure"); fig.className = "chart";
+  fig.appendChild(chartSlot);
+  const cap = document.createElement("figcaption");
+  fig.appendChild(cap);
+  slot.appendChild(fig);
+  const top = withFc.slice().sort((a, b) => Math.abs(b.log2fc) - Math.abs(a.log2fc)).slice(0, 25);
+  dotPlot(chartSlot,
+    top.map((r) => ({ label: `${r.hxb2_label} ${r.aa_change}`, value: r.log2fc,
+                      note: `${r.ref_codon}\u2192${r.your_codon}` })),
+    { title: "The 25 amino-acid changes whose accessibility shifts most", width: 740 });
+  const shifted = withFc.filter((r) => Math.abs(r.log2fc) > 1).length;
+  const stepChanged = rows.filter((r) => r.change && r.change.includes("substitutions")).length;
+  cap.innerHTML =
+    `${withFc.length.toLocaleString()} amino-acid changes are present in both atlases. ` +
+    `${shifted.toLocaleString()} shift by more than two-fold, and ${stepChanged.toLocaleString()} ` +
+    `require a different <em>number</em> of nucleotide substitutions than in NL4-3 \u2014 which is a ` +
+    `categorical change in accessibility, not a quantitative one. Codon shown at the right of each row.`;
+  const tableSlot = document.createElement("div");
+  slot.appendChild(tableSlot);
+  renderTable(tableSlot, {
+    columns: [
+      { key: "hxb2_change", label: "Mutation (HXB2)" },
+      { key: "ref_codon", label: "NL4-3 codon" },
+      { key: "your_codon", label: "Your codon" },
+      { key: "mu_nl43", label: "mu_aa NL4-3", type: "rate" },
+      { key: "mu_custom", label: "mu_aa yours", type: "rate" },
+      { key: "log2fc", label: "log2 FC", type: "num",
+        render: (r) => r.log2fc === null ? "\u2014" : r.log2fc.toFixed(2) },
+      { key: "min_nt_nl43", label: "min nt NL4-3", type: "num" },
+      { key: "min_nt_custom", label: "min nt yours", type: "num" },
+      { key: "change", label: "Note" },
+    ],
+    rows,
+    sort: { key: "log2fc", dir: "desc" },
+    filterPlaceholder: "filter\u2026",
+    downloadName: `mra_${page.version}_${safeName(row.name)}_accessibility_vs_nl43.csv`,
+    provenance: customProvenance(row, row.summary, geom),
+  });
+  tableSlot.appendChild(caveat(
+    "A fold change here reflects your codon and your local context. It is not evidence that " +
+    "your virus mutates at a different rate: the underlying per-site model is the same one, " +
+    "fitted on NL4-3."));
+}
+
 async function showDetail(index, row, out, slot) {
   slot.innerHTML = "";
   slot.appendChild(Object.assign(document.createElement("h3"),
@@ -509,6 +632,10 @@ async function showDetail(index, row, out, slot) {
 
   // --- interactive genome view ------------------------------------------------------
   renderInteractiveView(slot, detail, row);
+
+  // --- comparison to NL4-3 (folded in from the former "Compare & genome track" tab) ---
+  renderCodonDifferences(slot, detail, row, geom);
+  renderAccessibility(slot, detail, row, geom);
 
   // --- amino-acid layer ----------------------------------------------------------
   const aaHeading = document.createElement("h4");

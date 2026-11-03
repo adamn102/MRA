@@ -184,3 +184,121 @@ export function emergenceProbability(mu, n) {
 
 /** Expected de novo copies of a change in N replication events, one cycle. */
 export function expectedCopies(mu, n) { return mu * n; }
+
+// ---------------------------------------------------------------------------------
+// COMPARISON TO NL4-3. These back the "Your sequence" detail view where a submitted
+// sequence is set against the reference. Pure and DOM-free so test/compare_core_cases.mjs
+// can exercise them; the genetic code is passed in rather than imported, to keep this module
+// standalone. Previously these lived in the separate "Compare & genome track" tab.
+
+const _BASES = ["A", "C", "G", "T"];
+
+/** Amino acids reachable from a codon in exactly one nucleotide substitution (self excluded). */
+export function oneStepAminoAcids(codon, code) {
+  const out = new Set();
+  for (let i = 0; i < 3; i++) {
+    for (const b of _BASES) {
+      if (b === codon[i]) continue;
+      out.add(code[codon.slice(0, i) + b + codon.slice(i + 1)]);
+    }
+  }
+  out.delete(code[codon]);
+  return out;
+}
+
+/**
+ * One row per analysed codon that DIFFERS from the NL4-3 codon at the same position, with the
+ * amino acids that become reachable or unreachable in a single nucleotide step. Reachability is
+ * from the genetic code alone -- it does not depend on any rate estimate -- so a synonymous
+ * codon change can still reshape the set of accessible next steps.
+ *
+ * @param {Array}  detailAa  the custom atlas's amino-acid rows (one sequence)
+ * @param {object} proteins  reference.proteins (carries codon_seq and first_aa per protein)
+ * @param {object} code      the genetic code map, CODON -> amino acid
+ */
+export function codonDifferences(detailAa, proteins, code) {
+  const seen = new Map();
+  for (const r of detailAa) {
+    const key = r.protein + "|" + r.position;
+    if (seen.has(key)) continue;
+    const protRec = proteins[r.protein];
+    if (!protRec) continue;
+    const refCodon = protRec.codon_seq[r.position - protRec.first_aa];
+    if (!refCodon || refCodon === r.codon) continue;     // identical codon: nothing to say
+    const refAa = code[refCodon], yourAa = code[r.codon];
+    const refSet = oneStepAminoAcids(refCodon, code), yourSet = oneStepAminoAcids(r.codon, code);
+    const gained = [...yourSet].filter((a) => !refSet.has(a)).sort();
+    const lost = [...refSet].filter((a) => !yourSet.has(a)).sort();
+    seen.set(key, {
+      hxb2_label: r.hxb2_label, protein: r.protein, position: r.position,
+      ref_codon: refCodon, your_codon: r.codon, ref_aa: refAa, your_aa: yourAa,
+      kind: refAa === yourAa ? "synonymous codon change" : "amino-acid difference",
+      gained: gained.join(" ") || "\u2014", lost: lost.join(" ") || "\u2014",
+      n_gained: gained.length, n_lost: lost.length, query_nt_start: r.query_nt_start,
+    });
+  }
+  return [...seen.values()];
+}
+
+/**
+ * How the accessibility of each amino-acid change shifts relative to the published NL4-3 atlas.
+ * log2 FC = log2(mu_aa from your codon / mu_aa from the NL4-3 codon) at the same position. A
+ * change in min_nt_changes is categorical, not quantitative. refByPosition maps "protein|pos"
+ * to the NL4-3 amino-acid rows; it is built from the reference's own custom atlas, which the
+ * round-trip guarantee makes equal to the published layer -- so no heavy layer need load.
+ */
+export function accessibilityRows(detailAa, refByPosition, proteins, code) {
+  const rows = [];
+  for (const r of detailAa) {
+    const published = (refByPosition.get(r.protein + "|" + r.position) || [])
+      .find((p) => p.alt_aa === r.alt_aa);
+    const protRec = proteins[r.protein];
+    const refCodon = protRec ? protRec.codon_seq[r.position - protRec.first_aa] : null;
+    const codonDiffers = refCodon !== r.codon;
+    if (!published) {
+      rows.push({ hxb2_label: r.hxb2_label, hxb2_change: r.hxb2_change, aa_change: r.aa_change,
+        alt_aa: r.alt_aa, your_codon: r.codon, ref_codon: refCodon, codon_differs: codonDiffers,
+        mu_custom: r.mu_aa, mu_nl43: null, log2fc: null,
+        min_nt_custom: r.min_nt_changes, min_nt_nl43: null,
+        change: "not in the NL4-3 table at this position" });
+      continue;
+    }
+    rows.push({ hxb2_label: r.hxb2_label, hxb2_change: r.hxb2_change, aa_change: r.aa_change,
+      alt_aa: r.alt_aa, your_codon: r.codon, ref_codon: refCodon, codon_differs: codonDiffers,
+      mu_custom: r.mu_aa, mu_nl43: published.mu_aa, log2fc: Math.log2(r.mu_aa / published.mu_aa),
+      min_nt_custom: r.min_nt_changes, min_nt_nl43: published.min_nt_changes,
+      change: r.min_nt_changes < published.min_nt_changes ? "fewer substitutions needed"
+            : r.min_nt_changes > published.min_nt_changes ? "more substitutions needed" : "" });
+  }
+  return rows;
+}
+
+/**
+ * The quantity table shown beside the emergence curve, as an HTML string. Pure so it can be
+ * tested without a DOM -- which is the point: this builder previously lived inline in
+ * track_view.js and referenced an undefined `fmt`, a ReferenceError that only fired in a real
+ * browser (it aborted drawPositionPie, which aborted the whole "Scan the genome" view) and that
+ * no Node test could catch. Keeping it here, exercised by test/explore_cases.mjs, closes that gap.
+ */
+export function emergenceReadoutHtml(r) {
+  const { nStar, nLo, nHi } = emergenceStats(r);
+  const fmt = (n) => (n == null || !Number.isFinite(n)) ? "\u2014"
+    : n >= 1e4 ? n.toExponential(1) : Math.round(n).toLocaleString();
+  const pct = (x) => x >= 0.9995 ? "&gt;99.9%" : `${(100 * x).toFixed(1)}%`;
+  const pAt = (n) => emergenceProbability(r.mu_aa, n);
+  return '<table class="data track-stats"><thead><tr><th>Quantity</th><th>Value</th>' +
+    "<th>Basis</th></tr></thead><tbody>" +
+    `<tr><td>Rate of ${r.ref_aa}\u2192${r.alt_aa}</td>` +
+    `<td class="num">${r.mu_aa.toExponential(2)}</td>` +
+    `<td>per replication event; 95% CI ${r.mu_aa_lo95.toExponential(2)}\u2013` +
+    `${r.mu_aa_hi95.toExponential(2)}</td></tr>` +
+    `<tr><td>N* \u2014 replication events for one expected copy</td>` +
+    `<td class="num">${fmt(nStar)}</td>` +
+    `<td>1/rate; 95% CI ${fmt(nLo)}\u2013${fmt(nHi)}. At N* the chance of at least one ` +
+    `is 63%, not certainty</td></tr>` +
+    `<tr><td>P(generated) at N = 10\u2075</td><td class="num">${pct(pAt(1e5))}</td>` +
+    `<td>a small or recently founded population</td></tr>` +
+    `<tr><td>P(generated) at N = 10\u2077</td><td class="num">${pct(pAt(1e7))}</td>` +
+    `<td>order of a chronic untreated infection, per cycle</td></tr>` +
+    "</tbody></table>";
+}

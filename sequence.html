@@ -6,19 +6,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'none'">
-<title>Your sequence &mdash; HIV-1 Mutation Rate Atlas</title>
+<title>Your sequence &amp; comparison &mdash; HIV-1 Mutation Rate Atlas</title>
 <link rel="stylesheet" href="css/mra.css">
 </head>
 <body>
 <main>
-<h1>Custom atlas from your own sequence</h1>
+<h1>Your sequence: custom atlas and comparison to NL4-3</h1>
 <div id="privacy-slot"></div>
 <div id="caveat-slot"></div>
 
 <h2>Submit</h2>
 <p>Paste one nucleotide sequence or a multi-FASTA batch, or drop a file below. Any region of
 the HIV-1 genome works &mdash; a partial amplicon such as a clinical <em>pol</em> fragment is
-the common case. Reverse-complemented sequences are detected automatically.</p>
+the common case. Reverse-complemented sequences are detected automatically. Each analysed
+sequence gets a custom atlas, the mutational-supply track along the genome, and a comparison to
+NL4-3 &mdash; which amino-acid changes have become more or less accessible, and where the codons
+differ.</p>
 <textarea id="fasta" spellcheck="false" placeholder="&gt;my_isolate&#10;ATGGGTGCGAGAGCGTCGGTATTAAGCGGGGGAGAATTAGAT..."></textarea>
 <div class="controls">
   <div><button id="run">Compute custom atlas</button></div>

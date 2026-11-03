@@ -10,7 +10,7 @@ import fs from "node:fs";
 import { MraEngine } from "../js/mra_engine.js";
 import { trackStats } from "../js/track_view.js";
 import { LAYOUT, trackSliderGeometry } from "../js/chart.js";
-import { emergenceStats, expectedCopies, emergenceProbability } from "../js/explore_core.js";
+import { emergenceStats, expectedCopies, emergenceProbability, emergenceReadoutHtml } from "../js/explore_core.js";
 import { perSiteSupply, smoothSeries, buildFrameIndex, geneSegments, oneStepSlices,
          targetFor } from "../js/explore_core.js";
 
@@ -448,6 +448,25 @@ check("every clickable frame maps to a selectable protein/subunit",
   check("the slider ends inside the figure",
         ml + w + 100 * LAYOUT.padRight / LAYOUT.width <= 100.001,
         `${(ml + w).toFixed(2)}% used`);
+}
+
+// --- 11. the emergence readout html builds without a ReferenceError -------------------
+// This builder referenced an undefined `fmt` while inline in track_view.js; the error only
+// fired in a browser (aborting drawPositionPie and the whole scan view) and no Node test caught
+// it. Exercising the extracted pure function here closes that gap.
+{
+  const r = { ref_aa: "M", alt_aa: "I", mu_aa: 1.13e-5, mu_aa_lo95: 8e-6, mu_aa_hi95: 1.5e-5 };
+  let html = "";
+  let threw = false;
+  try { html = emergenceReadoutHtml(r); } catch (e) { threw = true; html = String(e); }
+  check("emergenceReadoutHtml does not throw", !threw, html.slice(0, 80));
+  check("emergenceReadoutHtml returns a stats table with N* filled",
+        /track-stats/.test(html) && /N\*/.test(html) && !/undefined/.test(html),
+        html.slice(0, 60));
+  // a zero rate must degrade gracefully (N* -> dash), not print NaN/Infinity
+  const z = emergenceReadoutHtml({ ref_aa: "A", alt_aa: "K", mu_aa: 0, mu_aa_lo95: 0, mu_aa_hi95: 0 });
+  check("a zero-rate readout shows a dash rather than Infinity/NaN",
+        !/Infinity|NaN/.test(z), z.slice(0, 80));
 }
 
 console.log("=".repeat(60));

@@ -10,7 +10,7 @@
 // renderer here is what stops the two views drifting apart.
 
 import { genomeTrack, pieChart, emergenceCurve, LAYOUT } from "./chart.js";
-import { smoothSeries, oneStepSlices, emergenceStats, emergenceProbability }
+import { smoothSeries, oneStepSlices, emergenceStats, emergenceProbability, emergenceReadoutHtml }
   from "./explore_core.js";
 import { formatRate } from "./table.js";
 
@@ -226,25 +226,7 @@ export function drawPositionPie(chartEl, captionEl, rows, label, opts = {}) {
       nMin: 1, nMax: 1e8, width: CURVE_W, height: FIG_H,
     });
 
-    const { nStar, nLo, nHi } = emergenceStats(r);
-    const pAt = (n) => emergenceProbability(r.mu_aa, n);
-    const pct = (x) => x >= 0.9995 ? "&gt;99.9%" : `${(100 * x).toFixed(1)}%`;
-    readout.innerHTML =
-      '<table class="data track-stats"><thead><tr><th>Quantity</th><th>Value</th>' +
-      "<th>Basis</th></tr></thead><tbody>" +
-      `<tr><td>Rate of ${r.ref_aa}\u2192${r.alt_aa}</td>` +
-      `<td class="num">${r.mu_aa.toExponential(2)}</td>` +
-      `<td>per replication event; 95% CI ${r.mu_aa_lo95.toExponential(2)}\u2013` +
-      `${r.mu_aa_hi95.toExponential(2)}</td></tr>` +
-      `<tr><td>N* \u2014 replication events for one expected copy</td>` +
-      `<td class="num">${fmt(nStar)}</td>` +
-      `<td>1/rate; 95% CI ${fmt(nLo)}\u2013${fmt(nHi)}. At N* the chance of at least one ` +
-      `is 63%, not certainty</td></tr>` +
-      `<tr><td>P(generated) at N = 10\u2075</td><td class="num">${pct(pAt(1e5))}</td>` +
-      `<td>a small or recently founded population</td></tr>` +
-      `<tr><td>P(generated) at N = 10\u2077</td><td class="num">${pct(pAt(1e7))}</td>` +
-      `<td>order of a chronic untreated infection, per cycle</td></tr>` +
-      "</tbody></table>";
+    readout.innerHTML = emergenceReadoutHtml(r);
   }
 
   sel.addEventListener("change", () => pick(sel.value));

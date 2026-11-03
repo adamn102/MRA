@@ -13,9 +13,8 @@ import { loadReleases, requestedVersionFromUrl, resolveVersion, renderVersionBan
 const PAGES = [
   { href: "index.html", label: "Overview" },
   { href: "browse.html", label: "Browse the atlas" },
-  { href: "sequence.html", label: "Your sequence" },
+  { href: "sequence.html", label: "Your sequence & comparison" },
   { href: "drm.html", label: "Resistance & escape" },
-  { href: "compare.html", label: "Compare & genome track" },
   { href: "download.html", label: "Download" },
 ];
 

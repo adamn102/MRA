@@ -1,56 +1,24 @@
 <!DOCTYPE html>
 <!-- SPDX-License-Identifier: MIT -->
+<!-- "Compare & genome track" merged into "Your sequence": the codon-difference and
+     accessibility views now appear under each analysed sequence there, and the supply track
+     is the interactive one on that page. This stub keeps shared links working. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'none'">
-<title>Compare & genome track &mdash; HIV-1 Mutation Rate Atlas</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'none'">
+<title>Moved to Your sequence &mdash; HIV-1 Mutation Rate Atlas</title>
 <link rel="stylesheet" href="css/mra.css">
 </head>
 <body>
 <main>
-<h1>Compare your sequence to NL4-3</h1>
-<div id="privacy-slot"></div>
-<div id="caveat-slot"></div>
-
-<h2>Submit</h2>
-<p>Paste a sequence, or carry over the one you used on the
-<a id="link-sequence" href="sequence.html">sequence page</a> in this tab.</p>
-<textarea id="fasta" spellcheck="false"></textarea>
-<div class="controls">
-  <div><button id="run">Compare to NL4-3</button></div>
-  <div><button id="load-file" class="secondary">Load FASTA file&hellip;</button>
-       <input type="file" id="file-input" accept=".fa,.fasta,.fas,.txt,.seq" hidden></div>
-  <div><button id="clear" class="secondary">Clear everything</button></div>
-  <div><span id="which" class="caveat"></span></div>
-</div>
-<div id="progress-slot"></div>
-<div id="run-status"></div>
-
-<h2 id="codon-heading" hidden>Where your codons differ from NL4-3</h2>
-<p id="codon-intro" class="caveat" hidden></p>
-<div id="codon-table"></div>
-
-<h2 id="access-heading" hidden>What has become more or less accessible</h2>
-<figure class="chart"><div id="access-chart"></div><figcaption id="access-caption"></figcaption></figure>
-<div id="access-table"></div>
-
-<h2 id="track-heading" hidden>Genome track</h2>
-<div class="controls">
-  <div>
-    <label for="track-type">Mutation type</label>
-    <select id="track-type"></select>
-  </div>
-  <div>
-    <label for="track-smooth">Smoothing window (nt)</label>
-    <input type="number" id="track-smooth" min="1" max="501" step="10" value="51" size="6">
-  </div>
-  <div><button id="track-draw" class="secondary">Redraw</button></div>
-</div>
-<figure class="chart"><div id="track-chart"></div><figcaption id="track-caption"></figcaption></figure>
+<h1>This page moved</h1>
+<p>Comparing a sequence to NL4-3 &mdash; the codon differences, the accessibility shifts, and
+the genome supply track &mdash; is now part of <a id="target" href="sequence.html">Your
+sequence</a>. Redirecting&hellip;</p>
 </main>
-<script type="module" src="js/compare.js"></script>
+<script type="module" src="js/compare_redirect.js"></script>
 </body>
 </html>

@@ -26,7 +26,7 @@
 // Bumped v1 -> v2 when the bNAb/DRM catalogs became mutable overlays: the activate handler
 // deletes every cache whose key is not this one, so the bump purges the old frozen copies that
 // were pinned under the previous cache-first-forever rule.
-const CACHE = "mra-portal-v2";
+const CACHE = "mra-portal-v3";
 
 // Curated annotation overlays: under a version directory, but revised over time rather than
 // frozen. Served network-first with the HTTP cache bypassed, so an edit is never masked by an
@@ -39,7 +39,7 @@ const SHELL = [
   "./js/version.js", "./js/page.js", "./js/data.js", "./js/table.js", "./js/chart.js", "./js/track_view.js", "./js/explore_core.js",
   "./js/mra_engine.js", "./js/align.js", "./js/align.worker.js", "./js/analysis.js",
   "./js/mutations.js", "./js/index.js", "./js/browse.js", "./js/explore_redirect.js", "./js/sequence.js",
-  "./js/compare.js", "./js/download.js", "./js/drm.js",
+  "./js/compare_redirect.js", "./js/download.js", "./js/drm.js",
   "./js/codon_sensitivity.js",
   "./data/releases.json",
 ];
