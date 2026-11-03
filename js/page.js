@@ -13,20 +13,17 @@ import { loadReleases, requestedVersionFromUrl, resolveVersion, renderVersionBan
 const PAGES = [
   { href: "index.html", label: "Overview" },
   { href: "browse.html", label: "Browse the atlas" },
-  { href: "sequence.html", label: "Your sequence & comparison" },
+  { href: "sequence.html", label: "Your sequence" },
   { href: "drm.html", label: "Resistance & escape" },
   { href: "download.html", label: "Download" },
 ];
 
 export const PRIVACY_TEXT =
-  "Sequences you paste or upload never leave your computer. This is a static site: " +
-  "there is no server, no database, no analytics, no telemetry and no error reporter. " +
-  "Alignment and all rate calculations run inside your browser. The one piece of " +
-  "third-party code is html2canvas, which turns a chart into a PNG for download; it is " +
-  "served from this site rather than a CDN, and makes no network requests of its own. " +
-  "You can confirm all of this by opening your browser's network panel \u2014 after the page " +
-  "and its data files load, submitting a sequence produces no further requests \u2014 or by " +
-  "disconnecting from the network and using the tool offline.";
+  "Sequences you paste or upload stay on your computer. This is a static site \u2014 no " +
+  "server, no database, no analytics \u2014 and alignment and every rate calculation run in " +
+  "your browser. The only third-party code is html2canvas, which saves a chart as a PNG; it is " +
+  "served from this site and makes no requests of its own. To check, open your browser's " +
+  "network panel after the page loads, or disconnect and use the tool offline.";
 
 /** Build the header, nav and version controls; returns the resolved version. */
 export async function bootstrapPage(activeHref) {
@@ -184,10 +181,9 @@ export const NEF_NOTE =
   "because of an error.";
 
 export const CUSTOM_CAVEAT =
-  "<strong>This is not a measurement of your virus.</strong> It is the MRA model, " +
-  "fitted on NL4-3, applied to your sequence. What genuinely differs between sequences " +
-  "is <em>codon identity</em> \u2014 two viruses with the same amino acid at a position but " +
-  "different synonymous codons reach different amino acids at different rates \u2014 and, " +
-  "second, local sequence context. Position-specific effects were measured on NL4-3 and " +
-  "transfer only where your sequence aligns to it. Every row below records which of " +
-  "those three components it rests on.";
+  "<strong>This is not a measurement of your virus.</strong> It is the NL4-3-fitted MRA " +
+  "model applied to your sequence. What actually differs between sequences is " +
+  "<em>codon identity</em> \u2014 the same amino acid encoded by a different synonymous codon " +
+  "reaches other amino acids at different rates \u2014 and local context. Position-specific " +
+  "effects were measured on NL4-3 and apply only where your sequence aligns to it. Each row " +
+  "records which of these it rests on.";

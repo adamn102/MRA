@@ -172,19 +172,15 @@ function refreshShare() {
 
 // --- bNAb selector ----------------------------------------------------------------
 document.getElementById("bnab-note").appendChild(note(
-  "<strong>Curated from primary literature.</strong> Every row records a substitution for " +
-  "which a cited study measured an effect on neutralisation \u2014 escape selected in vivo, " +
-  "a rebound virus in a treated participant, or a reported resistance assignment. Structural " +
-  "contacts and glycan positions without a measured effect are deliberately excluded. " +
-  "<strong>Evidence</strong> distinguishes <em>primary</em> (the substitution was shown to " +
-  "reduce neutralisation on its own), <em>secondary</em> (no effect alone; confers escape " +
-  "only alongside a partner mutation) and <em>clinical</em> (emerged in a treated " +
-  "participant and was attributed there). Escape mutations are published in HXB2 numbering " +
-  "against varied viral backgrounds; where NL4-3 does not carry the published wild-type " +
-  "residue the row is kept with its citation but no rate is shown, because the atlas can " +
-  "only rate a change starting from the NL4-3 codon. Rows are one mutation each: a combined " +
-  "rate for a multi-mutation genotype would assume sequential accumulation in a single " +
-  "lineage, which recombination can bypass."));
+  "<strong>Curated from primary literature.</strong> Each row is a substitution with a cited " +
+  "study showing a neutralisation effect \u2014 escape selected in vivo, a rebound virus, or a " +
+  "reported resistance assignment. Structural contacts and glycans without a measured effect are " +
+  "excluded. <strong>Evidence</strong> is <em>primary</em> (reduces neutralisation on its own), " +
+  "<em>secondary</em> (only with a partner mutation) or <em>clinical</em> (emerged in a treated " +
+  "participant). Escape is published in HXB2 numbering against varied backgrounds; where NL4-3 " +
+  "lacks the published wild-type residue the row is kept with its citation but no rate, since the " +
+  "atlas rates only changes from the NL4-3 codon. One mutation per row: a combined genotype rate " +
+  "would assume sequential accumulation, which recombination can bypass."));
 
 const bnabSel = document.getElementById("bnab-class");
 const bnabClasses = [...new Set(bnab.records.map((r) => r.epitope_class))].sort();

@@ -495,19 +495,18 @@ function renderCodonDifferences(slot, detail, row, geom) {
   heading.textContent = "Where your codons differ from NL4-3";
   slot.appendChild(heading);
   if (!rows.length) {
-    slot.appendChild(caveat("Every analysed codon in this sequence is identical to NL4-3, so " +
-      "there is nothing to compare here. (The worked NL4-3 example lands here.)"));
+    slot.appendChild(caveat("Every analysed codon matches NL4-3, so there is nothing to " +
+      "compare. (The worked NL4-3 example lands here.)"));
     return;
   }
   const syn = rows.filter((r) => r.kind === "synonymous codon change").length;
   const reshaped = rows.filter((r) => r.kind === "synonymous codon change" && (r.n_gained || r.n_lost)).length;
   slot.appendChild(note(
-    `<strong>${rows.length.toLocaleString()} analysed codons differ from NL4-3</strong>, of which ` +
-    `${syn.toLocaleString()} encode the <em>same amino acid</em> by a different codon. ` +
+    `<strong>${rows.length.toLocaleString()} analysed codons differ from NL4-3</strong>, ` +
+    `${syn.toLocaleString()} of them encoding the <em>same amino acid</em> by a different codon. ` +
     `<strong>${reshaped.toLocaleString()} of those synonymous differences change which amino acids are ` +
-    `reachable in a single nucleotide substitution.</strong> Those rows are the codon-identity effect ` +
-    `in its purest form: the protein sequence is unchanged, and the set of accessible next steps is not. ` +
-    `Gained and lost are computed from the genetic code alone and do not depend on any rate estimate.`));
+    `reachable in one substitution</strong> \u2014 the protein is unchanged, the accessible next steps ` +
+    `are not. Gained and lost come from the genetic code alone, not from any rate.`));
   const tableSlot = document.createElement("div");
   slot.appendChild(tableSlot);
   renderTable(tableSlot, {
@@ -557,10 +556,10 @@ function renderAccessibility(slot, detail, row, geom) {
   const shifted = withFc.filter((r) => Math.abs(r.log2fc) > 1).length;
   const stepChanged = rows.filter((r) => r.change && r.change.includes("substitutions")).length;
   cap.innerHTML =
-    `${withFc.length.toLocaleString()} amino-acid changes are present in both atlases. ` +
-    `${shifted.toLocaleString()} shift by more than two-fold, and ${stepChanged.toLocaleString()} ` +
-    `require a different <em>number</em> of nucleotide substitutions than in NL4-3 \u2014 which is a ` +
-    `categorical change in accessibility, not a quantitative one. Codon shown at the right of each row.`;
+    `${withFc.length.toLocaleString()} changes are in both atlases. ${shifted.toLocaleString()} ` +
+    `shift more than two-fold, and ${stepChanged.toLocaleString()} need a different <em>number</em> of ` +
+    `substitutions than in NL4-3 \u2014 a categorical change, not a quantitative one. ` +
+    `Codon at the right of each row.`;
   const tableSlot = document.createElement("div");
   slot.appendChild(tableSlot);
   renderTable(tableSlot, {
@@ -583,9 +582,8 @@ function renderAccessibility(slot, detail, row, geom) {
     provenance: customProvenance(row, row.summary, geom),
   });
   tableSlot.appendChild(caveat(
-    "A fold change here reflects your codon and your local context. It is not evidence that " +
-    "your virus mutates at a different rate: the underlying per-site model is the same one, " +
-    "fitted on NL4-3."));
+    "A fold change reflects your codon and local context, not a different mutation rate in your " +
+    "virus: the per-site model is the same one, fitted on NL4-3."));
 }
 
 async function showDetail(index, row, out, slot) {

@@ -235,26 +235,19 @@ export function drawPositionPie(chartEl, captionEl, rows, label, opts = {}) {
   captionEl.innerHTML =
     "<strong>Left:</strong> each slice is an amino-acid change reachable from " +
     (opts.custom ? "<strong>your</strong> codon" : "the reference codon") +
-    " by a <strong>single</strong> nucleotide substitution, sized by its share of the one-step " +
-    "mutational supply at this position. <code>*</code> marks a synonymous change. Click a " +
-    "slice, or use the selector, to choose one. " +
-    "<strong>Right:</strong> the probability that the selected change is <em>generated at " +
-    "least once</em> in a single replication cycle, in a population performing N replication " +
-    "events \u2014 P = 1 \u2212 (1 \u2212 rate)<sup>N</sup>, treating events as independent " +
-    "trials. The band comes from the rate's 95% interval; N* marks where one copy is expected, " +
-    "which is a 63% chance, not a certainty. <strong>N counts replication events</strong> " +
-    "(population size \u00d7 the fraction replicating), so it is not a fraction and is not " +
-    "bounded by 1. " +
+    " in one nucleotide substitution, sized by its share of the one-step supply here. " +
+    "<code>*</code> marks a synonymous change. Click a slice, or use the selector. " +
+    "<strong>Right:</strong> the chance the selected change is <em>generated at least once</em> " +
+    "in one replication cycle across N events \u2014 P = 1 \u2212 (1 \u2212 rate)<sup>N</sup>. " +
+    "The band is the rate's 95% interval; N* marks where one copy is expected (a 63% chance, " +
+    "not a certainty). N counts replication events, not a fraction, so it is not bounded by 1. " +
     (opts.custom
-      ? "Rates are computed for the codon in your sequence, so they differ from the published " +
-        "NL4-3 atlas wherever your codon differs. "
-      : "Rates are read from the atlas, not recomputed. ") +
-    "<strong>This is generation, not establishment:</strong> a variant generated here may " +
-    "still be lost to drift, purged by selection, or never sampled \u2014 the curve speaks " +
-    "only to mutational supply. It is also per cycle, so it understates supply accumulated " +
-    "over an infection, and it applies only to the one-step changes in the pie; a multi-step " +
-    "change is not a single-cycle event and must not be read off it. The shaded band marks " +
-    "the order of magnitude of replication in a chronic untreated infection, taken from the " +
-    "HIV dynamics literature rather than measured here.";
+      ? "Rates use the codon in your sequence, so they differ from the NL4-3 atlas where it does. "
+      : "Rates are read from the atlas. ") +
+    "<strong>This is generation, not establishment</strong> \u2014 a variant generated here can " +
+    "still be lost to drift, purged by selection, or never sampled. It is per cycle (so it " +
+    "understates supply over a whole infection) and covers only the one-step changes in the pie; " +
+    "do not read a multi-step change off it. The shaded band is the order of magnitude of " +
+    "replication in a chronic untreated infection, from the literature, not measured here.";
   return true;
 }

@@ -12,15 +12,15 @@
 </head>
 <body>
 <main>
-<h1>Browse the published NL4-3 atlas</h1>
+<h1>Browse the atlas</h1>
 <div id="scope-slot"></div>
 
 <div id="dashboard-export">
 <h2>Position dashboard</h2>
-<p>Pick a position three ways &mdash; click the track, drag the slider under it, or type a
-coordinate. You get the reference amino acid and codon, where a single substitution's supply
-goes, and the mutability of every reachable amino-acid change with its 95% interval, the
-minimum number of nucleotide substitutions required and the number of paths.</p>
+<p>Pick a position: click the track, drag the slider, or type a coordinate. You get the
+reference amino acid and codon, where a single substitution's supply goes, and the rate of
+every reachable amino-acid change with its 95% interval, the fewest substitutions needed and
+the number of paths.</p>
 
 <div class="controls">
   <div>
@@ -69,9 +69,9 @@ minimum number of nucleotide substitutions required and the number of paths.</p>
   </div>
   <div><span id="share-slot"></span></div>
 </div>
-<p class="caveat">Protein positions are in each subunit's own numbering, which is the
-convention a paper or clinic uses &mdash; type <strong>RT</strong> 103 for K103N,
-<strong>PR</strong> 46 for M46I, <strong>IN</strong> 155 for N155H. For <em>env</em> and
+<p class="caveat">Protein positions use each subunit's own numbering, as a paper or clinic
+does: <strong>RT</strong> 103 for K103N, <strong>PR</strong> 46 for M46I, <strong>IN</strong>
+155 for N155H. For <em>env</em> and
 <em>vpu</em> the number is read as HXB2 and mapped through the alignment, so Env 332 finds the
 10-1074 glycan even though NL4-3 numbers it 330. &ldquo;Reading frame here&rdquo; lists every
 frame coding at the selected nucleotide; overlapping genes give more than one.</p>
@@ -89,10 +89,9 @@ frame coding at the selected nucleotide; overlapping genes give more than one.</
 <div id="dashboard-paths"></div>
 
 <h2>Table analysis &mdash; paste a list of mutations</h2>
-<p>One mutation per line, in the form <code>RT K65R</code>, <code>PR M46I</code>,
-<code>IN N155H</code>, <code>Env N160K</code> or <code>Gag M1K</code>. The reference amino acid
-is optional; when given it is checked against the atlas and a mismatch is reported rather than
-quietly ignored.</p>
+<p>One mutation per line, as <code>RT K65R</code>, <code>PR M46I</code>, <code>IN N155H</code>,
+<code>Env N160K</code> or <code>Gag M1K</code>. The reference amino acid is optional; if given, a
+mismatch against the atlas is reported, not ignored.</p>
 <textarea id="mutation-list" spellcheck="false">RT K65R
 RT M184V
 RT K103N
