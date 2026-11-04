@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: MIT -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'none'">
+<title>Table analysis &mdash; HIV-1 Mutation Rate Atlas</title>
+<link rel="stylesheet" href="css/mra.css">
+</head>
+<body>
+<main>
+<h1>Table analysis</h1>
+<div id="scope-slot"></div>
+<div id="tables-status"></div>
+<p>One mutation per line, as <code>RT K65R</code>, <code>PR M46I</code>, <code>IN N155H</code>,
+<code>Env N160K</code> or <code>Gag M1K</code>. The reference amino acid is optional; if given, a
+mismatch against the atlas is reported, not ignored.</p>
+<textarea id="mutation-list" spellcheck="false">RT K65R
+RT M184V
+RT K103N
+PR M46I
+PR L90M
+IN N155H
+IN Q148H</textarea>
+<div class="controls">
+  <div><button id="analyse">Analyse list</button></div>
+  <div><button id="load-file" class="secondary">Load from file&hellip;</button>
+       <input type="file" id="file-input" accept=".txt,.csv,.tsv" hidden></div>
+</div>
+<div id="analysis-result"></div>
+</main>
+<script type="module" src="js/tables.js"></script>
+</body>
+</html>

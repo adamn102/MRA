@@ -88,23 +88,9 @@ frame coding at the selected nucleotide; overlapping genes give more than one.</
 <h3 id="paths-heading" hidden>Individual codon paths at this position</h3>
 <div id="dashboard-paths"></div>
 
-<h2>Table analysis &mdash; paste a list of mutations</h2>
-<p>One mutation per line, as <code>RT K65R</code>, <code>PR M46I</code>, <code>IN N155H</code>,
-<code>Env N160K</code> or <code>Gag M1K</code>. The reference amino acid is optional; if given, a
-mismatch against the atlas is reported, not ignored.</p>
-<textarea id="mutation-list" spellcheck="false">RT K65R
-RT M184V
-RT K103N
-PR M46I
-PR L90M
-IN N155H
-IN Q148H</textarea>
-<div class="controls">
-  <div><button id="analyse">Analyse list</button></div>
-  <div><button id="load-file" class="secondary">Load from file&hellip;</button>
-       <input type="file" id="file-input" accept=".txt,.csv,.tsv" hidden></div>
-</div>
-<div id="analysis-result"></div>
+<p class="caveat">Looking up a whole list of mutations at once?
+<a href="tables.html">Table analysis</a> takes a pasted list or a file and returns a rate for
+each one.</p>
 </main>
 <script type="module" src="js/browse.js"></script>
 </body>

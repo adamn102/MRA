@@ -408,40 +408,53 @@ export function buildAaIndex(proteins) {
 export function makeAaMatrix(nSamples, nPositions) {
   const n = nSamples * nPositions;
   const nonsyn = new Float32Array(n), syn = new Float32Array(n), stop = new Float32Array(n);
-  nonsyn.fill(NaN); syn.fill(NaN); stop.fill(NaN);
-  return { nonsyn, syn, stop, nSamples, nPositions,
+  const ga = new Float32Array(n);
+  nonsyn.fill(NaN); syn.fill(NaN); stop.fill(NaN); ga.fill(NaN);
+  return { nonsyn, syn, stop, ga, nSamples, nPositions,
            covered: new Uint8Array(n),
            codonCode: new Uint8Array(n).fill(NO_CODON),
            aaCode: new Uint8Array(n).fill(255),
-           // (positionIndex, codon) -> Float32Array(21) of per-destination one-step rates.
-           // All samples sharing a codon at a position have identical destinations, so this
-           // is stored once per distinct pair rather than once per sample: a few thousand
-           // entries instead of a few hundred thousand.
            destinations: new Map(),
            sitesCovered: new Int32Array(nSamples) };
 }
 
 /** Fold one sample's amino-acid rows into the codon matrix. */
-export function foldAaIntoMatrix(matrix, sampleIndex, aaRows, aaIndex) {
-  const { nonsyn, syn, stop, nPositions, covered, codonCode, aaCode, destinations } = matrix;
+/**
+ * Fold one sample's one-step codon paths into the codon matrix.
+ *
+ * Takes `paths` (from customAtlas) rather than the amino-acid rows, for two reasons. It makes
+ * the quantity exact: an amino-acid row's rate is summed over ALL paths reaching that residue,
+ * including two- and three-nucleotide ones, so filtering rows by min_nt_changes === 1 would
+ * still fold a little multi-step rate into a per-generation number. And a path carries its own
+ * mutation type, which is what lets G->A be separated here -- an amino-acid row cannot be
+ * classified that way, because several paths with different types can reach the same residue.
+ */
+export function foldAaIntoMatrix(matrix, sampleIndex, paths, aaIndex) {
+  const { nonsyn, syn, stop, ga, nPositions, covered, codonCode, aaCode, destinations } = matrix;
   const acc = new Map();
-  for (const r of aaRows) {
-    if (r.min_nt_changes !== 1) continue;            // per-generation events only
+  for (const r of paths) {
+    if (r.n_nt_changes !== 1) continue;              // per-generation events only
     const col = aaIndex.index.get(r.protein + "|" + r.position);
     if (col === undefined) continue;
     let a = acc.get(col);
-    if (!a) acc.set(col, (a = { codon: r.codon, ref: r.ref_aa, ns: 0, sy: 0, st: 0,
+    if (!a) acc.set(col, (a = { codon: r.codon, ref: r.ref_aa, ns: 0, sy: 0, st: 0, ga: 0,
                                 dest: new Float32Array(AA_ORDER.length) }));
     const di = AA_INDEX.get(r.alt_aa);
-    if (di !== undefined) a.dest[di] += r.mu_aa;
-    if (r.alt_aa === "*") a.st += r.mu_aa;
-    else if (r.alt_aa === r.ref_aa) a.sy += r.mu_aa;
-    else a.ns += r.mu_aa;
+    if (di !== undefined) a.dest[di] += r.mu_path;
+    if (r.alt_aa === "*") a.st += r.mu_path;
+    else if (r.alt_aa === r.ref_aa) a.sy += r.mu_path;
+    else {
+      a.ns += r.mu_path;
+      // The G->A class is tracked within the non-synonymous supply, because that is the
+      // quantity the tracks plot; separating it answers whether a region's apparent
+      // mutability is APOBEC-driven or not.
+      if (r.mutation_type_path === "G->A") a.ga += r.mu_path;
+    }
   }
   let n = 0;
   for (const [col, a] of acc) {
     const k = sampleIndex * nPositions + col;
-    nonsyn[k] = a.ns; syn[k] = a.sy; stop[k] = a.st;
+    nonsyn[k] = a.ns; syn[k] = a.sy; stop[k] = a.st; ga[k] = a.ga;
     covered[k] = 1;
     codonCode[k] = encodeCodon(a.codon);
     const ai = AA_INDEX.get(a.ref);
@@ -471,7 +484,11 @@ function medianOfSorted(a) {
  */
 export function aaPositionStats(matrix, aaIndex, { field = "nonsyn" } = {}) {
   const { nSamples, nPositions, covered, codonCode, aaCode } = matrix;
-  const src = matrix[field];
+  // "nonga" is not stored: it is the non-synonymous supply with the G->A part taken out, and
+  // deriving it avoids a fourth array that would always equal this subtraction.
+  const derived = field === "nonga";
+  const src = derived ? matrix.nonsyn : matrix[field];
+  const sub = derived ? matrix.ga : null;
   const out = [];
   for (let col = 0; col < nPositions; col++) {
     const vals = [];
@@ -479,7 +496,7 @@ export function aaPositionStats(matrix, aaIndex, { field = "nonsyn" } = {}) {
     for (let s = 0; s < nSamples; s++) {
       const k = s * nPositions + col;
       if (!covered[k] || !Number.isFinite(src[k])) continue;
-      vals.push(src[k]);
+      vals.push(sub ? Math.max(0, src[k] - sub[k]) : src[k]);
       const aa = aaCode[k] === 255 ? "?" : AA_ORDER[aaCode[k]];
       aaCounts.set(aa, (aaCounts.get(aa) || 0) + 1);
       const cd = decodeCodon(codonCode[k]) || "???";
@@ -676,19 +693,22 @@ export function spearman(xs, ys) {
  */
 export function samplesAtAaPosition(matrix, stat, names, { field = "nonsyn" } = {}) {
   const { nPositions, covered, codonCode, aaCode } = matrix;
-  const src = matrix[field];
+  const derived = field === "nonga";
+  const src = derived ? matrix.nonsyn : matrix[field];
+  const sub = derived ? matrix.ga : null;
   const col = stat.position_index;
   const out = [];
   for (let s = 0; s < names.length; s++) {
     const k = s * nPositions + col;
     const isCov = !!covered[k] && Number.isFinite(src[k]);
+    const v = isCov ? (sub ? Math.max(0, src[k] - sub[k]) : src[k]) : null;
     out.push({
       sample: names[s],
       covered: isCov,
       codon: isCov ? decodeCodon(codonCode[k]) : null,
       aa: isCov && aaCode[k] !== 255 ? AA_ORDER[aaCode[k]] : null,
-      value: isCov ? src[k] : null,
-      ratio: isCov && stat.median > 0 ? src[k] / stat.median : null,
+      value: v,
+      ratio: v !== null && stat.median > 0 ? v / stat.median : null,
     });
   }
   return out;

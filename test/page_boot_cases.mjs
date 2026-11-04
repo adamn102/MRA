@@ -44,8 +44,10 @@ function check(name, ok, detail = "") {
 }
 
 // Buttons that must forward a click to a hidden file input, per page.
-const FILE_PICKERS = { batch: ["load-file", "file-input"], sequence: ["load-file", "file-input"] };
-const PAGES = ["index", "browse", "sequence", "batch", "drm", "download"];
+const FILE_PICKERS = { batch: ["load-file", "file-input"],
+                       sequence: ["load-file", "file-input"],
+                       tables: ["load-file", "file-input"] };
+const PAGES = ["index", "browse", "tables", "drm", "sequence", "batch", "download"];
 
 for (const page of PAGES) {
   const html = fs.readFileSync(path.join(REPO, `${page}.html`), "utf8");

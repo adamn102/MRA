@@ -24,11 +24,9 @@ import { renderTable, formatRate, toCsv, downloadText } from "./table.js";
 import { MraEngine } from "./mra_engine.js";
 import { batchSiteStats, topDivergentSites, perSampleSummary,
          buildAaIndex, aaPositionStats, weightedDestinationSupply, codonSensitivity,
-         diversityVsMutability, spearman, AA_ORDER, samplesAtAaPosition,
-         perSampleRates, MUT_TYPES } from "./batch_core.js";
+         samplesAtAaPosition, perSampleRates, MUT_TYPES } from "./batch_core.js";
 import { drawMutabilityTrack, drawMutabilityDivergenceTrack,
-         drawDiversityVsMutability, drawPositionComposition, drawDestinationSupply }
-  from "./batch_view.js";
+         drawPositionComposition, drawDestinationSupply } from "./batch_view.js";
 import { geneSegments, targetFor as targetForIn } from "./explore_core.js";
 
 const page = await bootstrapPage("batch.html");
@@ -90,10 +88,10 @@ const TARGET_BY_KEY = new Map(TARGETS.map((t) => [t.key, t]));
  * The nucleotide a protein-position lookup should land on.
  *
  * A codon spans three nucleotides and the track is per nucleotide, so a protein position alone
- * is ambiguous; the codon-base selector resolves it. Returns null with a reason when the typed
+ * Returns null with a reason when the typed
  * position has no NL4-3 equivalent, which happens where HXB2 has residues NL4-3 lacks.
  */
-function ntForProteinPosition(targetKey, ownPosition, baseIndex) {
+function ntForProteinPosition(targetKey, ownPosition) {
   const target = TARGET_BY_KEY.get(targetKey);
   if (!target) return { nt: null, reason: "unknown protein" };
   const geneAa = engine.geneAaFromOwnPosition(target, ownPosition);
@@ -106,7 +104,9 @@ function ntForProteinPosition(targetKey, ownPosition, baseIndex) {
   if (!codon) {
     return { nt: null, reason: `${targetKey} ${ownPosition} is outside the modelled region` };
   }
-  return { nt: codon[baseIndex] || codon[0], geneAa, protein: target.protein, target };
+  // The codon's first base. Which of the three is immaterial now that everything on this
+  // page is keyed on the codon rather than the nucleotide; it only has to land inside it.
+  return { nt: codon[0], geneAa, protein: target.protein, target };
 }
 
 const FRAME_AT = (() => {
@@ -132,7 +132,14 @@ let AA_INDEX_REF = null;
 let markerCol = null;   // index into AA_STATS of the selected codon
 let markerNt = 1600;
 let markerSetByUser = false;   // once a position is chosen, a class change must not move it
-let field = "total";
+let field = "nonsyn";
+const CLASS_LABEL = { nonsyn: "all residue changes", ga: "G\u2192A only",
+                      nonga: "non-G\u2192A only" };
+// The nucleotide matrix carries only total and G->A, so it cannot express the non-G->A class;
+// the per-sample coverage table, which is the only thing still reading it, falls back to total
+// there. The codon views carry the exact split and are unaffected.
+const ntFieldFor = (f) => (f === "ga" ? "ga" : "total");
+
 
 // --- input helpers -------------------------------------------------------------------
 el("load-file").addEventListener("click", () => el("file-input").click());
@@ -225,10 +232,10 @@ el("run").addEventListener("click", async () => {
 /** Rebuild the per-site statistics for the current class, then redraw everything. */
 function recompute() {
   if (!BATCH) return;
-  STATS = batchSiteStats(BATCH.matrix, { field });
+  STATS = batchSiteStats(BATCH.matrix, { field: ntFieldFor(field) });
   // Mutability is a property of a codon, so everything the user looks at is keyed here.
   if (!AA_INDEX_REF) AA_INDEX_REF = buildAaIndex(assets.reference.proteins);
-  AA_STATS = BATCH.aaMatrix ? aaPositionStats(BATCH.aaMatrix, AA_INDEX_REF) : [];
+  AA_STATS = BATCH.aaMatrix ? aaPositionStats(BATCH.aaMatrix, AA_INDEX_REF, { field }) : [];
   const top = topDivergentSites(AA_STATS, { limit: 1 })[0];
   renderSummary();
   // Open on the most divergent site: with nothing selected yet, that is the position most
@@ -242,7 +249,6 @@ function recompute() {
   el("track-slider").value = String(markerNt);
   el("position").value = String(markerNt);
   drawAll();
-  renderRatesTable();
   renderBatchTable();
   renderSampleTable();
 }
@@ -301,33 +307,30 @@ function drawAll() {
   const nVar = AA_STATS.filter((r) => r.n_aa > 1).length;
   const nSyn = AA_STATS.filter((r) => r.n_aa === 1 && r.n_codons > 1).length;
   el("track-caption").innerHTML =
-    `One point per codon: the summed rate of every one-step change that alters the residue, ` +
-    `smoothed over ${win} codons. The band is the full min\u2013max across samples, not an ` +
+    `One point per codon: the summed rate of one-step changes that alter the residue ` +
+    `(<strong>${CLASS_LABEL[field] || field}</strong>), smoothed over ${win} codons. The band is the full min\u2013max across samples, not an ` +
     `interquartile range \u2014 at most positions every sample carries the same codon, so the ` +
     `quartiles coincide and only the extremes separate. Median across codons ` +
     `${formatRate(med)}. <strong>${nVar.toLocaleString()}</strong> positions vary in residue; ` +
     `a further <strong>${nSyn.toLocaleString()}</strong> carry the same residue on different ` +
     `codons, where supply differs but the protein does not. Click to select a position.`;
 
+  const dwin = Number(el("divergence-window").value);
   drawMutabilityDivergenceTrack(el("divergence-track"), {
     stats: AA_STATS, first: region.first_position, last: region.last_position,
-    marker: stat ? stat.nt_start : markerNt, onSelect: (p) => selectPosition(p),
+    win: dwin, marker: stat ? stat.nt_start : markerNt,
+    onSelect: (p) => selectPosition(p),
   });
   el("divergence-caption").innerHTML =
-    `Per-codon log<sub>2</sub>(max/min) of mutability across the samples covering it, ` +
-    `unsmoothed. A stem means the samples would generate residue change at different rates ` +
-    `there \u2014 which happens whenever the codon or its 3\u2032 context differs, including ` +
-    `when the residue is identical. Positions covered by one sample show nothing, because a ` +
-    `fold range needs two.`;
-
-  // The supply-versus-diversity view: the only figure here that sets what the model predicts
-  // against what the submitted sequences actually show.
-  const pts = diversityVsMutability(AA_STATS);
-  const rho = pts.length > 2
-    ? spearman(pts.map((d) => Math.log10(d.mutability)), pts.map((d) => d.diversity)) : null;
-  drawDiversityVsMutability(el("scatter-chart"), el("scatter-caption"), pts, {
-    rho, labelFor: (d) => engine.hxb2Label(d.protein, d.position),
-  });
+    `Per-codon log<sub>2</sub>(max/min) of mutability across the samples covering it. Each ` +
+    `stem is one codon where the samples would generate residue change at different rates ` +
+    `\u2014 which happens whenever the codon or its 3\u2032 context differs, including when ` +
+    `the residue is identical. ` +
+    (dwin > 1
+      ? `The line is the mean over ${dwin} codons, counting non-diverging codons as zero, so ` +
+        `it shows how concentrated disagreement is rather than how large any single one is. `
+      : `No smoothing is applied at a window of 1. `) +
+    `Positions covered by one sample show nothing, because a fold range needs two.`;
 
   drawSite(label);
 }
@@ -400,8 +403,8 @@ function renderSiteSampleTable(stat, label, refCodon) {
       { key: "aa", label: "Residue",
         render: (r) => r.aa ? (r.aa === stat.majority_aa ? r.aa : r.aa + " \u25c0") : "\u2014" },
       { key: "codon", label: "Codon",
-        render: (r) => r.codon ? (r.codon === refCodon ? r.codon + " (NL4-3)" : r.codon)
-                               : "\u2014" },
+        render: (r) => !r.codon ? "\u2014"
+          : `${r.codon} (${r.aa || "?"})` + (r.codon === refCodon ? " NL4-3" : "") },
       { key: "value", label: "Mutability", type: "rate" },
       { key: "ratio", label: "\u00d7 batch median", type: "num",
         render: (r) => r.ratio === null ? "\u2014" : r.ratio.toFixed(2) },
@@ -437,12 +440,15 @@ el("track-window").addEventListener("input", () => {
 function syncCoordControls() {
   const mode = el("coord-system").value;
   el("protein").disabled = mode !== "protein";
-  el("codon-base").disabled = mode !== "protein";
   el("position").disabled = mode === "divergent";
 }
 el("coord-system").addEventListener("change", syncCoordControls);
 syncCoordControls();
 
+el("divergence-window").addEventListener("input", () => {
+  el("divergence-window-out").textContent = el("divergence-window").value;
+  if (BATCH) drawAll();
+});
 el("track-class").addEventListener("change", () => {
   field = el("track-class").value;
   recompute();
@@ -464,7 +470,7 @@ el("go").addEventListener("click", () => {
     return;
   }
   if (mode === "nt") { selectPosition(v); return; }
-  const r = ntForProteinPosition(el("protein").value, v, Number(el("codon-base").value));
+  const r = ntForProteinPosition(el("protein").value, v);
   if (r.nt === null) { showError(el("site-head"), r.reason); return; }
   selectPosition(r.nt);
 });
@@ -577,7 +583,8 @@ function renderBatchTable() {
 
 /** Per-sample rows, shared by the on-page table and the combined export. */
 function sampleRows() {
-  const summ = perSampleSummary(BATCH.matrix, STATS, BATCH.names, { field });
+  const summ = perSampleSummary(BATCH.matrix, STATS, BATCH.names,
+                                { field: ntFieldFor(field) });
   return summ.map((r, i) => {
     const s = BATCH.summaries[i] || {};
     const g = BATCH.geometry[i] || {};
@@ -618,6 +625,11 @@ function renderSampleTable() {
 }
 
 /** Per-sequence rate summary: bulk, each substitution class, and G->A called out. */
+/**
+ * Per-sequence rate summary. No longer shown on the page -- it is a per-nucleotide-class
+ * quantity, which sits oddly next to views keyed on codons -- but it is still written to the
+ * combined CSV, where a reader wanting bulk and per-type rates can find it.
+ */
 function ratesRows() {
   return perSampleRates(BATCH.matrix, BATCH.names).map((r, i) => {
     const sm = BATCH.summaries[i] || {};
@@ -632,36 +644,6 @@ function ratesRows() {
   });
 }
 
-function renderRatesTable() {
-  renderTable(el("rates-table"), {
-    columns: [
-      { key: "sample", label: "Sequence" },
-      { key: "sites_covered", label: "Sites", type: "num" },
-      { key: "bulk_rate", label: "Bulk rate", type: "rate",
-        title: "Mean total substitution supply per covered site" },
-      { key: "expected_per_cycle", label: "Subs/cycle", type: "num",
-        render: (r) => r.expected_per_cycle === null ? "\u2014"
-                     : r.expected_per_cycle.toFixed(3),
-        title: "Bulk rate x sites covered: expected substitutions over the covered region " +
-               "per replication cycle" },
-      { key: "ga_rate", label: "G\u2192A rate", type: "rate",
-        title: "Mean G->A rate over G sites only" },
-      { key: "ga_share", label: "G\u2192A share", type: "num",
-        render: (r) => r.ga_share === null ? "\u2014" : (100 * r.ga_share).toFixed(1) + "%",
-        title: "Fraction of this sequence's total supply that is G->A" },
-      { key: "transition_rate", label: "Transition", type: "rate" },
-      { key: "transversion_rate", label: "Transversion", type: "rate" },
-      ...MUT_TYPES.map((t) => ({ key: t, label: t.replace("->", "\u2192"), type: "rate",
-        title: `Mean ${t} rate over sites whose reference base is ${t[0]}` })),
-      { key: "excluded", label: "Excluded" },
-    ],
-    rows: ratesRows(),
-    sort: { key: "bulk_rate", dir: "desc" },
-    filterPlaceholder: "filter by sequence\u2026",
-    downloadName: `mra_${page.version}_batch_sequence_rates.csv`,
-    provenance: batchProvenance(),
-  });
-}
 
 // --- the whole analysis as one CSV ------------------------------------------------------
 // Three tables of different shapes cannot share a header row, so they are written as labelled

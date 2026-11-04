@@ -13,9 +13,10 @@ import { loadReleases, requestedVersionFromUrl, resolveVersion, renderVersionBan
 const PAGES = [
   { href: "index.html", label: "Overview" },
   { href: "browse.html", label: "Browse the atlas" },
+  { href: "tables.html", label: "Table analysis" },
+  { href: "drm.html", label: "Curated tables" },
   { href: "sequence.html", label: "Your sequence" },
   { href: "batch.html", label: "Batch analysis" },
-  { href: "drm.html", label: "Resistance & escape" },
   { href: "download.html", label: "Download" },
 ];
 

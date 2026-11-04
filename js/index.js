@@ -13,7 +13,8 @@ document.getElementById("scope-slot").appendChild(note(
 
 // Every link carries its version explicitly, so a copied URL keeps resolving to this release.
 const v = page.version.replace(/^v/, "");
-for (const [id, href] of [["link-browse", "browse.html"], ["link-sequence", "sequence.html"],
+for (const [id, href] of [["link-browse", "browse.html"], ["link-tables", "tables.html"],
+                          ["link-drm", "drm.html"], ["link-sequence", "sequence.html"],
                           ["link-batch", "batch.html"], ["link-download", "download.html"]]) {
   document.getElementById(id).href = href + "?v=" + v;
 }

@@ -173,7 +173,7 @@ export class Analysis {
         await new Promise((r) => setTimeout(r, 0));
         const out = self_.engine.customAtlas({ name, sequence, alignment });
         foldSequenceIntoMatrix(matrix, i, out.nt, codonByPositionFrom(out.aa, ref.proteins));
-        foldAaIntoMatrix(aaMatrix, i, out.aa, aaIndex);
+        foldAaIntoMatrix(aaMatrix, i, out.paths, aaIndex);
         summaries.push(out.summary);
         geometry.push({ identity: alignment.identity, coverageOfQuery: alignment.coverageOfQuery,
                         refStart: alignment.refStart, refEnd: alignment.refEnd,

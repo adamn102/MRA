@@ -318,8 +318,10 @@ check("a missing codon encodes to NO_CODON and decodes to null",
     const m = makeAaMatrix(recs.length, aaIdx.nPositions);
     recs.forEach((r, i) => {
       const aln = alignToReference(r.sequence, ref.sequence, { seedIndex });
+      // paths, not aa rows: mutability is the sum of ONE-STEP path rates, and a path carries
+      // the mutation type that lets G->A be separated.
       foldAaIntoMatrix(m, i, engine.customAtlas({ name: r.name, sequence: r.sequence,
-                                                  alignment: aln }).aa, aaIdx);
+                                                  alignment: aln }).paths, aaIdx);
     });
     return { m, names: recs.map((r) => r.name) };
   };
@@ -412,6 +414,51 @@ check("a missing codon encodes to NO_CODON and decodes to null",
         pts.length > 0 && pts.every((d) => d.mutability > 0 && d.diversity >= 0),
         `${pts.length} points`);
   check("spearman returns null on too few points", spearman([1, 2], [1, 2]) === null);
+}
+
+// --- 11. the G->A / non-G->A split ----------------------------------------------------------
+{
+  const aaIdx = buildAaIndex(ref.proteins);
+  const m = makeAaMatrix(1, aaIdx.nPositions);
+  const out = engine.customAtlas({ name: "nl43", sequence: ref.sequence,
+                                   alignment: alignToReference(ref.sequence, ref.sequence) });
+  foldAaIntoMatrix(m, 0, out.paths, aaIdx);
+  const all = aaPositionStats(m, aaIdx, { field: "nonsyn" });
+  const ga = aaPositionStats(m, aaIdx, { field: "ga" });
+  const ng = aaPositionStats(m, aaIdx, { field: "nonga" });
+
+  check("the three classes cover the same positions",
+        all.length === ga.length && ga.length === ng.length, `${all.length}/${ga.length}/${ng.length}`);
+  const bad = all.filter((r, i) =>
+    Math.abs((ga[i].median + ng[i].median) - r.median) > 1e-12 * Math.max(1e-30, r.median));
+  check("G->A plus non-G->A equals the non-synonymous total at every position",
+        bad.length === 0, `${bad.length} positions disagree`);
+  check("non-G->A is never negative",
+        ng.every((r) => r.median >= 0 && r.min >= 0));
+  // A codon with no G cannot contribute G->A supply, so plenty of positions must be exactly 0.
+  const zeroGa = ga.filter((r) => r.median === 0).length;
+  check("positions whose codon has no G carry zero G->A supply",
+        zeroGa > 1000 && zeroGa < ga.length, `${zeroGa} of ${ga.length}`);
+  // G->A dominates overall, which is the APOBEC signature the atlas is built around.
+  const sum = (a) => a.reduce((t, r) => t + r.median, 0);
+  const share = sum(ga) / sum(all);
+  check("G->A is the majority of non-synonymous supply genome-wide",
+        share > 0.5 && share < 0.95, `${(100 * share).toFixed(1)}%`);
+  // Folding from one-step paths must not drift from the amino-acid rows it replaced.
+  const byPos = new Map();
+  for (const r of out.aa) {
+    if (r.min_nt_changes !== 1 || r.alt_aa === "*" || r.alt_aa === r.ref_aa) continue;
+    const k = r.protein + "|" + r.position;
+    byPos.set(k, (byPos.get(k) || 0) + r.mu_aa);
+  }
+  let maxRel = 0;
+  for (const r of all) {
+    const v = byPos.get(r.key);
+    if (v === undefined) continue;
+    maxRel = Math.max(maxRel, Math.abs(v - r.median) / Math.max(v, 1e-30));
+  }
+  check("one-step path sums agree with the amino-acid rows to better than 1%",
+        maxRel < 0.01, `max ${(100 * maxRel).toExponential(2)}%`);
 }
 
 console.log("=".repeat(60));

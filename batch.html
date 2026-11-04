@@ -68,8 +68,9 @@ ones. Both are counted separately in the summary above.</p>
   <div>
     <label for="track-class">Supply shown</label>
     <select id="track-class">
-      <option value="total">Total substitution supply</option>
+      <option value="nonsyn">All residue changes</option>
       <option value="ga">G&rarr;A only</option>
+      <option value="nonga">Non-G&rarr;A only</option>
     </select>
   </div>
   <div><span id="share-slot"></span></div>
@@ -80,6 +81,13 @@ ones. Both are counted separately in the summary above.</p>
            aria-label="Genome position (NL4-3 nucleotide)">
   </div>
   <figcaption id="track-caption"></figcaption></figure>
+<div class="controls">
+  <div>
+    <label for="divergence-window">Smoothing window (codons)</label>
+    <input type="range" id="divergence-window" min="1" max="201" step="10" value="31">
+    <output id="divergence-window-out">31</output>
+  </div>
+</div>
 <figure class="chart"><div id="divergence-track"></div>
   <figcaption id="divergence-caption"></figcaption></figure>
 
@@ -108,14 +116,6 @@ single substitution would take it.</p>
     <input type="number" id="position" min="1" value="46" size="8">
   </div>
   <div><button id="go">Go</button></div>
-  <div>
-    <label for="codon-base">Codon base</label>
-    <select id="codon-base">
-      <option value="0">1st</option>
-      <option value="1">2nd</option>
-      <option value="2">3rd</option>
-    </select>
-  </div>
   <div><button id="download-png" class="secondary">Download as PNG</button></div>
 </div>
 <p id="coord-note" class="caveat"></p>
@@ -127,22 +127,6 @@ single substitution would take it.</p>
   <figcaption id="codon-caption"></figcaption></figure>
 </div>
 <div id="site-sample-table"></div>
-
-<h3>Supply against observed diversity</h3>
-<p>What the model predicts about how readily each residue changes, set against how much the
-submitted sequences actually vary there. Positions that mutate readily yet never vary are the
-ones worth looking at.</p>
-<figure class="chart"><div id="scatter-chart"></div>
-  <figcaption id="scatter-caption"></figcaption></figure>
-
-<h3>Rate summary per sequence</h3>
-<p class="caveat">One row per submitted sequence. <strong>Bulk rate</strong> is the mean total
-substitution supply per covered site &mdash; multiply by sites covered for the expected
-substitutions per cycle. Each <strong>per-type</strong> rate is averaged only over the sites
-where that substitution can occur (sites whose reference base is the type's source base), so the
-twelve are comparable with each other. <strong>G&rarr;A share</strong> is the fraction of total
-supply that is G&rarr;A.</p>
-<div id="rates-table"></div>
 
 <h3>Compiled atlas, one row per codon</h3>
 <p class="caveat">One row per codon, summarising the samples that cover

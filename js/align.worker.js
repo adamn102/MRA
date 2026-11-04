@@ -88,7 +88,7 @@ self.onmessage = (event) => {
         const out = engine.customAtlas({ name, sequence, alignment });
         foldSequenceIntoMatrix(matrix, i, out.nt,
                                codonByPositionFrom(out.aa, reference.proteins));
-        foldAaIntoMatrix(aaMatrix, i, out.aa, aaIndex);
+        foldAaIntoMatrix(aaMatrix, i, out.paths, aaIndex);
         summaries.push(out.summary);
         geometry.push({ identity: alignment.identity, coverageOfQuery: alignment.coverageOfQuery,
                         refStart: alignment.refStart, refEnd: alignment.refEnd,
@@ -105,6 +105,7 @@ self.onmessage = (event) => {
         aa: {
           nSamples: aaMatrix.nSamples, nPositions: aaMatrix.nPositions,
           nonsyn: aaMatrix.nonsyn, syn: aaMatrix.syn, stop: aaMatrix.stop,
+          ga: aaMatrix.ga,
           covered: aaMatrix.covered, codonCode: aaMatrix.codonCode, aaCode: aaMatrix.aaCode,
           destinations: aaMatrix.destinations, sitesCovered: aaMatrix.sitesCovered,
         },
@@ -112,6 +113,7 @@ self.onmessage = (event) => {
       }, [matrix.total.buffer, matrix.ga.buffer, matrix.covered.buffer, matrix.codonCode.buffer,
           matrix.typeSum.buffer, matrix.typeCount.buffer, matrix.sitesCovered.buffer,
           aaMatrix.nonsyn.buffer, aaMatrix.syn.buffer, aaMatrix.stop.buffer,
+          aaMatrix.ga.buffer,
           aaMatrix.covered.buffer, aaMatrix.codonCode.buffer, aaMatrix.aaCode.buffer,
           aaMatrix.sitesCovered.buffer]);
       return;

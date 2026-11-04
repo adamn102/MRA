@@ -70,8 +70,19 @@ export function drawMutabilityDivergenceTrack(container, o) {
     container.appendChild(p);
     return false;
   }
-  // Reuse genomeTrack's frame by passing the divergence as a series on a linear scale: the
-  // track's own y-scale is logarithmic, so stems are drawn here instead.
+  // SMOOTHING. One stem per diverging codon is unreadable once a few hundred positions
+  // disagree, so a window mean is drawn over the stems. The mean is taken over EVERY covered
+  // codon in the window, counting non-diverging ones as the zero they are -- averaging only
+  // the diverging ones would make a region with one big outlier look like a region where
+  // everything disagrees. At win = 1 the mean is the raw value and only the stems show.
+  const win = Math.max(1, o.win || 1);
+  let smooth = null;
+  if (win > 1) {
+    const xs = o.stats.map((r) => r.nt_start);
+    const byPos = new Map(o.stats.map((r) => [r.nt_start,
+      { total: r.divergence === null ? 0 : r.divergence }]));
+    smooth = smoothSeries(xs, byPos, "total", win);
+  }
   const width = LAYOUT.width, height = 150;
   const padLeft = LAYOUT.padLeft, padRight = LAYOUT.padRight, padTop = 18, padBottom = 34;
   const plotW = width - padLeft - padRight, plotH = height - padTop - padBottom;
@@ -98,9 +109,19 @@ export function drawMutabilityDivergenceTrack(container, o) {
     t.textContent = (frac * yMax).toFixed(1);
     svg.appendChild(t);
   }
+  // Stems fade back when a smoothed line is drawn over them, so the line reads first while
+  // individual spikes stay locatable.
+  const stemOpacity = smooth ? 0.22 : 0.8;
   for (const [pos, v] of pts) {
     svg.appendChild(mk("line", { x1: sx(pos), x2: sx(pos), y1: sy(0), y2: sy(v),
-                                 stroke: "#b5485d", "stroke-width": 0.6, "stroke-opacity": 0.8 }));
+                                 stroke: "#b5485d", "stroke-width": 0.6,
+                                 "stroke-opacity": stemOpacity }));
+  }
+  if (smooth && smooth.length) {
+    const d = smooth.map((p, i) => `${i ? "L" : "M"}${sx(p[0]).toFixed(1)},${sy(p[1]).toFixed(1)}`)
+                    .join(" ");
+    svg.appendChild(mk("path", { d, fill: "none", stroke: "#8c1d33", "stroke-width": 1.6,
+                                 "stroke-linejoin": "round" }));
   }
   if (Number.isFinite(o.marker)) {
     svg.appendChild(mk("line", { x1: sx(o.marker), x2: sx(o.marker), y1: padTop,
@@ -383,13 +404,17 @@ export function drawPositionComposition(container, captionEl, stat, opts = {}) {
   const y2 = 24 + rowH + gap;
   svg.appendChild(mk("text", { x: padLeft - 8, y: y2 + rowH / 2 + 3.5, "text-anchor": "end",
                                "font-size": 10, fill: "#5c6670" }, "codon"));
+  // The residue each codon encodes, so a reader does not have to translate in their head and
+  // can see at a glance which codon differences are synonymous.
+  const withAa = (c) => stat.codon_aa && stat.codon_aa.get(c)
+    ? `${c} (${stat.codon_aa.get(c)})` : c;
   compositionBar(svg, mk, padLeft, y2, w, rowH, stat.codon_counts, n, COMP_PALETTE,
-                 (l, f) => `${l}  ${(100 * f).toFixed(0)}%`);
+                 (l, f) => `${withAa(l)}  ${(100 * f).toFixed(0)}%`);
   // Full legends under each bar, since narrow slices carry no inline label.
   svg.appendChild(mk("text", { x: padLeft, y: 24 + rowH + 14, "font-size": 9, fill: "#5c6670" },
                      stat.aa_counts.map(([a, c]) => `${a} ${c}`).join("   ")));
   svg.appendChild(mk("text", { x: padLeft, y: y2 + rowH + 14, "font-size": 9, fill: "#5c6670" },
-                     stat.codon_counts.map(([c, k]) => `${c} ${k}`).join("   ")));
+                     stat.codon_counts.map(([c, k]) => `${withAa(c)} ${k}`).join("   ")));
   container.appendChild(svg);
 
   const synonymousOnly = stat.n_aa === 1 && stat.n_codons > 1;
@@ -433,10 +458,10 @@ export function drawDestinationSupply(container, captionEl, dest, stat, opts = {
     note: d.fold_range && d.fold_range > 1.01
       ? `${d.fold_range.toFixed(1)}\u00d7 across codons` : "",
   })), { title: opts.title || "Where a single substitution goes from here",
-  // Linear scale deliberately: the bars are read as shares of this position's supply, and
-  // the synonymous destination (which can be orders of magnitude larger) is excluded
-  // above, so nothing here compresses the rest. Exact rates print per row regardless.
-         width: opts.width || LAYOUT.width,
+  // Log scale: destination rates at one position routinely span two orders of magnitude, and
+  // on a linear axis every row below the largest collapses into an unreadable sliver. Exact
+  // rates print per row, so the absolute values are never inferred from bar length alone.
+         width: opts.width || LAYOUT.width, log: true, logDecades: 2.5,
          xLabel: "batch-weighted rate per replication" });
 
   const total = rows.reduce((t, d) => t + d.weighted_rate, 0);
