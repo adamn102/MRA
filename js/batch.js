@@ -26,7 +26,7 @@ import { batchSiteStats, topDivergentSites, perSampleSummary,
          buildAaIndex, aaPositionStats, weightedDestinationSupply, codonSensitivity,
          samplesAtAaPosition, perSampleRates, MUT_TYPES } from "./batch_core.js";
 import { drawMutabilityTrack, drawMutabilityDivergenceTrack,
-         drawPositionComposition, drawDestinationSupply } from "./batch_view.js";
+         drawPositionComposition, drawSupplyFlow } from "./batch_view.js";
 import { geneSegments, targetFor as targetForIn } from "./explore_core.js";
 
 const page = await bootstrapPage("batch.html");
@@ -159,26 +159,46 @@ el("clear").addEventListener("click", () => {
 
 // A worked example: the reference plus copies carrying a few codon changes, so the tab
 // demonstrates its own point (codon identity moves supply) without needing real patient data.
-el("load-demo").addEventListener("click", () => {
-  const ref = assets.reference.sequence;
-  const flip = { A: "G", C: "T", G: "A", T: "C" };
-  const out = [`>reference_NL4-3\n${ref.slice(0, 3000)}`];
-  for (let i = 1; i <= 5; i++) {
-    const a = ref.split("");
-    let s = i * 7919 + 17;
-    const rnd = () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
-    for (let k = 0; k < 15; k++) {
-      const p = Math.floor(rnd() * 3000);
-      a[p] = flip[a[p]] || a[p];
-    }
-    out.push(`>example_${String(i).padStart(2, "0")}\n${a.join("").slice(0, 3000)}`);
-  }
-  fasta.value = out.join("\n");
+// --- the worked example ---------------------------------------------------------------
+// The LANL compendium rather than anything generated here: a real set is the only way to see
+// what this page is for, because the interesting quantity -- how codon usage spreads
+// mutational accessibility -- does not exist in sequences we invent. Fetched on demand rather
+// than precached, since it is ~1.7 MB and most visits will not want it.
+el("load-demo").addEventListener("click", async () => {
+  const btn = el("load-demo");
+  const prev = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Loading\u2026";
   el("run-status").innerHTML = "";
-  el("run-status").appendChild(note(
-    "Six synthetic sequences spanning gag and part of pol: the NL4-3 reference plus five " +
-    "copies carrying scattered substitutions. They are generated in your browser as a " +
-    "demonstration and are not real isolates."));
+  try {
+    const resp = await fetch(`data/${page.version}/lanl_batch_demo.fasta`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const text = await resp.text();
+    fasta.value = text;
+    const n = (text.match(/^>/gm) || []).length;
+    el("run-status").appendChild(note(
+      `<strong>${n} HIV-1 group M genomes</strong> from the Los Alamos HIV Sequence Database ` +
+      `2025 compendium \u2014 one reference strain per subtype and circulating recombinant ` +
+      `form, named <code>subtype.country.year.name.accession</code>. Alignment gaps have been ` +
+      `stripped, because each sequence is aligned to NL4-3 here independently. ` +
+      `Press <em>Compile batch atlas</em>; whole genomes take roughly half a minute.`));
+    el("run-status").appendChild(caveat(
+      `Groups N, O and P and the SIVcpz/SIVgor outgroups in the published compendium are ` +
+      `left out of this set. They sit at 74\u201378% identity to NL4-3 against 85\u201393% ` +
+      `for group M, so their codons differ because the lineages diverged long before group M ` +
+      `existed \u2014 two of them are not HIV-1 at all. Including them would fill the ` +
+      `divergence track with between-lineage distance under a label that says codon usage. ` +
+      `Even within group M, remember these are one reference strain per subtype, so the ` +
+      `diversity here is between-subtype, not within-host.`));
+  } catch (err) {
+    showError(el("run-status"),
+              "Could not load the compendium: " + err.message +
+              ". It ships with the data release; check that data/" + page.version +
+              "/lanl_batch_demo.fasta was deployed.");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = prev;
+  }
 });
 
 // --- the run ---------------------------------------------------------------------------
@@ -360,13 +380,17 @@ function drawSite(label) {
       : `; every covering sample carries the same codon, so there is no codon sensitivity ` +
         `to report here.`)));
 
-  // What the batch carries: residues and codons, side by side.
+  // What the batch carries, as a single strip. Only the residue row: the codon composition is
+  // the flow chart's own left column, and showing it twice is what made this section hard to
+  // read in the first place.
   drawPositionComposition(el("site-chart"), el("site-caption"), stat,
-                          { title: `What the batch carries at ${label}` });
-  // Where a single substitution goes, weighted by the batch's own codon frequencies.
-  const dest = weightedDestinationSupply(BATCH.aaMatrix, stat);
-  drawDestinationSupply(el("codon-chart"), el("codon-caption"), dest, stat,
-                        { title: `Where a single substitution goes from ${label}` });
+                          { only: "aa", title: `What the batch carries at ${label}` });
+  // Where the supply goes, as a flow. Band width is codon frequency times that codon's rate,
+  // so the left column is each codon's share of SUPPLY rather than of sequences -- the gap
+  // between those two numbers is the point of compiling a batch at all.
+  drawSupplyFlow(el("codon-chart"), el("codon-caption"), stat, BATCH.aaMatrix,
+                 { refCodon, weight: el("flow-weight").value,
+                   title: `Where residue change at ${label} comes from, and where it goes` });
   renderSiteSampleTable(stat, label, refCodon);
 
   // Keep the coordinate box in step with a track click.
@@ -445,6 +469,13 @@ function syncCoordControls() {
 el("coord-system").addEventListener("change", syncCoordControls);
 syncCoordControls();
 
+// Re-draw only the position panel: the weighting changes how the flow is apportioned, not
+// anything the tracks or tables show.
+el("flow-weight").addEventListener("change", () => {
+  if (!BATCH) return;
+  const st = aaStatForNt(markerNt);
+  drawSite(st ? engine.hxb2Label(st.protein, st.position) : `nt ${markerNt}`);
+});
 el("divergence-window").addEventListener("input", () => {
   el("divergence-window-out").textContent = el("divergence-window").value;
   if (BATCH) drawAll();

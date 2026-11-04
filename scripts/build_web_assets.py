@@ -49,6 +49,7 @@ import numpy as np
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from build_drm_assets import build_drm
 from build_bnab_assets import build_bnab
+from build_lanl_batch_demo import build_lanl_demo
 
 HERE = pathlib.Path(__file__).resolve().parent
 REPO = HERE.parent
@@ -535,6 +536,12 @@ def main():
     print("\n[6c/7] provisional bNAb escape catalog and glycan sequons")
     ref_for_bnab = json.loads((outdir / "nl43_reference.json").read_text())
     build_bnab(outdir, ref_for_bnab, hxb2)
+    print("\n[6d/7] batch-analysis worked example (LANL compendium, group M)")
+    lanl_src = REPO / "data/source/HIV1_COM_2025_genome_DNA.fasta.gz"
+    if lanl_src.exists():
+        build_lanl_demo(lanl_src, outdir)
+    else:
+        print(f"  SKIPPED: {lanl_src.relative_to(REPO)} not present")
     build_citation(outdir, version, args.doi, args.release_date, model)
     print("\n[7/7] manifest and release list")
     manifest = write_manifest(outdir, version, args.doi, args.release_date, model)

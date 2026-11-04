@@ -461,6 +461,80 @@ check("a missing codon encodes to NO_CODON and decodes to null",
         maxRel < 0.01, `max ${(100 * maxRel).toExponential(2)}%`);
 }
 
+// --- 12. the supply-flow chart's two weightings and its codon pooling ------------------------
+// drawSupplyFlow needs a DOM, so this group is skipped where jsdom is absent (same contract as
+// test/page_boot_cases.mjs). The arithmetic it guards is not incidental: the two weightings are
+// different quantities, not a rescaling of each other, and a bug that silently swapped them
+// would still render a plausible-looking chart.
+{
+  let JSDOM = null;
+  for (const spec of ["jsdom", "/tmp/domtest/node_modules/jsdom/lib/api.js"]) {
+    try { ({ JSDOM } = await import(spec)); break; } catch { /* try the next */ }
+  }
+  if (!JSDOM) {
+    console.log("  skip  jsdom not found - supply-flow checks skipped");
+  } else {
+    const dom = new JSDOM("<!DOCTYPE html><body></body>");
+    globalThis.window = dom.window; globalThis.document = dom.window.document;
+    const { drawSupplyFlow } = await import("../js/batch_view.js");
+
+    // A position carrying one dominant codon plus a tail of rare ones.
+    const aaIdx = buildAaIndex(ref.proteins);
+    const pol = ref.proteins.Pol, nts = pol.codon_nt[253 - pol.first_aa];
+    const put = (c) => { const a = ref.sequence.split("");
+      a[nts[0] - 1] = c[0]; a[nts[1] - 1] = c[1]; a[nts[2] - 1] = c[2]; return a.join(""); };
+    const mix = [["AAA", 90], ["AAG", 6], ["AAC", 1], ["AAT", 1], ["AGA", 1], ["CAA", 1]];
+    const seqs = [];
+    for (const [c, k] of mix) for (let i = 0; i < k; i++) seqs.push(put(c));
+    const m = makeAaMatrix(seqs.length, aaIdx.nPositions);
+    seqs.forEach((q, i) => foldAaIntoMatrix(m, i,
+      engine.customAtlas({ name: "s" + i, sequence: q,
+                           alignment: alignToReference(q, ref.sequence) }).paths, aaIdx));
+    const st = aaPositionStats(m, aaIdx).find((r) => r.protein === "Pol" && r.position === 253);
+    check("the test position carries the six planted codons", st.n_codons === 6, st.n_codons);
+
+    const draw = (weight) => {
+      const box = dom.window.document.createElement("div");
+      const cap = dom.window.document.createElement("div");
+      const ok = drawSupplyFlow(box, cap, st, m, { weight, refCodon: "AAA" });
+      const texts = [...box.querySelectorAll("text")].map((t) => t.textContent);
+      const names = texts.filter((t) => /\([A-Z*]\)|rarer codons/.test(t));
+      const heights = [...box.querySelectorAll("rect")]
+        .map((r) => Number(r.getAttribute("height"))).slice(0, names.length);
+      const tot = heights.reduce((a, b) => a + b, 0);
+      return { ok, names, cap: cap.textContent, share: heights.map((h) => h / tot) };
+    };
+    const bySeq = draw("sequences"), bySup = draw("supply");
+
+    check("both weightings draw", bySeq.ok && bySup.ok);
+    // 4 codons under 2% of 99 samples are pooled, leaving AAA, AAG and one block.
+    check("codons under 2% are pooled into a single block",
+          bySeq.names.length === 3 && /rarer codons/.test(bySeq.names[2]),
+          bySeq.names.join(" | "));
+    check("the pooled block is reported in the caption",
+          /codons each under 2% of the batch are pooled/.test(bySeq.cap));
+    // In "sequences" mode a block must be the codon's frequency, nothing else.
+    const freqAAA = st.codon_counts.find(([c]) => c === "AAA")[1] / st.n_covered;
+    check("a block in sequences mode equals that codon's frequency",
+          Math.abs(bySeq.share[0] - freqAAA) < 0.01,
+          `${bySeq.share[0].toFixed(3)} vs ${freqAAA.toFixed(3)}`);
+    // In "supply" mode it must not, because the codons differ in mutability.
+    check("supply mode gives the dominant codon a smaller share than its frequency",
+          bySup.share[0] < bySeq.share[0] - 0.02,
+          `${bySup.share[0].toFixed(3)} vs ${bySeq.share[0].toFixed(3)}`);
+    check("the rare pooled codons carry more supply than their frequency",
+          bySup.share[2] > bySeq.share[2] + 0.02,
+          `${bySup.share[2].toFixed(3)} vs ${bySeq.share[2].toFixed(3)}`);
+    for (const [tag, r] of [["sequences", bySeq], ["supply", bySup]]) {
+      check(`${tag} mode block shares sum to 1`,
+            Math.abs(r.share.reduce((a, b) => a + b, 0) - 1) < 1e-9);
+    }
+    check("both captions state that synonymous routes are excluded",
+          /Synonymous routes are excluded/.test(bySeq.cap) &&
+          /Synonymous routes are excluded/.test(bySup.cap));
+  }
+}
+
 console.log("=".repeat(60));
 if (failures) { console.log(`${failures} CHECK(S) FAILED`); process.exit(1); }
 console.log("ALL BATCH CASES PASSED");

@@ -34,7 +34,7 @@ independently, so records may cover different regions.</p>
   <div><button id="run">Compile batch atlas</button></div>
   <div><button id="load-file" class="secondary">Load FASTA file&hellip;</button>
        <input type="file" id="file-input" accept=".fa,.fasta,.fas,.txt,.seq" hidden></div>
-  <div><button id="load-demo" class="secondary">Load a worked example</button></div>
+  <div><button id="load-demo" class="secondary">Load LANL compendium (182 genomes)</button></div>
   <div><button id="clear" class="secondary">Clear everything</button></div>
   <div><span id="batch-note" class="caveat"></span></div>
 </div>
@@ -116,6 +116,13 @@ single substitution would take it.</p>
     <input type="number" id="position" min="1" value="46" size="8">
   </div>
   <div><button id="go">Go</button></div>
+  <div>
+    <label for="flow-weight">Band width</label>
+    <select id="flow-weight">
+      <option value="sequences">How common each codon is</option>
+      <option value="supply">How much supply each codon contributes</option>
+    </select>
+  </div>
   <div><button id="download-png" class="secondary">Download as PNG</button></div>
 </div>
 <p id="coord-note" class="caveat"></p>
