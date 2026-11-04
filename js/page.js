@@ -14,6 +14,7 @@ const PAGES = [
   { href: "index.html", label: "Overview" },
   { href: "browse.html", label: "Browse the atlas" },
   { href: "sequence.html", label: "Your sequence" },
+  { href: "batch.html", label: "Batch analysis" },
   { href: "drm.html", label: "Resistance & escape" },
   { href: "download.html", label: "Download" },
 ];

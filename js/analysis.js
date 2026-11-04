@@ -10,10 +10,13 @@
 // one throws, the same code runs on the main thread instead and the caller is told, so
 // the tool degrades to "briefly unresponsive" rather than "broken".
 
-import { alignToReference, buildSeedIndex, MAX_BATCH_SEQUENCES } from "./align.js";
+import { alignToReference, buildSeedIndex, MAX_BATCH_SEQUENCES, MAX_DETAIL_SEQUENCES }
+  from "./align.js";
+import { makeBatchMatrix, foldSequenceIntoMatrix, codonByPositionFrom,
+         buildAaIndex, makeAaMatrix, foldAaIntoMatrix } from "./batch_core.js";
 import { MraEngine } from "./mra_engine.js";
 
-export { MAX_BATCH_SEQUENCES };
+export { MAX_BATCH_SEQUENCES, MAX_DETAIL_SEQUENCES };
 
 export class Analysis {
   constructor(assets) {
@@ -48,7 +51,7 @@ export class Analysis {
 
   /** @param {function} onProgress called with {index, total, name, phase} */
   run(records, onProgress) {
-    const capped = records.slice(0, MAX_BATCH_SEQUENCES);
+    const capped = records.slice(0, MAX_DETAIL_SEQUENCES);
     const truncated = records.length > capped.length;
     if (this.usedWorker) {
       return new Promise((resolve, reject) => {
@@ -100,6 +103,83 @@ export class Analysis {
         });
       }
       return { summaries, geometry, truncated };
+    })();
+  }
+
+  /**
+   * Fold a whole batch into one per-site x per-sample matrix, retaining no atlases.
+   *
+   * Use this instead of run()+detail() for batch work: run() keeps every atlas so detail()
+   * can serve it later, which for 100 full genomes is ~286 MB inside the worker. This path
+   * discards each atlas as soon as it has been folded, so the peak is the matrix (~8 MB).
+   * The per-sequence tables are therefore NOT available afterwards -- that is the trade.
+   *
+   * @returns {Promise<{matrix, names, summaries, geometry, truncated}>}
+   */
+  batch(records, onProgress) {
+    const capped = records.slice(0, MAX_BATCH_SEQUENCES);
+    const truncated = records.length > capped.length;
+    if (this.usedWorker) {
+      return new Promise((resolve, reject) => {
+        const onMessage = (e) => {
+          const m = e.data;
+          if (m.type === "progress") { onProgress && onProgress(m); return; }
+          if (m.type === "batch") {
+            this.worker.removeEventListener("message", onMessage);
+            // Rebuild both matrices from the transferred buffers. typeSum/typeCount/
+            // sitesCovered must be carried across or the per-sequence rate summary silently
+            // loses its denominators -- they were missing here until the codon layer was
+            // added, and only the main-thread fallback was exercising that code.
+            resolve({
+              matrix: { total: m.total, ga: m.ga, covered: m.covered, codonCode: m.codonCode,
+                        typeSum: m.typeSum, typeCount: m.typeCount,
+                        sitesCovered: m.sitesCovered,
+                        nSamples: m.nSamples, nSites: m.nSites, firstSite: m.firstSite },
+              aaMatrix: m.aa,
+              names: m.names, summaries: m.summaries, geometry: m.geometry,
+              truncated: m.truncated || truncated,
+            });
+          } else if (m.type === "error") {
+            this.worker.removeEventListener("message", onMessage);
+            reject(new Error(m.message));
+          }
+        };
+        this.worker.addEventListener("message", onMessage);
+        this.worker.postMessage({ type: "batch", sequences: capped });
+      });
+    }
+    // Main-thread fallback, yielding between sequences so the progress bar paints.
+    const self_ = this;
+    return (async () => {
+      const ref = self_.assets.reference;
+      const region = ref.modelled_region;
+      const nSites = region.last_position - region.first_position + 1;
+      const matrix = makeBatchMatrix(capped.length, nSites, region.first_position);
+      const aaIndex = buildAaIndex(ref.proteins);
+      const aaMatrix = makeAaMatrix(capped.length, aaIndex.nPositions);
+      const names = [], summaries = [], geometry = [];
+      for (let i = 0; i < capped.length; i++) {
+        const { name, sequence } = capped[i];
+        names.push(name);
+        onProgress && onProgress({ index: i, total: capped.length, name, phase: "aligning" });
+        await new Promise((r) => setTimeout(r, 0));
+        const alignment = alignToReference(sequence, ref.sequence, { seedIndex: self_.seedIndex });
+        if (alignment.unalignable) {
+          summaries.push({ name, unalignable: true, reason: alignment.reason });
+          geometry.push(null);
+          continue;
+        }
+        onProgress && onProgress({ index: i, total: capped.length, name, phase: "evaluating" });
+        await new Promise((r) => setTimeout(r, 0));
+        const out = self_.engine.customAtlas({ name, sequence, alignment });
+        foldSequenceIntoMatrix(matrix, i, out.nt, codonByPositionFrom(out.aa, ref.proteins));
+        foldAaIntoMatrix(aaMatrix, i, out.aa, aaIndex);
+        summaries.push(out.summary);
+        geometry.push({ identity: alignment.identity, coverageOfQuery: alignment.coverageOfQuery,
+                        refStart: alignment.refStart, refEnd: alignment.refEnd,
+                        orientation: alignment.orientation });
+      }
+      return { matrix, aaMatrix, names, summaries, geometry, truncated };
     })();
   }
 

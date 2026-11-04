@@ -1,0 +1,68 @@
+{
+ "pol_amplicon_2.3kb": [
+  {
+   "n": 10,
+   "ms": 429,
+   "msPerSeq": 42.9,
+   "aaRowsPerSeq": 16385,
+   "peakAa": 16386
+  },
+  {
+   "n": 25,
+   "ms": 928,
+   "msPerSeq": 37.1,
+   "aaRowsPerSeq": 16383,
+   "peakAa": 16386
+  },
+  {
+   "n": 50,
+   "ms": 1598,
+   "msPerSeq": 32,
+   "aaRowsPerSeq": 16384,
+   "peakAa": 16386
+  },
+  {
+   "n": 100,
+   "ms": 3187,
+   "msPerSeq": 31.9,
+   "aaRowsPerSeq": 16384,
+   "peakAa": 16386
+  }
+ ],
+ "full_genome_8.2kb": [
+  {
+   "n": 10,
+   "ms": 1352,
+   "msPerSeq": 135.2,
+   "aaRowsPerSeq": 62518,
+   "peakAa": 62519
+  },
+  {
+   "n": 25,
+   "ms": 3461,
+   "msPerSeq": 138.4,
+   "aaRowsPerSeq": 62518,
+   "peakAa": 62520
+  },
+  {
+   "n": 50,
+   "ms": 6552,
+   "msPerSeq": 131,
+   "aaRowsPerSeq": 62518,
+   "peakAa": 62520
+  },
+  {
+   "n": 100,
+   "ms": 12850,
+   "msPerSeq": 128.5,
+   "aaRowsPerSeq": 62518,
+   "peakAa": 62520
+  }
+ ],
+ "matrix_bytes": {
+  "sites": 8213,
+  "samples": 100,
+  "float32": 3285200,
+  "note": "per-site x per-sample supply matrix"
+ }
+}

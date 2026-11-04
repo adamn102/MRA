@@ -14,7 +14,7 @@
 import { bootstrapPage, privacyPanel, note, caveat, showError, exportProvenance,
          CUSTOM_CAVEAT, NEF_NOTE } from "./page.js";
 import { loadSmallAssets } from "./data.js";
-import { Analysis, progressRow, MAX_BATCH_SEQUENCES } from "./analysis.js";
+import { Analysis, progressRow, MAX_DETAIL_SEQUENCES } from "./analysis.js";
 import { parseFasta, alignToReference } from "./align.js";
 import { renderTable, formatRate, toCsv, downloadText } from "./table.js";
 import { MraEngine, GENETIC_CODE } from "./mra_engine.js";
@@ -29,7 +29,7 @@ const region = page.release.modelled_region;
 document.getElementById("privacy-slot").appendChild(privacyPanel());
 document.getElementById("caveat-slot").appendChild(note(CUSTOM_CAVEAT));
 document.getElementById("batch-note").textContent =
-  `Up to ${MAX_BATCH_SEQUENCES} sequences per batch.`;
+  `Up to ${MAX_DETAIL_SEQUENCES} sequences per batch.`;
 
 const statusSlot = document.getElementById("run-status");
 let assets, analysis, engine;
@@ -114,8 +114,8 @@ document.getElementById("run").addEventListener("click", async () => {
   document.getElementById("results-heading").hidden = false;
   if (out.truncated) {
     summarySlot.appendChild(note(
-      `Only the first ${MAX_BATCH_SEQUENCES} sequences were analysed. The cap is a named ` +
-      `constant (<code>MAX_BATCH_SEQUENCES</code> in <code>js/align.js</code>) and is set from ` +
+      `Only the first ${MAX_DETAIL_SEQUENCES} sequences were analysed. The cap is a named ` +
+      `constant (<code>MAX_DETAIL_SEQUENCES</code> in <code>js/align.js</code>) and is set from ` +
       `measured timing, not guessed.`));
   }
 

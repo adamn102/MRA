@@ -156,7 +156,12 @@ export function genomeTrack(container, series, options = {}) {
   const padTop = 24 + bandH;
   const plotW = width - padLeft - padRight, plotH = height - padTop - padBottom;
 
-  const all = series.flatMap((s) => s.points.map((p) => p[1])).filter((v) => v > 0);
+  // The ribbon's extent counts toward the y-domain: an envelope drawn outside the computed
+  // range would be silently clipped at the plot edge and read as a narrower spread.
+  const ribbon = options.ribbon || null;
+  const ribbonVals = ribbon ? ribbon.flatMap((r) => [r[1], r[2]]).filter((v) => v > 0) : [];
+  const all = series.flatMap((s) => s.points.map((p) => p[1])).filter((v) => v > 0)
+    .concat(ribbonVals);
   if (!all.length) {
     container.appendChild(Object.assign(document.createElement("p"),
       { className: "caveat", textContent: "No rates to plot for this selection." }));
@@ -222,6 +227,32 @@ export function genomeTrack(container, series, options = {}) {
                                  stroke: "#e3e8ec", "stroke-width": 0.8 }));
     svg.appendChild(el("text", { x: padLeft - 6, y: y + 3.5, "text-anchor": "end",
                                  "font-size": 10, fill: "#5c6670" }, supLabel(e)));
+  }
+
+  // Inter-sample envelope, drawn under the series so the median line stays readable. Points
+  // are [position, lo, hi]; a gap (lo or hi non-positive) breaks the polygon rather than
+  // bridging it, so an uncovered stretch does not read as a narrow spread.
+  if (ribbon && ribbon.length) {
+    let runFwd = [], runBack = [];
+    const flush = () => {
+      if (runFwd.length > 1) {
+        svg.appendChild(el("path", {
+          d: "M" + runFwd.join(" L") + " L" + runBack.reverse().join(" L") + " Z",
+          fill: options.ribbonColour || "#0b5c8a", "fill-opacity": options.ribbonOpacity || 0.18,
+          stroke: "none" }));
+      }
+      runFwd = []; runBack = [];
+    };
+    for (const r of ribbon) {
+      if (!(r[1] > 0 && r[2] > 0) || r[0] < x0 || r[0] > x1) { flush(); continue; }
+      runFwd.push(`${sx(r[0]).toFixed(1)} ${sy(r[2]).toFixed(1)}`);
+      runBack.push(`${sx(r[0]).toFixed(1)} ${sy(r[1]).toFixed(1)}`);
+    }
+    flush();
+    if (options.ribbonLabel) {
+      svg.appendChild(el("text", { x: padLeft + plotW + 6, y: padTop + 11, "font-size": 9,
+                                   fill: options.ribbonColour || "#0b5c8a" }, options.ribbonLabel));
+    }
   }
 
   for (const s of series) {

@@ -36,13 +36,26 @@ export const SCORES = { match: 2, mismatch: -3, gapOpen: -6, gapExtend: -1 };
 export const SEED_K = 12;              // k-mer length for diagonal voting
 export const DEFAULT_BAND = 64;        // half-width, in diagonals
 export const MAX_BAND = 1024;          // give up rather than fall back to full NW
-// Batch cap, set from measurement rather than guessed (test/align_timing.mjs,
+// Two caps, because the two batch paths have different binding constraints.
+//
+// Both are set from measurement rather than guessed (test/align_timing.mjs,
 // figures/alignment_timing.png): a near-full-length 8.6 kb genome costs ~27 ms to align
-// and ~106 ms to evaluate, so 100 of them is about 14 s in a worker with progress
-// reporting. A typical 1.5 kb clinical pol amplicon is ~22 ms, so 100 of those is ~2 s.
-// Note that after the band-edge fix it is MODEL EVALUATION, not alignment, that
-// dominates: a full genome enumerates 187,992 codon paths.
-export const MAX_BATCH_SEQUENCES = 100;
+// and ~106 ms to evaluate; a typical 1.5 kb clinical pol amplicon is ~22 ms. Note that
+// after the band-edge fix it is MODEL EVALUATION, not alignment, that dominates: a full
+// genome enumerates 187,992 codon paths.
+//
+// MAX_DETAIL_SEQUENCES governs the "Your sequence" path, which RETAINS every atlas so the
+// per-sequence tables can be served on demand. That retention is the limit, not the time:
+// a full-genome atlas is ~62,500 amino-acid rows, so 100 of them is ~286 MB held in the
+// worker and 250 would be ~715 MB. Time at 100 is about 14 s.
+export const MAX_DETAIL_SEQUENCES = 100;
+
+// MAX_BATCH_SEQUENCES governs the batch-analysis path, which folds each atlas into the
+// per-site matrix and DISCARDS it, so memory is O(sites x samples) and does not grow with
+// the tables. Measured at 250: the matrix is 19.6 MB, a batch of 250 pol amplicons takes
+// 9.1 s and 250 full-length genomes 35.9 s, with the per-site statistics adding ~30 ms.
+// Raising this further is bounded by patience, not memory.
+export const MAX_BATCH_SEQUENCES = 250;
 
 const COMPLEMENT = { A: "T", C: "G", G: "C", T: "A", N: "N", "-": "-" };
 
