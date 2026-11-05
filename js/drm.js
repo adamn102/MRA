@@ -22,7 +22,8 @@ import { loadSmallAssets, loadDrmCatalog, loadBnabCatalog, loadLanlCodonFrequenc
 import { renderTable, formatRate } from "./table.js";
 import { barChart } from "./chart.js";
 import { MraEngine } from "./mra_engine.js";
-import { codonSensitivity, sequonLossRate } from "./codon_sensitivity.js";
+import { codonSensitivity, codonSensitivitySummary, formatFold, sequonLossRate }
+  from "./codon_sensitivity.js";
 
 const page = await bootstrapPage("drm.html");
 const region = page.release.modelled_region;
@@ -112,6 +113,9 @@ function renderDrm() {
       freq_naive: strata.naive ? strata.naive.freq : null,
       nl43_codon: any.nl43_codon,
       note: any.nl43_matches_consensus ? "" : `NL4-3 carries ${any.atlas_ref_aa}, not consensus ${any.ref_aa}`,
+      ...codonFields(codonSensitivitySummary(engine, {
+        gene: any.gene, genePosition: Number(any.gene_position),
+        refAa: any.ref_aa, altAa: any.alt_aa })),
       _row: any,
     });
   }
@@ -128,16 +132,8 @@ function renderDrm() {
       { key: "freq_treated", label: `freq (${label(stratum)})`, type: "rate",
         title: "clinical sequence frequency in this treatment stratum" },
       { key: "freq_naive", label: "freq (naive)", type: "rate" },
-      { key: "nl43_codon", label: "NL4-3 codon" },
+      ...CODON_COLUMNS,
       { key: "note", label: "Note" },
-      { key: "mutation", label: "",
-        render: (r) => {
-          if (r._indel) return "\u2014";
-          const b = document.createElement("button");
-          b.className = "secondary"; b.textContent = "codon sensitivity";
-          b.addEventListener("click", () => drillDrm(r._row));
-          return b;
-        } },
     ],
     rows: rows.sort((a, b) => (b.mu_aa || 0) - (a.mu_aa || 0)),
     sort: { key: "mu_aa", dir: "desc" },
@@ -220,6 +216,15 @@ function renderBnab() {
       citation: r.citation,
       doi: r.citation_doi,
       note: r.note || "",
+      ...codonFields(r.applies_to_nl43 && r.nl43_env_position
+        ? codonSensitivitySummary(engine, { gene: "Env",
+            genePosition: Number(r.nl43_env_position), refAa: r.wt_aa, altAa: r.escape_aa })
+        : null),
+      // Several escape substitutions work by destroying an N-linked glycan sequon. The total
+      // supply for losing that glycan by ANY route is larger than this one substitution --
+      // three codons can destroy it -- so it belongs beside the single-substitution rate
+      // rather than one click away, where a reader comparing the two would never see it.
+      ...sequonFields(sequonByHxb2.get(r.hxb2_position) || null, r),
       _row: r,
       _sequon: sequonByHxb2.get(r.hxb2_position) || null,
     });
@@ -246,16 +251,13 @@ function renderBnab() {
           a.target = "_blank"; a.rel = "noopener noreferrer";
           return a;
         } },
+      ...CODON_COLUMNS,
+      { key: "sequon_loss", label: "glycan loss (any route)", type: "rate",
+        title: "Where this position carries an N-X-S/T sequon, the summed rate of destroying " +
+               "it by any single substitution in any of its three codons. Larger than the " +
+               "single escape rate beside it, because several changes destroy the motif." },
       { key: "effect", label: "Reported effect" },
       { key: "note", label: "Note" },
-      { key: "antibody", label: "",
-        render: (r) => {
-          const b = document.createElement("button");
-          b.className = "secondary"; b.textContent = "codon sensitivity";
-          b.disabled = !r._row.applies_to_nl43;
-          b.addEventListener("click", () => drillBnab(r._row, r._sequon));
-          return b;
-        } },
     ],
     rows: rows.sort((a, b) => (b.mu || 0) - (a.mu || 0)),
     sort: { key: "mu", dir: "desc" },
@@ -271,117 +273,53 @@ function renderBnab() {
 }
 bnabSel.addEventListener("change", renderBnab);
 
-// --- codon-sensitivity drill-down -------------------------------------------------
-function drillDrm(row) {
-  const s = codonSensitivity(engine, { gene: row.gene, genePosition: row.gene_position,
-    refAa: row.ref_aa, altAa: row.alt_aa });
-  showDrill(`${row.protein} ${row.ref_aa}${row.protein_position}${row.alt_aa}`, s, null);
-}
-function drillBnab(row, sequon) {
-  if (!row.applies_to_nl43 || !row.nl43_env_position || !row.escape_aa) return;
-  const s = codonSensitivity(engine, { gene: "Env", genePosition: row.nl43_env_position,
-    refAa: row.wt_aa, altAa: row.escape_aa });
-  showDrill(`${row.antibody}: Env ${row.wt_aa}${row.hxb2_position}${row.escape_aa}`, s, null);
-  // Several escape substitutions work by destroying an N-linked glycan sequon. Where this
-  // position carries one, also show the total supply for losing that glycan by ANY route --
-  // a larger number than the single substitution, because three codons can destroy it.
-  if (sequon) {
-    const loss = sequonLossRate(engine, sequon);
-    if (loss) showSequonDrill(row, loss);
-  }
-}
+// --- codon sensitivity, inline ----------------------------------------------------
+// Every row carries its own codon decomposition rather than hiding it behind a control. The
+// whole catalogue costs ~14 ms to compute, so there is nothing to defer, and the comparison a
+// reader wants -- is this mutation rate a property of the virus or of how this virus happens
+// to spell the wild-type residue? -- is only visible when it sits next to the rate itself.
 
-function showDrill(title, s, _) {
-  document.getElementById("drill-heading").hidden = false;
-  const intro = document.getElementById("drill-intro");
-  intro.hidden = false;
-  const chart = document.getElementById("drill-chart");
-  const detail = document.getElementById("drill-detail");
-  chart.innerHTML = ""; detail.innerHTML = "";
-  if (!s.applicable) { intro.textContent = s.reason; return; }
-
-  intro.innerHTML =
-    `<strong>${title}.</strong> The rate of this change if the wild-type amino acid were ` +
-    `encoded by each of its synonymous codons, holding the neighbouring amino acid fixed. ` +
-    `NL4-3 uses <code>${s.nl43Codon}</code>` +
-    (s.nl43_rank_among_peers ? `, which ranks ${s.nl43_rank_among_peers} of ${s.n_peers_at_nl43_step} ` +
-      `(1 = lowest supply) among codons reaching the target in ${s.nl43_step_count} step(s).` : ".") +
-    ` Codon-optimization fold range: <strong>${s.site_fold_range.toFixed(1)}\u00d7</strong>` +
-    (s.step_count_varies
-      ? `. Some synonymous codons need a different number of nucleotide changes (a categorical ` +
-        `accessibility difference); including those the full range is ${s.full_fold_range.toExponential(1)}\u00d7.`
-      : ".") +
-    (s.flank_varied
-      ? ` Varying the 3\u2032 flanking codon synonymously changes the rate by up to ` +
-        `${s.flank_fold_range.toFixed(2)}\u00d7.` : "");
-
-  // Optional LANL weighting: how common each synonymous codon is in circulating virus.
-  const lanlFor = (codon) => {
-    if (!lanl || !lanl.present) return null;
-    const hit = lanl.byKey.get(`${s.gene}|${s.genePosition}|${codon}`);
-    return hit ? hit.fraction : 0;
+/** Flatten a summary into row fields, so the table and its CSV export carry the same values. */
+function codonFields(sum) {
+  if (!sum) return { ref_codons: "", codon_fold: null, codon_fold_text: "\u2014",
+                     n_ref_codons: null, nl43_codon_rank: "" };
+  return {
+    ref_codons: sum.text,
+    codon_fold: sum.n_codons > 1 ? sum.fold_range : null,
+    codon_fold_text: formatFold(sum.fold_range, sum.n_codons),
+    n_ref_codons: sum.n_codons,
+    nl43_codon_rank: sum.n_codons > 1 && sum.nl43_rank
+      ? `${sum.nl43_rank} of ${sum.n_codons}` : "",
   };
-  const anyLanl = lanl && lanl.present && s.by_site_codon.some((r) => lanlFor(r.codon) !== null);
-  barChart(chart, s.by_site_codon.map((r) => {
-    const f = lanlFor(r.codon);
-    const steps = r.min_nt_changes > s.min_nt_changes ? "more steps" : "";
-    const freq = anyLanl ? ` ${((f || 0) * 100).toFixed(0)}% LANL` : "";
-    return {
-      label: r.codon + (r.is_nl43 ? " (NL4-3)" : "") + (r.min_nt_changes > s.min_nt_changes ? ` [${r.min_nt_changes}nt]` : ""),
-      value: r.mu_aa, lo: r.lo95, hi: r.hi95, highlight: r.is_nl43,
-      note: [steps, freq].filter(Boolean).join("  "),
-    };
-  }), { title: "mutation rate per synonymous wild-type codon", width: 720,
-        xLabel: "mu_aa (per site per replication)" });
-  if (anyLanl) {
-    // LANL-weighted mean rate and the fraction of circulating virus on a high-supply codon
-    const median = s.by_site_codon.map((r) => r.mu_aa).sort((a, b) => a - b)[Math.floor(s.by_site_codon.length / 2)];
-    let wMean = 0, wSum = 0, highFrac = 0;
-    for (const r of s.by_site_codon) {
-      const f = lanlFor(r.codon) || 0;
-      wMean += f * r.mu_aa; wSum += f;
-      if (r.mu_aa >= median) highFrac += f;
-    }
-    intro.innerHTML += ` <strong>LANL weighting (${lanl.alignmentVersion || "unversioned"}):</strong> ` +
-      `circulating-sequence-weighted mean rate ${wSum > 0 ? formatRate(wMean / wSum) : "\u2014"}; ` +
-      `${(highFrac * 100).toFixed(0)}% of sequences use an at-or-above-median-supply codon.`;
-  } else {
-    intro.innerHTML += ` <span class="caveat">LANL codon-frequency weighting is not loaded ` +
-      `for this release, so how common each codon is in circulating virus is not shown ` +
-      `(the fold range above is the achievable range, not the realised one).</span>`;
-  }
-  document.getElementById("drill-caption").innerHTML =
-    "Highlighted bar is NL4-3's codon. Codons tagged with a step count reach the target amino " +
-    "acid only via more nucleotide changes \u2014 a categorical accessibility difference, not codon " +
-    "optimization, so they are not in the fold range above.";
-  document.getElementById("drill-heading").scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
-function showSequonDrill(row, loss) {
-  document.getElementById("drill-heading").hidden = false;
-  const intro = document.getElementById("drill-intro");
-  intro.hidden = false;
-  const chart = document.getElementById("drill-chart");
-  const detail = document.getElementById("drill-detail");
-  chart.innerHTML = ""; detail.innerHTML = "";
-  intro.innerHTML =
-    `<strong>${row.antibody}: loss of the N${row.hxb2_position} glycan (${loss.motif}).</strong> ` +
-    `Any change that destroys the N-X-S/T sequon removes the glycan, so the escape rate is the ` +
-    `summed mutability over all three codons: <strong>${formatRate(loss.mu_sequon_loss)}</strong>. ` +
-    `The single largest route (${loss.largest_contributor.role} \u2192 ${loss.largest_contributor.alt_aa}) ` +
-    `is ${(loss.largest_fraction * 100).toFixed(0)}% of that; a view that counted only one change ` +
-    `would miss the rest.`;
-  barChart(chart, loss.per_codon.map((c) => ({
-    label: `${c.role} codon ${c.codon} (${c.ref_aa})`,
-    value: c.mu_loss, lo: c.lo95, hi: c.hi95,
-    highlight: c.role === loss.largest_contributor.role,
-    note: `${c.n_paths} routes`,
-  })), { title: `Sequon-loss supply by codon at N${row.hxb2_position}`, width: 720,
-         xLabel: "summed mu_aa to any sequon-destroying residue" });
-  document.getElementById("drill-caption").textContent =
-    "Each bar is the summed rate of all changes at that codon that destroy the glycan sequon. " +
-    "N = the asparagine, X = the middle position (loss via proline), S/T = the hydroxyl position.";
+/** Glycan sequon-loss total for a row, where its position carries a sequon. */
+function sequonFields(sequon, row) {
+  if (!sequon || !row.applies_to_nl43) return { sequon_loss: null, sequon_motif: "" };
+  const loss = sequonLossRate(engine, sequon);
+  if (!loss || !loss.applicable) return { sequon_loss: null, sequon_motif: "" };
+  return { sequon_loss: loss.mu_sequon_loss, sequon_motif: loss.motif };
 }
+
+const CODON_COLUMNS = [
+  { key: "ref_codons", label: "Wild-type codon options (rate)",
+    title: "Every synonymous codon the wild-type residue could be written as, and the rate " +
+           "this change would have from each. * marks the codon NL4-3 carries; (2nt)/(3nt) " +
+           "marks a codon needing more than one substitution to reach the target.",
+    render: (r) => {
+      const span = document.createElement("span");
+      span.className = "codon-options";
+      span.textContent = r.ref_codons || "\u2014";
+      return span;
+    } },
+  { key: "codon_fold", label: "codon sensitivity", type: "num",
+    title: "Fold range (max/min) of this change's rate across every synonymous codon for the " +
+           "wild-type residue. 1x or blank means the residue has a single codon, so codon " +
+           "usage cannot move this rate. Large values are usually driven by a codon that " +
+           "needs an extra nucleotide, which the codon list shows.",
+    render: (r) => r.codon_fold_text },
+];
+
 
 // --- open on URL params -----------------------------------------------------------
 const qs = new URLSearchParams(window.location.search);

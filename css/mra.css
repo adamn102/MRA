@@ -131,3 +131,12 @@ table.data.track-stats tbody tr:hover { background: transparent; }
              max-width: 1140px; }
 .panel-row > div { min-width: 0; }     /* flex basis and max-width are set in JS */
 .panel-row svg { display: block; width: 100%; }
+
+/* --- inline codon decomposition in the curated tables --------------------- */
+/* A list of codon:rate pairs, not a single value: it needs to wrap rather than stretch the
+   table, and a tabular font keeps the rates column-aligned enough to scan down the page. */
+td .codon-options {
+  font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11.5px; line-height: 1.45; white-space: normal;
+  display: inline-block; max-width: 34em; color: var(--ink, #1c2530);
+}

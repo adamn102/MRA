@@ -111,3 +111,22 @@ positions in HXB2 Env numbering, resolved to NL4-3 through the position-by-posit
 lookup. Every exported file carries the atlas version, the model name and the retrieval
 date. bNAb exports additionally record the inclusion standard and note that rows
 without a rate are those where NL4-3 does not carry the published wild-type residue.
+
+## Inline codon sensitivity (curated tables)
+
+Every row in the curated tables carries its own codon decomposition, computed in the browser
+from the model bundle. The whole catalogue costs about 14 ms, so nothing is deferred.
+
+| column | meaning |
+| --- | --- |
+| `ref_codons` | every synonymous codon the wild-type residue could be written as, with the rate this change would have from each. `*` marks the codon NL4-3 carries; `(2nt)`/`(3nt)` marks a codon needing more than one substitution to reach the target. |
+| `codon_fold` | fold range (max/min) of the rate across those codons. Blank where the residue has a single codon, so codon usage cannot move the rate. |
+| `n_ref_codons`, `nl43_codon_rank` | how many options exist and where NL4-3's codon ranks among them, fastest first. |
+| `sequon_loss` | bNAb table only: where the position carries an N-X-S/T sequon, the summed rate of destroying it by any single substitution in any of its three codons. Larger than the single escape rate, because several changes destroy the motif. |
+
+`codon_fold` is the **full** range across all synonymous codons, not the range at matched step
+count. The matched-step range isolates the context effect but reads 1.0x wherever a single
+codon reaches the target in the fewest steps, which hides the largest real effect of codon
+choice: at RT L210W five of the six leucine codons put the tryptophan four to five logs
+further away. The per-codon step counts are shown beside the rates so the mechanism behind a
+large range is visible rather than inferred.

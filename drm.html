@@ -6,16 +6,25 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'none'">
-<title>Resistance & escape &mdash; HIV-1 Mutation Rate Atlas</title>
+<title>Curated tables &mdash; HIV-1 Mutation Rate Atlas</title>
 <link rel="stylesheet" href="css/mra.css">
 </head>
 <body>
 <main>
-<h1>Resistance and escape</h1>
+<h1>Curated tables</h1>
 <p>Mutation rates for documented resistance mutations and broadly neutralizing antibody escape
 positions. The rate is mutational supply &mdash; how often the variant is generated per
 replication &mdash; not how often it is seen clinically. Selection acts on top of it. Both are
 shown.</p>
+
+<p class="caveat">Each row carries its own codon decomposition. <strong>Wild-type codon
+options</strong> lists every synonymous codon the wild-type residue could be written as and the
+rate this change would have from each; <code>*</code> marks the codon NL4-3 carries, and
+<code>(2nt)</code> marks a codon that needs more than one substitution to reach the target.
+<strong>Codon sensitivity</strong> is the fold range across those options &mdash; how much the
+rate would move if the virus spelled the wild-type residue differently. A dash means the residue
+has a single codon, so codon usage cannot move it at all. Where the range is large it is usually
+because one codon needs an extra nucleotide, which the codon list makes visible.</p>
 
 <div id="scope-slot"></div>
 
@@ -51,10 +60,6 @@ shown.</p>
 </div>
 <div id="bnab-table"></div>
 
-<h3 id="drill-heading" hidden>Codon sensitivity</h3>
-<p id="drill-intro" class="caveat" hidden></p>
-<figure class="chart"><div id="drill-chart"></div><figcaption id="drill-caption"></figcaption></figure>
-<div id="drill-detail"></div>
 </main>
 <script type="module" src="js/drm.js"></script>
 </body>

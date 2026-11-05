@@ -13,7 +13,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { MraEngine, GENETIC_CODE } from "../js/mra_engine.js";
-import { codonSensitivity, sequonLossRate } from "../js/codon_sensitivity.js";
+import { codonSensitivity, codonSensitivitySummary, formatFold, sequonLossRate }
+  from "../js/codon_sensitivity.js";
 import { parseCsv } from "../js/data.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -154,6 +155,64 @@ for (const sq of sequons.slice(0, 10)) {
   if (r && r.motif[0] !== "N") motifOk = false;
 }
 check("every listed sequon translates to an N-X-S/T motif", motifOk);
+
+// --- the inline summary used by the curated tables --------------------------------------------
+// These rows are now rendered into every table cell rather than built on demand, so a silent
+// change in shape would ship as a wrong column rather than a broken button.
+{
+  // Methionine has one codon: codon usage cannot move the rate, and the score must say so
+  // rather than printing a misleading "1.0x".
+  const met = codonSensitivitySummary(engine, { gene: "Pol", genePosition: 87,
+                                                refAa: "M", altAa: "I" });
+  check("a single-codon residue yields one codon option",
+        met && met.n_codons === 1 && met.codons[0].is_nl43, met && met.n_codons);
+  check("a single-codon residue scores as not applicable, not as 1x",
+        formatFold(met.fold_range, met.n_codons) === "\u2014",
+        formatFold(met.fold_range, met.n_codons));
+
+  // Glycine has four codons; two of them need an extra nucleotide to reach serine, which is
+  // what makes the fold range large. The step count must be visible in the text.
+  const gly = codonSensitivitySummary(engine, { gene: "Pol", genePosition: 6,
+                                                refAa: "G", altAa: "S" });
+  if (gly) {
+    check("a four-codon residue lists four options", gly.n_codons === 4, gly.n_codons);
+    check("options are ordered fastest first",
+          gly.codons.every((c, i) => i === 0 || gly.codons[i - 1].rate >= c.rate));
+    check("the NL4-3 codon is marked exactly once",
+          gly.codons.filter((c) => c.is_nl43).length === 1);
+    check("the text marks NL4-3 with an asterisk and flags multi-step codons",
+          /\*/.test(gly.text) && (!gly.step_count_varies || /\dnt\)/.test(gly.text)),
+          gly.text);
+    check("the fold range equals max over min of the listed rates",
+          Math.abs(gly.fold_range -
+            gly.codons[0].rate / gly.codons[gly.codons.length - 1].rate) < 1e-6 * gly.fold_range,
+          `${gly.fold_range.toExponential(2)}`);
+    check("the NL4-3 rank is its position in the listed order",
+          gly.codons[gly.nl43_rank - 1].is_nl43, gly.nl43_rank);
+  }
+
+  // The headline score is the full range, not the matched-step one: at a position where a
+  // single codon reaches the target in the fewest steps, the matched-step range is 1.0 and
+  // would hide a real several-log effect of spelling the wild-type residue differently.
+  let foundWide = false;
+  for (let pos = 100; pos < 400 && !foundWide; pos++) {
+    const sm = codonSensitivitySummary(engine, { gene: "Pol", genePosition: pos,
+                                                 refAa: "L", altAa: "W" });
+    if (sm && sm.n_codons > 1 && sm.fold_range_same_steps < 1.01 && sm.fold_range > 100) {
+      foundWide = true;
+      check("the score reports the full range where the matched-step range would read 1.0",
+            formatFold(sm.fold_range, sm.n_codons) !== "\u2014" &&
+            sm.fold_range > sm.fold_range_same_steps,
+            `full ${sm.fold_range.toExponential(1)} vs same-step ${sm.fold_range_same_steps.toFixed(2)}`);
+    }
+  }
+  check("such a position exists in pol (the case the score is designed for)", foundWide);
+
+  check("formatFold is compact below 1000 and exponential above",
+        formatFold(45.2, 3) === "45\u00d7" && formatFold(4.4, 2) === "4.4\u00d7" &&
+        /e\d/.test(formatFold(44000, 4)),
+        [formatFold(45.2, 3), formatFold(4.4, 2), formatFold(44000, 4)].join(" "));
+}
 
 console.log("\n" + "=".repeat(60));
 console.log(failures === 0 ? "ALL CODON-SENSITIVITY CASES PASSED" : `${failures} CASE(S) FAILED`);

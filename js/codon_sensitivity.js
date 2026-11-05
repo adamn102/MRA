@@ -320,3 +320,57 @@ export function sequonLossRate(engine, sequon) {
     per_codon: perCodon,
   };
 }
+
+
+/**
+ * Display-ready codon sensitivity for one amino-acid change: every synonymous codon the
+ * REFERENCE residue could be written as, the rate this change would have from each, and one
+ * number for how much that choice matters.
+ *
+ * WHICH FOLD RANGE IS THE HEADLINE. `codonSensitivity` reports two. `site_fold_range` holds
+ * accessibility fixed and varies only the codon, which isolates the codon-optimisation effect
+ * but reads 1.0x whenever a single codon reaches the target in the fewest steps -- at RT L210W
+ * that hides the fact that five of the six leucine codons put the tryptophan four to five logs
+ * further away. `full_fold_range` spans every synonymous codon regardless of step count, which
+ * is the answer to the question actually being asked here: if this virus spelled the wild-type
+ * residue differently, how much would the supply of this resistance change move? We report the
+ * full range as the score and keep the per-codon step counts visible beside it, so a reader can
+ * see when the spread is driven by an extra nucleotide rather than by context alone.
+ *
+ * @returns {object|null} null when the change has no codon decomposition at this position
+ */
+export function codonSensitivitySummary(engine, spec) {
+  const s = codonSensitivity(engine, spec);
+  if (!s || !s.applicable) return null;
+  const codons = s.by_site_codon.map((c) => ({
+    codon: c.codon, rate: c.mu_aa, steps: c.min_nt_changes, is_nl43: !!c.is_nl43,
+  }));
+  const rank = codons.findIndex((c) => c.is_nl43) + 1;   // by_site_codon is sorted fast -> slow
+  return {
+    codons,
+    n_codons: codons.length,
+    nl43_codon: s.nl43Codon,
+    nl43_rate: s.nl43_rate,
+    nl43_rank: rank || null,
+    fold_range: s.full_fold_range,
+    fold_range_same_steps: s.site_fold_range,
+    step_count_varies: s.step_count_varies,
+    // One cell for the table and one field for the CSV, built from the same list so the two
+    // can never disagree. "*" marks the codon NL4-3 actually carries.
+    text: codons.map((c) => `${c.codon}${c.is_nl43 ? "*" : ""} ${formatSmall(c.rate)}` +
+                            (c.steps > 1 ? ` (${c.steps}nt)` : "")).join(" \u00b7 "),
+  };
+}
+
+/** Compact rate for in-cell text: two significant figures, exponent only when needed. */
+function formatSmall(v) {
+  if (!(v > 0)) return "0";
+  return v.toExponential(1).replace("e-", "e\u2212");
+}
+
+/** "45x", "4.4e4x", or an em dash where a single codon leaves nothing to compare. */
+export function formatFold(fold, nCodons) {
+  if (nCodons <= 1 || !(fold > 1.0000001)) return "\u2014";
+  if (fold < 1000) return fold.toFixed(fold < 10 ? 1 : 0) + "\u00d7";
+  return fold.toExponential(1).replace("e+", "e") + "\u00d7";
+}
