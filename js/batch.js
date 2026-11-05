@@ -578,6 +578,7 @@ function siteRows() {
       evenness: ss && ss.evenness !== null ? ss.evenness : null,
       top_destination: ss ? ss.top_destination : "",
       top_share: ss ? ss.top_share : null,
+      top_rate: ss ? ss.top_rate : null,
       protein: r.protein,
       hxb2_label: engine.hxb2Label(r.protein, r.position),
       nl43_position: r.position,
@@ -753,7 +754,7 @@ el("download-all").addEventListener("click", () => {
              "mutability_median", "mutability_min", "mutability_max",
              "codon_fold_range", "fraction_on_fastest_codon", "divergence",
              "syn_fraction", "stop_fraction", "n_destinations", "effective_destinations",
-             "evenness", "top_destination", "top_share"));
+             "evenness", "top_destination", "top_share", "top_rate"));
   // Where the supply goes, one row per (position, destination residue), weighted by the
   // batch's own codon frequencies. This is the block a reader needs to reproduce a
   // population-weighted rate for a specific amino-acid change.

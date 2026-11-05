@@ -213,6 +213,28 @@ section("9. a full LTR-to-LTR genome (query LONGER than the reference)");
               `${out.summary.codonsAnalysed} codons, ${out.summary.droppedOutsideRegion} dropped past 8,213`);
 }
 
+// --- RNA spelling -----------------------------------------------------------------------------
+// A pasted RNA sequence used to align at ~78% identity and silently lose a third of its codons,
+// because U is not one of the four bases the model is defined on. It must now behave exactly
+// like the DNA spelling of the same sequence.
+{
+  const frag = reference.sequence.slice(2000, 3000);
+  const dna = parseFasta(">x\n" + frag)[0].sequence;
+  const rna = parseFasta(">x\n" + frag.replace(/T/g, "U"))[0].sequence;
+  check("U is mapped to T on input", rna === dna);
+  check("no U survives parsing", !/U/.test(rna));
+  const aDna = alignToReference(dna, reference.sequence);
+  const aRna = alignToReference(rna, reference.sequence);
+  check("an RNA sequence aligns identically to its DNA spelling",
+        Math.abs(aDna.identity - aRna.identity) < 1e-12 && aRna.identity > 0.999,
+        `DNA ${(100 * aDna.identity).toFixed(1)}% vs RNA ${(100 * aRna.identity).toFixed(1)}%`);
+  // Lower case and alignment gap characters were already handled; pin them so they stay that way.
+  check("lower case and gap characters are normalised away",
+        parseFasta(">x\n" + frag.slice(0, 60).toLowerCase())[0].sequence === frag.slice(0, 60) &&
+        parseFasta(">x\n" + frag.slice(0, 30) + "---" + frag.slice(30, 60))[0].sequence
+          === frag.slice(0, 60));
+}
+
 console.log("\n" + "=".repeat(60));
 console.log(failures === 0 ? "ALL ALIGNMENT CASES PASSED" : `${failures} ALIGNMENT CASE(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);

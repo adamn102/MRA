@@ -769,10 +769,16 @@ export function siteSupplyStats(matrix, stat) {
     stop_fraction: stop / total,
     n_destinations: k,
     effective_destinations: Math.exp(H),
-    // Evenness is exp(H)/k: 1 when every reachable residue gets the same supply, towards 0
-    // when one dominates. Null at k = 1, where evenness is undefined rather than perfect.
-    evenness: k > 1 ? Math.exp(H) / k : null,
+    // Pielou's J = H / log(k): 1 when every reachable residue gets the same supply, towards 0
+    // when one dominates. This is the normalised entropy used in the mutation-skew analysis of
+    // the accompanying paper, so a reader can reproduce that panel from this column directly.
+    // Null at k = 1, where evenness is undefined rather than perfect.
+    evenness: k > 1 ? H / Math.log(k) : null,
     top_destination: top,
     top_share: topShare,
+    // The weighted supply to that destination, in rate units rather than as a share. Exported
+    // so that the skew relationship -- evenness against the fastest single change at a site --
+    // is a two-column plot from one table, without a join back to the per-destination block.
+    top_rate: top === null ? null : byDest.get(top),
   };
 }

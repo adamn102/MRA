@@ -615,6 +615,20 @@ async function showDetail(index, row, out, slot) {
     .filter(([, v]) => v.codonsAnalysed > 0)
     .map(([k, v]) => `${k} ${v.firstAnalysed}\u2013${v.lastAnalysed} (${v.codonsAnalysed} of ${v.codonsInReference} modelled codons)`)
     .join("; ");
+  // A sequence far from NL4-3 still aligns and still returns numbers, so the only thing
+  // standing between a reader and a misread is saying so. The threshold is empirical: across
+  // the LANL group M compendium, subtypes and CRFs sit at 85-93% identity to NL4-3, while
+  // groups N/O/P and the SIVcpz/SIVgor outgroups fall at 74-78%. Below 80% the position
+  // effects measured on NL4-3 are being extrapolated further than this model supports.
+  if (s.identity !== null && s.identity < 0.80) {
+    slot.appendChild(caveat(
+      `<strong>This sequence is only ${(s.identity * 100).toFixed(1)}% identical to NL4-3.</strong> ` +
+      `Group M subtypes and CRFs sit at 85&ndash;93%; non-M groups and SIV outgroups fall at ` +
+      `74&ndash;78%. The rates below are still computed, but position effects fitted on NL4-3 ` +
+      `are being carried a long way from where they were measured &mdash; treat them as ` +
+      `indicative, not quantitative. If you pasted an RNA, protein or non-HIV-1 sequence, that ` +
+      `is the more likely explanation.`));
+  }
   slot.appendChild(note(
     `Placed on NL4-3 ${geom.refStart.toLocaleString()}&ndash;${geom.refEnd.toLocaleString()} at ` +
     `${(s.identity * 100).toFixed(2)}% identity, ${(geom.coverageOfQuery * 100).toFixed(1)}% of the ` +

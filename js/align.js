@@ -71,8 +71,13 @@ export function parseFasta(text) {
   let name = null, chunks = [];
   const flush = () => {
     if (chunks.length) {
+      // U -> T: an RNA sequence is a legitimate way to write a viral genome, and the model is
+      // defined on DNA bases. Mapping here rather than rejecting means a pasted RNA sequence
+      // behaves exactly like its DNA spelling; leaving it unmapped silently dropped every U
+      // position and returned a plausible-looking atlas at ~78% identity.
       records.push({ name: name || `sequence_${records.length + 1}`,
-                     sequence: chunks.join("").toUpperCase().replace(/[^A-Z]/g, "") });
+                     sequence: chunks.join("").toUpperCase()
+                                     .replace(/[^A-Z]/g, "").replace(/U/g, "T") });
     }
     chunks = [];
   };

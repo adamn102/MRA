@@ -581,10 +581,11 @@ check("a missing codon encodes to NO_CODON and decodes to null",
   check("the effective number lies between 1 and the reachable count",
         all.every((s) => s.effective_destinations >= 1 - 1e-9 &&
                          s.effective_destinations <= s.n_destinations + 1e-9));
-  check("evenness is exp(H)/k, or null where only one residue is reachable",
+  check("evenness is Pielou's J = log(effN)/log(k), or null at k = 1",
         all.every((s) => s.evenness === null
           ? s.n_destinations === 1
-          : Math.abs(s.evenness - s.effective_destinations / s.n_destinations) < 1e-9));
+          : Math.abs(s.evenness -
+              Math.log(s.effective_destinations) / Math.log(s.n_destinations)) < 1e-9));
   check("the largest destination share is at least 1/k and at most 1",
         all.every((s) => s.top_share >= 1 / s.n_destinations - 1e-9 && s.top_share <= 1 + 1e-9));
   // A site whose supply is concentrated must score near 1, a spread one well above it: if the
