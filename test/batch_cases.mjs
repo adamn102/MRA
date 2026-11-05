@@ -14,7 +14,7 @@ import { alignToReference, buildSeedIndex } from "../js/align.js";
 import { makeBatchMatrix, foldSequenceIntoMatrix, codonByPositionFrom, batchSiteStats,
          topDivergentSites, siteAcrossSamples, perSampleSummary,
          encodeCodon, decodeCodon, NO_CODON, perSampleRates, MUT_TYPES, codonGroupsAtSite,
-         buildAaIndex, makeAaMatrix, foldAaIntoMatrix, aaPositionStats,
+         buildAaIndex, makeAaMatrix, foldAaIntoMatrix, aaPositionStats, siteSupplyStats,
          weightedDestinationSupply, codonSensitivity, diversityVsMutability,
          samplesAtAaPosition, spearman, AA_ORDER }
   from "../js/batch_core.js";
@@ -502,7 +502,8 @@ check("a missing codon encodes to NO_CODON and decodes to null",
       const heights = [...box.querySelectorAll("rect")]
         .map((r) => Number(r.getAttribute("height"))).slice(0, names.length);
       const tot = heights.reduce((a, b) => a + b, 0);
-      return { ok, names, cap: cap.textContent, share: heights.map((h) => h / tot) };
+      return { ok, names, box, labels: texts, cap: cap.textContent,
+               share: heights.map((h) => h / tot) };
     };
     const bySeq = draw("sequences"), bySup = draw("supply");
 
@@ -529,10 +530,76 @@ check("a missing codon encodes to NO_CODON and decodes to null",
       check(`${tag} mode block shares sum to 1`,
             Math.abs(r.share.reduce((a, b) => a + b, 0) - 1) < 1e-9);
     }
-    check("both captions state that synonymous routes are excluded",
-          /Synonymous routes are excluded/.test(bySeq.cap) &&
-          /Synonymous routes are excluded/.test(bySup.cap));
+    // Synonymous routes used to be dropped; they are now a destination block of their own,
+    // because they are a median 21% of a site's supply and were silently missing from it.
+    check("the no-change block is drawn and named",
+          bySeq.labels.some((t) => /no change \(synonymous\)/.test(t)),
+          bySeq.labels.filter((t) => /change|other/.test(t)).join(" | "));
+    check("the left blocks no longer carry a supply percentage",
+          !bySeq.labels.some((t) => /of supply/.test(t)));
+    check("the left blocks still carry a sequence percentage",
+          bySeq.labels.filter((t) => /of sequences/.test(t)).length === bySeq.names.length);
+    // A codon must be drawn in the colour of the residue it encodes, so degenerate codons
+    // match each other and match that residue in the composition bar above.
+    const { residueColour, drawPositionComposition } = await import("../js/batch_view.js");
+    check("AAA and AAG are the same colour, being degenerate for lysine",
+          residueColour("K") === residueColour("K") &&
+          residueColour("K") !== residueColour("N"));
+    const fills = [...bySeq.box.querySelectorAll("rect")]
+      .map((r) => r.getAttribute("fill")).slice(0, bySeq.names.length);
+    const wanted = bySeq.names.map((n) => {
+      const mm = /^([ACGT]{3}) \(([A-Z*])\)/.exec(n);
+      return mm ? residueColour(mm[2]) : null;
+    });
+    check("every codon block is drawn in its residue's colour",
+          wanted.every((c, i) => c === null || c === fills[i]),
+          wanted.map((c, i) => `${bySeq.names[i].trim()}:${c}/${fills[i]}`).join(" "));
+    const cbox = dom.window.document.createElement("div");
+    const ccap = dom.window.document.createElement("div");
+    drawPositionComposition(cbox, ccap, st, { only: "aa" });
+    const cfill = [...cbox.querySelectorAll("rect")].map((r) => r.getAttribute("fill"));
+    check("the composition bar uses the same residue colours as the flow",
+          cfill[0] === residueColour(st.aa_counts[0][0]),
+          `${cfill[0]} vs ${residueColour(st.aa_counts[0][0])}`);
   }
+}
+
+// --- 13. per-site supply statistics ----------------------------------------------------------
+{
+  const aaIdx = buildAaIndex(ref.proteins);
+  const m = makeAaMatrix(1, aaIdx.nPositions);
+  foldAaIntoMatrix(m, 0, engine.customAtlas({ name: "nl43", sequence: ref.sequence,
+    alignment: alignToReference(ref.sequence, ref.sequence) }).paths, aaIdx);
+  const stats = aaPositionStats(m, aaIdx);
+  const all = stats.map((st) => siteSupplyStats(m, st)).filter(Boolean);
+  check("a statistic is returned for essentially every position",
+        all.length > 0.95 * stats.length, `${all.length} of ${stats.length}`);
+  check("fractions are in [0,1] and the two reported ones never exceed 1 together",
+        all.every((s) => s.syn_fraction >= 0 && s.stop_fraction >= 0 &&
+                         s.syn_fraction + s.stop_fraction <= 1 + 1e-9));
+  // exp(H) is bounded by the number of reachable destinations and is at least 1.
+  check("the effective number lies between 1 and the reachable count",
+        all.every((s) => s.effective_destinations >= 1 - 1e-9 &&
+                         s.effective_destinations <= s.n_destinations + 1e-9));
+  check("evenness is exp(H)/k, or null where only one residue is reachable",
+        all.every((s) => s.evenness === null
+          ? s.n_destinations === 1
+          : Math.abs(s.evenness - s.effective_destinations / s.n_destinations) < 1e-9));
+  check("the largest destination share is at least 1/k and at most 1",
+        all.every((s) => s.top_share >= 1 / s.n_destinations - 1e-9 && s.top_share <= 1 + 1e-9));
+  // A site whose supply is concentrated must score near 1, a spread one well above it: if the
+  // statistic did not discriminate it would be useless as a column. The ceiling is lower here
+  // than on a real batch because this is ONE sequence, so every position has a single codon
+  // and at most nine one-step neighbours; a 182-sequence batch pools codons and reaches ~14.
+  const eff = all.map((s) => s.effective_destinations).sort((a, b) => a - b);
+  check("the effective number discriminates across the proteome",
+        eff[0] < 2 && eff[eff.length - 1] > 4,
+        `${eff[0].toFixed(2)} to ${eff[eff.length - 1].toFixed(2)}`);
+  check("a single sequence cannot exceed the nine one-step neighbours of its codon",
+        all.every((s) => s.n_destinations <= 9), Math.max(...all.map((s) => s.n_destinations)));
+  const synMed = all.map((s) => s.syn_fraction).sort((a, b) => a - b)[Math.floor(all.length / 2)];
+  check("synonymous supply is a substantial but not dominant median share",
+        synMed > 0.05 && synMed < 0.5, `${(100 * synMed).toFixed(1)}%`);
 }
 
 console.log("=".repeat(60));

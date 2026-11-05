@@ -713,3 +713,66 @@ export function samplesAtAaPosition(matrix, stat, names, { field = "nonsyn" } = 
   }
   return out;
 }
+
+
+/**
+ * Summary statistics for one position's mutational output.
+ *
+ * WHY AN EFFECTIVE NUMBER RATHER THAN RAW ENTROPY. `effective_destinations` is exp(H) over the
+ * batch-weighted supply to each non-synonymous destination residue. Entropy in bits is hard to
+ * read; its exponential is in natural units -- "this site effectively generates about five
+ * distinct residue changes" -- and it combines richness with evenness in one number, so a site
+ * reaching twelve residues but sending 98% of its supply to one scores near 1, not near 12.
+ * It is the same construction as Wright's effective number of codons, which readers in this
+ * field already know.
+ *
+ * WHY SYNONYMOUS IS EXCLUDED FROM THAT NUMBER BUT REPORTED BESIDE IT. The question exp(H)
+ * answers is how concentrated the PROTEIN-changing output is. Folding synonymous routes in
+ * would make the statistic mostly track the synonymous fraction, which varies over an order of
+ * magnitude between sites (3.8% to 53% across the LANL compendium) and is worth its own
+ * column. Stop codons are likewise kept out of the entropy -- a stop is not one residue
+ * outcome among twenty -- and reported separately.
+ *
+ * Returns null where the position has no residue-changing supply at all.
+ */
+export function siteSupplyStats(matrix, stat) {
+  const byDest = new Map();
+  let syn = 0, stop = 0, nonsyn = 0;
+  for (const [codon, count] of stat.codon_counts) {
+    const d = matrix.destinations.get(stat.position_index + "|" + codon);
+    if (!d) continue;
+    const own = stat.codon_aa.get(codon);
+    const freq = count / stat.n_covered;
+    for (let i = 0; i < AA_ORDER.length; i++) {
+      const v = freq * d[i];
+      if (!(v > 0)) continue;
+      const alt = AA_ORDER[i];
+      if (alt === own) syn += v;
+      else if (alt === "*") stop += v;
+      else { nonsyn += v; byDest.set(alt, (byDest.get(alt) || 0) + v); }
+    }
+  }
+  const total = syn + stop + nonsyn;
+  if (!(total > 0) || !(nonsyn > 0)) return null;
+
+  const ps = [...byDest.values()].map((v) => v / nonsyn);
+  let H = 0;
+  for (const prob of ps) if (prob > 0) H -= prob * Math.log(prob);
+  const k = ps.length;
+  let top = null, topShare = 0;
+  for (const [a, v] of byDest) if (v / nonsyn > topShare) { top = a; topShare = v / nonsyn; }
+
+  return {
+    total_supply: total,
+    nonsyn_supply: nonsyn,
+    syn_fraction: syn / total,
+    stop_fraction: stop / total,
+    n_destinations: k,
+    effective_destinations: Math.exp(H),
+    // Evenness is exp(H)/k: 1 when every reachable residue gets the same supply, towards 0
+    // when one dominates. Null at k = 1, where evenness is undefined rather than perfect.
+    evenness: k > 1 ? Math.exp(H) / k : null,
+    top_destination: top,
+    top_share: topShare,
+  };
+}

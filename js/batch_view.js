@@ -346,13 +346,22 @@ function supDigits(e) {
 }
 
 /** A horizontal stacked-proportion bar: what the batch carries at one position. */
+/**
+ * A stacked proportion bar. `palette` is either an array indexed by slice or, where the colour
+ * carries meaning rather than just separating neighbours, a function of the slice label -- the
+ * residue and codon rows pass a function so that a residue and the codons encoding it come out
+ * the same colour here and in the flow chart.
+ */
 function compositionBar(svg, mk, x, y, w, h, entries, total, palette, labelFmt) {
+  const colourAt = typeof palette === "function"
+    ? (label) => palette(label)
+    : (label, i) => palette[i % palette.length];
   let cx = x;
   entries.forEach(([label, count], i) => {
     const frac = count / total;
     const bw = frac * w;
     svg.appendChild(mk("rect", { x: cx.toFixed(1), y, width: Math.max(bw, 0.6).toFixed(1),
-                                 height: h, fill: palette[i % palette.length],
+                                 height: h, fill: colourAt(label, i),
                                  stroke: "#fff", "stroke-width": 0.6 }));
     // Only label a slice wide enough to hold the text; the rest are in the legend.
     if (bw > 28) {
@@ -364,8 +373,6 @@ function compositionBar(svg, mk, x, y, w, h, entries, total, palette, labelFmt) 
   });
 }
 
-const COMP_PALETTE = ["#0b5c8a", "#2e8b9a", "#6aaa64", "#c2973a", "#c2561a", "#8a4f7d",
-                      "#5c6670", "#b5485d"];
 
 /**
  * What the batch carries at one codon: the residue composition and the codon composition,
@@ -402,7 +409,7 @@ export function drawPositionComposition(container, captionEl, stat, opts = {}) {
                      opts.title || "What the batch carries here"));
   svg.appendChild(mk("text", { x: padLeft - 8, y: 24 + rowH / 2 + 3.5, "text-anchor": "end",
                                "font-size": 10, fill: "#5c6670" }, "amino acid"));
-  compositionBar(svg, mk, padLeft, 24, w, rowH, stat.aa_counts, n, COMP_PALETTE,
+  compositionBar(svg, mk, padLeft, 24, w, rowH, stat.aa_counts, n, residueColour,
                  (l, f) => `${l}  ${(100 * f).toFixed(0)}%`);
   const y2 = 24 + rowH + gap;
   if (aaOnly) {
@@ -430,7 +437,8 @@ export function drawPositionComposition(container, captionEl, stat, opts = {}) {
   // can see at a glance which codon differences are synonymous.
   const withAa = (c) => stat.codon_aa && stat.codon_aa.get(c)
     ? `${c} (${stat.codon_aa.get(c)})` : c;
-  compositionBar(svg, mk, padLeft, y2, w, rowH, stat.codon_counts, n, COMP_PALETTE,
+  compositionBar(svg, mk, padLeft, y2, w, rowH, stat.codon_counts, n,
+                 (codon) => residueColour(stat.codon_aa.get(codon)),
                  (l, f) => `${withAa(l)}  ${(100 * f).toFixed(0)}%`);
   // Full legends under each bar, since narrow slices carry no inline label.
   svg.appendChild(mk("text", { x: padLeft, y: 24 + rowH + 14, "font-size": 9, fill: "#5c6670" },
@@ -457,6 +465,36 @@ export function drawPositionComposition(container, captionEl, stat, opts = {}) {
   return true;
 }
 
+
+// ---------------------------------------------------------------------------------
+/**
+ * One colour per amino acid, used everywhere a residue or a codon appears on this page.
+ *
+ * Keyed on the RESIDUE, so a codon takes the colour of what it encodes and degenerate codons
+ * are necessarily the same colour -- AAA and AAG are both lysine and both read as lysine at a
+ * glance. The composition bar and the flow chart share this map, so a residue in one is the
+ * same colour as the codons encoding it in the other.
+ *
+ * The assignment is fixed rather than order-of-appearance: a residue keeps its colour between
+ * positions, so moving the marker does not recolour the figure under the reader. Chemically
+ * similar residues are deliberately NOT grouped -- the question here is identity, not
+ * property, and property-grouped schemes make the common case (telling two destinations apart)
+ * harder.
+ */
+const AA_COLOUR = {
+  A: "#0b5c8a", R: "#c2561a", N: "#2e8b9a", D: "#8a4f7d", C: "#6aaa64",
+  E: "#b5485d", Q: "#3f7fa8", G: "#c2973a", H: "#7a5ea8", I: "#2f8f6f",
+  L: "#a8553a", K: "#1f6fb2", M: "#9c6b2f", F: "#4a7d3a", P: "#b03a6b",
+  S: "#2a9d8f", T: "#846a3c", V: "#5566b5", W: "#7d4a2a", Y: "#3d8ab5",
+};
+const STOP_COLOUR = "#8c1d33";      // a stop is an outcome, not a residue: kept visually apart
+const NEUTRAL_COLOUR = "#9aa4ae";   // pooled blocks and the no-change block
+
+/** The colour for a residue, falling back to neutral for stops, pools and unknowns. */
+export function residueColour(aa) {
+  if (aa === "*") return STOP_COLOUR;
+  return AA_COLOUR[aa] || NEUTRAL_COLOUR;
+}
 
 /**
  * Where this position's residue change comes from and where it goes: codons on the left,
@@ -487,9 +525,12 @@ export function drawPositionComposition(container, captionEl, stat, opts = {}) {
  * happens AFTER each codon's synonymous routes are removed, because the pooled codons do not
  * all encode the same residue and "synonymous" would otherwise be ill-defined.
  *
- * SYNONYMOUS ROUTES ARE EXCLUDED throughout. They are often the largest rate at a position
- * (AAG->AAA is a G->A transition at ~1e-3) and would swamp every residue-changing band while
- * saying nothing about where the protein can go. The per-position table carries them.
+ * SYNONYMOUS ROUTES ARE INCLUDED, as one destination block rather than scattered among the
+ * residues. A synonymous change from AAA and one from GGT have nothing in common except that
+ * neither alters the protein, so pooling them is semantically exact in a way that pooling two
+ * different residues would not be. They are a median 21% of a site's supply across the LANL
+ * compendium and range from 4% to 53%, so leaving them out understated how much of what a
+ * position generates never reaches the protein.
  */
 export function drawSupplyFlow(container, captionEl, stat, matrix, opts = {}) {
   container.innerHTML = "";
@@ -508,8 +549,11 @@ export function drawSupplyFlow(container, captionEl, stat, matrix, opts = {}) {
     let tot = 0;
     for (let i = 0; i < AA_ORDER.length; i++) {
       const alt = AA_ORDER[i];
-      if (alt === own || !(d[i] > 0)) continue;
-      m.set(alt, d[i]);
+      if (!(d[i] > 0)) continue;
+      // Every synonymous route lands in one block: what they share is that the protein does
+      // not change, not the residue they happen to preserve.
+      const key = alt === own ? SYNONYMOUS : alt;
+      m.set(key, (m.get(key) || 0) + d[i]);
       tot += d[i];
     }
     if (m.size && tot > 0) raw.set(codon, { m, tot });
@@ -561,8 +605,13 @@ export function drawSupplyFlow(container, captionEl, stat, matrix, opts = {}) {
   // Keep the largest destinations and pool the tail, or the bands become hairlines.
   const limit = opts.limit || 8;
   let order = [...dTotal.entries()].sort((a, b) => b[1] - a[1]).map(([a]) => a);
-  const tail = order.slice(limit);
-  order = order.slice(0, limit);
+  // The no-change block always keeps its own row: it is the one destination a reader needs to
+  // see whatever its size, and pooling it into "other" would merge it with residue changes.
+  const hasSyn = order.includes(SYNONYMOUS);
+  order = order.filter((a) => a !== SYNONYMOUS);
+  const tail = order.slice(limit - (hasSyn ? 1 : 0));
+  order = order.slice(0, limit - (hasSyn ? 1 : 0));
+  if (hasSyn) order.unshift(SYNONYMOUS);
   if (tail.length) {
     const pooled = new Set(tail);
     for (const m of flows.values()) {
@@ -580,6 +629,12 @@ export function drawSupplyFlow(container, captionEl, stat, matrix, opts = {}) {
   const supplyTotal = [...supplyOf.values()].reduce((t, v) => t + v, 0);
   const live = codons.filter((c) => flows.has(c) && cTotal.get(c) > 0)
     .concat(flows.has(OTHER_CODONS) && cTotal.get(OTHER_CODONS) > 0 ? [OTHER_CODONS] : []);
+
+  // A codon is drawn in the colour of the residue it encodes, so degenerate codons share one
+  // colour and match that residue in the composition bar above. The pooled block spans several
+  // residues and so takes the neutral colour rather than any one of them.
+  const bandColour = (c) =>
+    c === OTHER_CODONS ? NEUTRAL_COLOUR : residueColour(stat.codon_aa.get(c));
 
   const width = opts.width || LAYOUT.width;
   const padTop = 34, padBottom = 14;
@@ -641,8 +696,7 @@ export function drawSupplyFlow(container, captionEl, stat, matrix, opts = {}) {
                 `${xb},${y1.toFixed(1)} L${xb},${(y1 + hR).toFixed(1)} ` +
                 `C${xm},${(y1 + hR).toFixed(1)} ${xm},${(y0 + hL).toFixed(1)} ` +
                 `${xa},${(y0 + hL).toFixed(1)} Z`;
-      svg.appendChild(mk("path", { d, fill: FLOW_PALETTE[ci % FLOW_PALETTE.length],
-                                   "fill-opacity": 0.42 }));
+      svg.appendChild(mk("path", { d, fill: bandColour(c), "fill-opacity": 0.42 }));
     }
   });
 
@@ -650,8 +704,7 @@ export function drawSupplyFlow(container, captionEl, stat, matrix, opts = {}) {
     const [y0, y1] = cy.get(c);
     svg.appendChild(mk("rect", { x: xL, y: y0.toFixed(1), width: BW,
                                  height: (y1 - y0).toFixed(1),
-                                 fill: FLOW_PALETTE[ci % FLOW_PALETTE.length],
-                                 "fill-opacity": 0.9 }));
+                                 fill: bandColour(c), "fill-opacity": 0.9 }));
     const mid = (y0 + y1) / 2;
     const isPool = c === OTHER_CODONS;
     svg.appendChild(mk("text", { x: xL - 10, y: mid - 2, "text-anchor": "end", "font-size": 11,
@@ -659,18 +712,18 @@ export function drawSupplyFlow(container, captionEl, stat, matrix, opts = {}) {
                        isPool ? `${pooledCodons} rarer codons`
                               : `${c} (${stat.codon_aa.get(c)})` +
                                 (c === opts.refCodon ? "  \u25c0 NL4-3" : "")));
-    // Both numbers on every block, in both modes: their gap is the thing worth seeing.
     svg.appendChild(mk("text", { x: xL - 10, y: mid + 11, "text-anchor": "end", "font-size": 9,
                                  fill: "#5c6670" },
-                       `${(100 * freqOf.get(c)).toFixed(0)}% of sequences \u2192 ` +
-                       `${(100 * supplyOf.get(c) / supplyTotal).toFixed(0)}% of supply`));
+                       `${(100 * freqOf.get(c)).toFixed(0)}% of sequences`));
   });
   for (const a of order) {
     const [y0, y1] = dy.get(a);
+    const dCol = (a === OTHER || a === SYNONYMOUS) ? NEUTRAL_COLOUR : residueColour(a);
     svg.appendChild(mk("rect", { x: xR - BW, y: y0.toFixed(1), width: BW,
-                                 height: (y1 - y0).toFixed(1), fill: "#5c6670",
-                                 "fill-opacity": 0.55 }));
-    const label = a === OTHER ? "other" : a === "*" ? "stop" : a;
+                                 height: (y1 - y0).toFixed(1), fill: dCol,
+                                 "fill-opacity": 0.75 }));
+    const label = a === OTHER ? "other" : a === SYNONYMOUS ? "no change (synonymous)"
+                : a === "*" ? "stop" : a;
     svg.appendChild(mk("text", { x: xR + 10, y: (y0 + y1) / 2 + 4, "font-size": 11 },
                        `${label}   ${(100 * dTotal.get(a) / total).toFixed(0)}%`));
   }
@@ -682,8 +735,6 @@ export function drawSupplyFlow(container, captionEl, stat, matrix, opts = {}) {
     const f = freqOf.get(c), share = supplyOf.get(c) / supplyTotal;
     if (!lead || share - f > lead.gap) lead = { codon: c, f, share, gap: share - f };
   }
-  const topDest = order[0];
-  const dName = (a) => a === OTHER ? "the pooled remainder" : a === "*" ? "a stop codon" : a;
   captionEl.innerHTML =
     (mode === "supply"
       ? `Band width is a codon's frequency multiplied by its rate to that residue, so a left ` +
@@ -696,10 +747,21 @@ export function drawSupplyFlow(container, captionEl, stat, matrix, opts = {}) {
         `sequences but accounts for <strong>${(100 * lead.share).toFixed(0)}%</strong> of what ` +
         `this position generates. `
       : `Supply is spread across the codons roughly in proportion to how common they are. `) +
-    `Most goes to <strong>${dName(topDest)}</strong> ` +
-    `(${(100 * dTotal.get(topDest) / total).toFixed(0)}%). ` +
-    `Synonymous routes are excluded: they are often the largest rate at a position and would ` +
-    `swamp the rest without saying anything about where the protein can go.` +
+    // Deliberately the supply fraction from siteSupplyStats, not this chart's own synonymous
+    // band share: in "sequences" weighting a band is a per-codon proportion, so its share is a
+    // mean of proportions and would read differently from the same quantity in the table and
+    // the readout. One number for one thing, whichever weighting is on screen.
+    (opts.stats
+      ? `<strong>${(100 * opts.stats.syn_fraction).toFixed(0)}%</strong> of the supply here is ` +
+        `synonymous and never reaches the protein. `
+      : "") +
+    (opts.stats
+      ? `Across the residue changes, the supply is spread over the equivalent of ` +
+        `<strong>${opts.stats.effective_destinations.toFixed(1)}</strong> residues ` +
+        `(exp of the entropy; ${opts.stats.n_destinations} are reachable at all), with ` +
+        `${(100 * opts.stats.top_share).toFixed(0)}% of it going to ` +
+        `<strong>${opts.stats.top_destination}</strong>. `
+      : "") +
     (tail.length ? ` The ${tail.length} smallest destinations are pooled as "other".` : "") +
     (pooledCodons
       ? ` ${pooledCodons} codons each under ${(100 * minFreq).toFixed(0)}% of the batch are ` +
@@ -710,6 +772,5 @@ export function drawSupplyFlow(container, captionEl, stat, matrix, opts = {}) {
 }
 
 const OTHER = "\u2014other\u2014";
+const SYNONYMOUS = "\u2014synonymous\u2014";
 const OTHER_CODONS = "\u2014other codons\u2014";
-const FLOW_PALETTE = ["#0b5c8a", "#2e8b9a", "#c2973a", "#c2561a", "#6aaa64", "#8a4f7d",
-                      "#5c6670", "#b5485d"];

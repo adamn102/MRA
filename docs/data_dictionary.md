@@ -236,3 +236,22 @@ When present: `gene`, `protein`, `protein_position`, `codon`, `lanl_fraction`,
 `n_sequences`, `alignment_version`. Adds circulating-codon-usage weighting to the
 codon-sensitivity view. Absent in v0.1; the weighted columns show an em dash. See
 `scripts/build_lanl_codon_frequencies.py`.
+
+### Per-site supply statistics (batch analysis)
+
+Computed per codon position from the batch-frequency-weighted supply to each destination
+residue. Written by `siteSupplyStats()` in `js/batch_core.js`.
+
+| column | meaning |
+| --- | --- |
+| `syn_fraction` | share of the position's one-step supply that leaves the residue unchanged |
+| `stop_fraction` | share that introduces a stop codon |
+| `n_destinations` | distinct residues reachable in one substitution (richness) |
+| `effective_destinations` | exp of the Shannon entropy of the residue-changing supply: the effective number of destination residues. 1 when a single change takes essentially all of it; equal to `n_destinations` when the supply is spread evenly. Same construction as Wright's effective number of codons. |
+| `evenness` | `effective_destinations / n_destinations`, in (0,1]; null where only one residue is reachable |
+| `top_destination`, `top_share` | the residue taking the largest share of the residue-changing supply, and that share |
+
+Synonymous and stop routes are excluded from the entropy and reported as their own fractions:
+the entropy answers how concentrated the *protein-changing* output is, and folding the
+synonymous part in would make it mostly track `syn_fraction`, which varies independently
+(across the LANL group M compendium the two correlate only r = 0.43).

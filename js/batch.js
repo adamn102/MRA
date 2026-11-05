@@ -24,7 +24,8 @@ import { renderTable, formatRate, toCsv, downloadText } from "./table.js";
 import { MraEngine } from "./mra_engine.js";
 import { batchSiteStats, topDivergentSites, perSampleSummary,
          buildAaIndex, aaPositionStats, weightedDestinationSupply, codonSensitivity,
-         samplesAtAaPosition, perSampleRates, MUT_TYPES } from "./batch_core.js";
+         samplesAtAaPosition, siteSupplyStats, perSampleRates, MUT_TYPES }
+  from "./batch_core.js";
 import { drawMutabilityTrack, drawMutabilityDivergenceTrack,
          drawPositionComposition, drawSupplyFlow } from "./batch_view.js";
 import { geneSegments, targetFor as targetForIn } from "./explore_core.js";
@@ -368,6 +369,7 @@ function drawSite(label) {
   }
   const refCodon = refCodonFor(stat);
   const sens = codonSensitivity(BATCH.aaMatrix, stat);
+  const sstats = siteSupplyStats(BATCH.aaMatrix, stat);
   head.appendChild(note(
     `<strong>${label}</strong> &middot; NL4-3 ${stat.protein} ${stat.position} ` +
     `&middot; codon starts at nt ${stat.nt_start.toLocaleString()}` +
@@ -378,7 +380,13 @@ function drawSite(label) {
         `<strong>${sens.fold_range.toFixed(1)}-fold</strong>, with ` +
         `${(100 * sens.fraction_on_fastest).toFixed(0)}% of samples on the highest-supply codon.`
       : `; every covering sample carries the same codon, so there is no codon sensitivity ` +
-        `to report here.`)));
+        `to report here.`) +
+    (sstats
+      ? ` <strong>${(100 * sstats.syn_fraction).toFixed(0)}%</strong> of the supply here is ` +
+        `synonymous; the residue-changing part is spread over the equivalent of ` +
+        `<strong>${sstats.effective_destinations.toFixed(1)}</strong> of its ` +
+        `${sstats.n_destinations} reachable residues.`
+      : "")));
 
   // What the batch carries, as a single strip. Only the residue row: the codon composition is
   // the flow chart's own left column, and showing it twice is what made this section hard to
@@ -389,8 +397,8 @@ function drawSite(label) {
   // so the left column is each codon's share of SUPPLY rather than of sequences -- the gap
   // between those two numbers is the point of compiling a batch at all.
   drawSupplyFlow(el("codon-chart"), el("codon-caption"), stat, BATCH.aaMatrix,
-                 { refCodon, weight: el("flow-weight").value,
-                   title: `Where residue change at ${label} comes from, and where it goes` });
+                 { refCodon, weight: el("flow-weight").value, stats: sstats,
+                   title: `Where mutation at ${label} goes` });
   renderSiteSampleTable(stat, label, refCodon);
 
   // Keep the coordinate box in step with a track click.
@@ -561,7 +569,15 @@ function batchProvenance() {
 function siteRows() {
   return AA_STATS.map((r) => {
     const sens = codonSensitivity(BATCH.aaMatrix, r);
+    const ss = siteSupplyStats(BATCH.aaMatrix, r);
     return {
+      syn_fraction: ss ? ss.syn_fraction : null,
+      stop_fraction: ss ? ss.stop_fraction : null,
+      n_destinations: ss ? ss.n_destinations : null,
+      effective_destinations: ss ? ss.effective_destinations : null,
+      evenness: ss && ss.evenness !== null ? ss.evenness : null,
+      top_destination: ss ? ss.top_destination : "",
+      top_share: ss ? ss.top_share : null,
       protein: r.protein,
       hxb2_label: engine.hxb2Label(r.protein, r.position),
       nl43_position: r.position,
@@ -601,6 +617,16 @@ function renderBatchTable() {
       { key: "codon_fold_range", label: "Codon fold range", type: "num",
         render: (r) => r.codon_fold_range === null ? "\u2014"
                                                    : r.codon_fold_range.toFixed(2) },
+      { key: "syn_fraction", label: "syn share", type: "num",
+        title: "Fraction of this site's supply that does not change the residue",
+        render: (r) => r.syn_fraction === null ? "\u2014"
+                     : (100 * r.syn_fraction).toFixed(0) + "%" },
+      { key: "effective_destinations", label: "eff. residues", type: "num",
+        title: "exp(entropy) of the residue-changing supply \u2014 the effective number of " +
+               "destination residues. Near 1 when one change takes almost all of it; near " +
+               "the reachable count when the supply is spread evenly.",
+        render: (r) => r.effective_destinations === null ? "\u2014"
+                     : r.effective_destinations.toFixed(1) },
       { key: "divergence", label: "log2(max/min)", type: "num",
         render: (r) => r.divergence === null ? "\u2014" : r.divergence.toFixed(3) },
     ],
@@ -725,7 +751,9 @@ el("download-all").addEventListener("click", () => {
              "majority_aa", "majority_aa_freq", "n_aa", "entropy",
              "majority_codon", "majority_codon_freq", "n_codons",
              "mutability_median", "mutability_min", "mutability_max",
-             "codon_fold_range", "fraction_on_fastest_codon", "divergence"));
+             "codon_fold_range", "fraction_on_fastest_codon", "divergence",
+             "syn_fraction", "stop_fraction", "n_destinations", "effective_destinations",
+             "evenness", "top_destination", "top_share"));
   // Where the supply goes, one row per (position, destination residue), weighted by the
   // batch's own codon frequencies. This is the block a reader needs to reproduce a
   // population-weighted rate for a specific amino-acid change.
