@@ -330,8 +330,10 @@ function renderInteractiveView(slot, detail, row) {
       marker: markerNt,
       markerLabel: selected ? engine.hxb2Label(selected.protein, selected.geneAa) : String(markerNt),
       variants,
-      title: `Smoothed supply along ${row.name}`,
+      title: `Smoothed supply along ${row.name}, with NL4-3 overlaid`,
+      label: shortName(row.name),
       source: "computed from the codons and 3\u2032 context in your sequence, not from NL4-3",
+      refPerSite: referenceAtlas().perSite,
       statsEl: statsSlot,
       refBase: baseAt.get(markerNt),      // the base in YOUR sequence, not NL4-3
       onSelect: (pos) => selectNt(pos),
@@ -471,22 +473,31 @@ function renderInteractiveView(slot, detail, row) {
 // it once from the reference's OWN custom atlas: the round-trip guarantee makes that identical
 // to the published layer, and it is computed in-browser from assets already loaded. Cached so a
 // batch of sequences pays the cost once.
-let _refByPosition = null;
-function refByPosition() {
-  if (_refByPosition) return _refByPosition;
+/** A legend-length name: FASTA headers are routinely 40 characters and sit at the line end. */
+function shortName(name) {
+  const n = String(name || "your sequence").trim();
+  return n.length <= 18 ? n : n.slice(0, 17) + "\u2026";
+}
+
+let _refCache = null;
+function referenceAtlas() {
+  if (_refCache) return _refCache;
   const seq = assets.reference.sequence;
   const refAtlas = engine.customAtlas({
     name: "NL4-3", sequence: seq, alignment: alignToReference(seq, seq) });
-  const m = new Map();
+  const byPosition = new Map();
   for (const r of refAtlas.aa) {
     const key = r.protein + "|" + r.position;
-    let list = m.get(key);
-    if (!list) m.set(key, (list = []));
+    let list = byPosition.get(key);
+    if (!list) byPosition.set(key, (list = []));
     list.push(r);
   }
-  _refByPosition = m;
-  return m;
+  // The nucleotide layer costs nothing extra here -- the atlas is already built -- and it is
+  // what the genome track overlays as the NL4-3 comparison line.
+  _refCache = { byPosition, perSite: perSiteSupply(groupByPosition(refAtlas.nt), "rate") };
+  return _refCache;
 }
+function refByPosition() { return referenceAtlas().byPosition; }
 
 /** "Where your codons differ from NL4-3" -- reachability reshaped by codon identity. */
 function renderCodonDifferences(slot, detail, row, geom) {

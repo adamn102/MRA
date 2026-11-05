@@ -43,6 +43,76 @@ function viewFor(seq) {
 }
 
 console.log(`\nSequence-tab genome track, atlas ${V}`);
+// --- the NL4-3 overlay on the submitted-sequence track ---------------------------------------
+// drawSupplyTrack needs a DOM, so this group skips where jsdom is absent. What it guards is
+// comparability: the reference line must be smoothed over the SAME positions as the
+// submission, or a partial amplicon gets compared against a whole-genome curve and the two
+// lines mean different things at the same x.
+{
+  let JSDOM = null;
+  for (const spec of ["jsdom", "/tmp/domtest/node_modules/jsdom/lib/api.js"]) {
+    try { ({ JSDOM } = await import(spec)); break; } catch { /* try the next */ }
+  }
+  if (!JSDOM) {
+    console.log("  skip  jsdom not found - NL4-3 overlay checks skipped");
+  } else {
+    const dom = new JSDOM("<!DOCTYPE html><body></body>");
+    globalThis.window = dom.window; globalThis.document = dom.window.document;
+    const { drawSupplyTrack } = await import("../js/track_view.js");
+    const { geneSegments } = await import("../js/explore_core.js");
+
+    const REGION = J("manifest.json").model.modelled_region
+      || { first_position: 1, last_position: reference.sequence.length };
+    const refOut = engine.customAtlas({ name: "NL4-3", sequence: reference.sequence,
+      alignment: alignToReference(reference.sequence, reference.sequence) });
+    const refPerSite = perSiteSupply(groupByPosition(refOut.nt), "rate");
+
+    const draw = (seq, withRef) => {
+      const out = engine.customAtlas({ name: "q", sequence: seq,
+        alignment: alignToReference(seq, reference.sequence) });
+      const perSite = perSiteSupply(groupByPosition(out.nt), "rate");
+      const sites = [...perSite.keys()].sort((a, b) => a - b);
+      const box = dom.window.document.createElement("div");
+      const stats = dom.window.document.createElement("div");
+      const cap = drawSupplyTrack(box, {
+        perSite, sites, win: 151, cls: "total", segments: geneSegments(reference.proteins),
+        first: REGION.first_position, last: REGION.last_position,
+        marker: sites[Math.floor(sites.length / 2)], markerLabel: "mid",
+        statsEl: stats, source: "test",
+        refPerSite: withRef ? refPerSite : undefined,
+      });
+      const paths = [...box.querySelectorAll("path")];
+      return { box, stats, cap, sites,
+               dashed: paths.filter((x) => x.getAttribute("stroke-dasharray")).length,
+               labels: [...box.querySelectorAll("text")].map((t) => t.textContent) };
+    };
+
+    // A partial amplicon is the case that would break if the reference were drawn whole.
+    const amplicon = reference.sequence.slice(1999, 4300);
+    const withRef = draw(amplicon, true);
+    const without = draw(amplicon, false);
+
+    check("the overlay adds exactly one dashed series", withRef.dashed === 1, withRef.dashed);
+    check("no overlay is drawn when no reference is supplied", without.dashed === 0);
+    check("the overlay is labelled NL4-3", withRef.labels.includes("NL4-3"));
+    check("the caption explains the dashed line",
+          /dashed grey line/.test(withRef.cap) && !/dashed grey line/.test(without.cap));
+    check("the overlay adds the marker comparison rows",
+          /NL4-3 at the marker/.test(withRef.stats.textContent) &&
+          /\u00f7 NL4-3/.test(withRef.stats.textContent));
+    check("those rows are absent without an overlay",
+          !/NL4-3 at the marker/.test(without.stats.textContent));
+    // The reference self-atlas reproduces the reference, so NL4-3 against itself must sit
+    // exactly on the overlay -- any offset here means the two series are misaligned.
+    const self = draw(reference.sequence, true);
+    const ratioRow = /Your sequence \u00f7 NL4-3<\/td><td class="num">([^<]+)/.exec(
+      self.stats.innerHTML);
+    check("NL4-3 submitted against itself gives a ratio of exactly 1",
+          ratioRow && /^[\u00d7\u00f7]1\.00$/.test(ratioRow[1]),
+          ratioRow ? ratioRow[1] : "row not found");
+  }
+}
+
 console.log("=".repeat(60));
 
 // --- 1. the reference itself has no differences -------------------------------------

@@ -274,8 +274,12 @@ export function genomeTrack(container, series, options = {}) {
     const pts = s.points.filter((p) => p[1] > 0 && p[0] >= x0 && p[0] <= x1);
     if (!pts.length) continue;
     const d = pts.map((p, i) => (i ? "L" : "M") + sx(p[0]).toFixed(1) + " " + sy(p[1]).toFixed(1)).join(" ");
-    svg.appendChild(el("path", { d, fill: "none", stroke: s.colour || "#0b5c8a",
-                                 "stroke-width": s.width || 1, "stroke-opacity": s.opacity || 1 }));
+    const attrs = { d, fill: "none", stroke: s.colour || "#0b5c8a",
+                    "stroke-width": s.width || 1, "stroke-opacity": s.opacity || 1 };
+    // A dashed series reads as a comparator rather than a measurement, which is what the
+    // NL4-3 overlay on the sequence page is.
+    if (s.dash) attrs["stroke-dasharray"] = s.dash;
+    svg.appendChild(el("path", attrs));
     const last = pts[pts.length - 1];
     svg.appendChild(el("text", { x: padLeft + plotW + 6, y: sy(last[1]) + 3.5, "font-size": 10,
                                  fill: s.colour || "#0b5c8a" }, s.label));

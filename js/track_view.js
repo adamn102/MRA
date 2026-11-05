@@ -42,9 +42,24 @@ const CLASS_COLOUR = { total: "#2f4b7c", nonga: "#3f8f7a", ga: "#c2561a" };
  */
 export function drawSupplyTrack(container, o) {
   const pts = smoothSeries(o.sites, o.perSite, o.cls, o.win);
-  genomeTrack(container, [
-    { label: CLASS_LABEL[o.cls], colour: CLASS_COLOUR[o.cls], points: pts, width: 1.1 },
-  ], {
+  const series = [
+    { label: o.label || CLASS_LABEL[o.cls], colour: CLASS_COLOUR[o.cls], points: pts, width: 1.1 },
+  ];
+  // NL4-3 OVERLAY. Drawn on exactly the sites the submission covers, not on the whole
+  // reference: the smoothing window must contain the same positions in both series or the
+  // two lines are not comparable point for point, and a partial amplicon would otherwise be
+  // set against a whole-genome curve. Dashed and grey so the submission reads as the subject
+  // and the reference as the comparator.
+  let refPts = null;
+  if (o.refPerSite) {
+    const shared = o.sites.filter((p) => o.refPerSite.has(p));
+    if (shared.length >= 3) {
+      refPts = smoothSeries(shared, o.refPerSite, o.cls, o.win);
+      series.push({ label: "NL4-3", colour: "#8a94a0", points: refPts, width: 1.0,
+                    dash: "4 3", opacity: 0.95 });
+    }
+  }
+  genomeTrack(container, series, {
     title: o.title || `Smoothed ${CLASS_LABEL[o.cls]} along the genome`,
     xMin: o.first, xMax: o.last, geneBand: o.segments,
     width: o.width || LAYOUT.width, height: o.height || 320,
@@ -64,16 +79,45 @@ export function drawSupplyTrack(container, o) {
     ? ` Only ${covered.toLocaleString()} of ${(o.last - o.first + 1).toLocaleString()} ` +
       `reference positions are covered by this sequence; the rest of the axis is blank.`
     : "";
-  if (o.statsEl) renderTrackStats(o.statsEl, trackStats({
-    vals, med, at, site, cls: o.cls, win: o.win, marker: o.marker, refBase: o.refBase,
-  }));
+  if (o.statsEl) {
+    const rows = trackStats({
+      vals, med, at, site, cls: o.cls, win: o.win, marker: o.marker, refBase: o.refBase,
+    });
+    // Where the two lines sit close together the eye cannot separate them, so the comparison
+    // is also given as a number at the marker.
+    if (refPts) {
+      const refAt = refPts.find((p) => p[0] >= o.marker);
+      if (at && refAt && refAt[1] > 0) {
+        const ratio = at[1] / refAt[1];
+        rows.push({ label: "NL4-3 at the marker", value: formatRate(refAt[1]),
+                    note: "the reference's own rate over the same positions and window" });
+        rows.push({
+          label: "Your sequence \u00f7 NL4-3",
+          value: (ratio >= 1 ? "\u00d7" : "\u00f7") +
+                 (ratio >= 1 ? ratio : 1 / ratio).toFixed(2),
+          note: Math.abs(Math.log2(ratio)) < 0.05
+            ? "within 3% \u2014 the codons and contexts here are effectively the reference's"
+            : (ratio > 1 ? "this window generates more change than NL4-3 does"
+                         : "this window generates less change than NL4-3 does"),
+        });
+      }
+    }
+    renderTrackStats(o.statsEl, rows);
+  }
 
   return `Centred running mean of the per-site rate over a ${o.win} nt window, summed across ` +
     `substitution classes${o.cls === "total" ? "" : " and restricted to " + CLASS_LABEL[o.cls]}. ` +
-    `Rates are ${o.source}. Insertions and deletions are excluded. The band above the plot ` +
-    `shows coding segments; overlapping reading frames sit on separate rows, and spliced ` +
-    `genes (tat, rev) appear as one box per exon, with the gene holding the marker filled ` +
-    `solid.` + spanNote;
+    `Rates are ${o.source}. Insertions and deletions are excluded. ` +
+    (refPts
+      ? `The dashed grey line is <strong>NL4-3</strong> over the same positions and the same ` +
+        `window, so the two are comparable point for point. They coincide wherever your ` +
+        `codons and 3\u2032 contexts match the reference, which for a close relative is most ` +
+        `of the genome \u2014 the gaps between them are the whole of what your sequence ` +
+        `changes about mutational supply. `
+      : "") +
+    `The band above the plot shows coding segments; overlapping reading frames sit on ` +
+    `separate rows, and spliced genes (tat, rev) appear as one box per exon, with the gene ` +
+    `holding the marker filled solid.` + spanNote;
 }
 
 /**
