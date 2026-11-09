@@ -59,7 +59,7 @@ check("a release-less stamp is still a sentence, not 'undefined'",
 console.log("The shipped pages declare a name for every figure");
 // index.html is the landing page and carries the browse figures; browse.html is now a
 // redirect stub with no figures of its own.
-for (const page of ["batch.html", "index.html"]) {
+for (const page of ["index.html"]) {
   const html = fs.readFileSync(path.join(REPO, page), "utf8");
   // Match any figure whose class list contains "chart", not the exact attribute: the landing
   // page's track is class="chart plot-card" now that the figures are bordered cards. A

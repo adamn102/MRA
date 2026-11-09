@@ -693,7 +693,7 @@ export function drawSupplyFlow(container, captionEl, stat, matrix, opts = {}) {
   // Title, subtitle and the two column headings are drawn only where the caller asks for a
   // title. A figure with its own heading and caption does not need them repeated inside the
   // plot, and on a narrow figure they are the first thing to collide; the caption carries
-  // them instead. The batch tab passes a title and keeps the full set.
+  // them instead. A caller that passes a title and leaves subtitle on gets the full set.
   if (showTitle) {
     svg.appendChild(mk("text", { x: 0, y: 13, "font-size": 12 }, opts.title));
   }
@@ -779,10 +779,9 @@ export function drawSupplyFlow(container, captionEl, stat, matrix, opts = {}) {
     const f = freqOf.get(c), share = supplyOf.get(c) / supplyTotal;
     if (!lead || share - f > lead.gap) lead = { codon: c, f, share, gap: share - f };
   }
-  // describeColumns is the dashboard (Browse and Your Sequence). Those pages have no
-  // weighting toggle, and the two columns are different quantities: the left is the LANL
-  // frequency, the right is that frequency times each codon's pie. The batch tab keeps the
-  // toggle and the wording that goes with it.
+  // describeColumns is Browse and Your Sequence. Those pages size the two columns
+  // differently: the left is the LANL frequency, the right is that frequency times each
+  // codon's pie. Callers that omit it keep the older supply-versus-frequency wording.
   const opening = opts.describeColumns
     ? `Left blocks are the LANL codon frequency only. Right blocks are relative supply: ` +
       `codon frequency multiplied by that codon's fraction of its one-step changes. `

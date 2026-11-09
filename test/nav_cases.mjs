@@ -82,6 +82,7 @@ const STUBS = [
   ["download.html", "js/reference_redirect.js", "reference.html"],
   ["compare.html", "js/compare_redirect.js", "sequence.html"],
   ["explore.html", "js/explore_redirect.js", "index.html"],
+  ["batch.html", "js/batch_redirect.js", "sequence.html"],
 ];
 for (const [stub, module, target] of STUBS) {
   check(`${stub} exists`, fs.existsSync(path.join(REPO, stub)));

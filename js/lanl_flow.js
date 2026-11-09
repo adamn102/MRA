@@ -2,11 +2,10 @@
 //
 // lanl_flow.js -- the precomputed LANL batch, reshaped into what drawSupplyFlow expects.
 //
-// The supply-flow chart was built for the batch tab, where the visitor has just submitted an
-// alignment and the batch is in memory. "Browse the atlas" has no batch, and running one on
-// the landing page would cost ~28 s of alignment before anything could be drawn. So the batch
-// over the 182 LANL group M compendium genomes is run once at build time
-// (scripts/build_lanl_flow.mjs) and only its end results ship.
+// The supply-flow chart reads a precomputed batch. Running that batch in the browser would
+// cost ~28 s of alignment before anything could be drawn, so the 182 LANL group M compendium
+// genomes are run once at build time (scripts/build_lanl_flow.mjs) and only the end results
+// ship.
 //
 // This module turns that file back into the two objects the chart reads -- a per-position
 // `stat` and a `matrix` carrying destination rates -- so drawSupplyFlow is the same function
@@ -55,7 +54,7 @@ export function loadLanlFlow(version) {
  *
  * `position_index` is set to 0 and the matrix holds only this position: the chart keys its
  * destination lookups on `position_index + "|" + codon`, so a single-position matrix is a
- * complete and much smaller input than the batch tab's full one. The chart cannot tell the
+ * complete and much smaller input than a full-genome matrix. The chart cannot tell the
  * difference, which is the point.
  */
 export function lanlFlowAt(index, protein, position) {

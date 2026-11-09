@@ -36,8 +36,9 @@
 // one of them selected for the pie and the flow chart.
 // v10: the dashboard flow chart sizes its left column by LANL codon frequency and its
 // right column by relative supply (frequency times that codon's pie).
+// v11: Batch analysis is gone. batch.html is a redirect stub; js/batch.js is not in the shell.
 // Without a bump a returning reader keeps the previous shell from cache.
-const CACHE = "mra-portal-v10";
+const CACHE = "mra-portal-v11";
 
 // Curated annotation overlays: under a version directory, but revised over time rather than
 // frozen. Served network-first with the HTTP cache bypassed, so an edit is never masked by an
@@ -45,11 +46,11 @@ const CACHE = "mra-portal-v10";
 const MUTABLE_OVERLAYS = /\/(bnab_catalog|drm_catalog)\.csv$/;
 
 const SHELL = [
-  // The five live pages, then the redirect stubs for addresses that have moved. A stub is
+  // The four live pages, then the redirect stubs for addresses that have moved. A stub is
   // cheap and must stay cached: an offline reader following an old bookmark should still be
   // forwarded rather than meeting a blank page.
-  "./", "./index.html", "./tables.html", "./sequence.html", "./batch.html", "./reference.html",
-  "./browse.html", "./compare.html", "./download.html", "./drm.html", "./explore.html",
+  "./", "./index.html", "./tables.html", "./sequence.html", "./reference.html",
+  "./batch.html", "./browse.html", "./compare.html", "./download.html", "./drm.html", "./explore.html",
   "./css/mra.css", "./vendor/html2canvas/html2canvas.min.js",
   "./js/version.js", "./js/page.js", "./js/data.js", "./js/table.js", "./js/chart.js", "./js/track_view.js", "./js/explore_core.js",
   "./js/mra_engine.js", "./js/align.js", "./js/align.worker.js", "./js/analysis.js",
@@ -57,8 +58,8 @@ const SHELL = [
   "./js/curated_tables.js", "./js/tables_custom.js", "./js/reference.js",
   "./js/figure_export.js",
   "./js/explore_redirect.js", "./js/compare_redirect.js", "./js/browse_redirect.js",
-  "./js/drm_redirect.js", "./js/reference_redirect.js",
-  "./js/batch.js", "./js/batch_core.js", "./js/batch_view.js",
+  "./js/drm_redirect.js", "./js/reference_redirect.js", "./js/batch_redirect.js",
+  "./js/batch_core.js", "./js/batch_view.js",
   "./js/codon_sensitivity.js", "./js/lanl_flow.js",
   "./data/releases.json",
 ];

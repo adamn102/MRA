@@ -1,204 +1,22 @@
 <!DOCTYPE html>
 <!-- SPDX-License-Identifier: MIT -->
+<!-- Batch analysis has been removed. Submitting sequences is Your Sequence, which keeps
+     up to 10 on one genome track. This stub keeps old links from landing on a blank page. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'none'">
-<title>Batch analysis &mdash; HIV-1 Mutation Rate Atlas</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'none'">
+<title>Moved to Your sequence &mdash; HIV-1 Mutation Rate Atlas</title>
 <link rel="stylesheet" href="css/mra.css">
-<script src="vendor/html2canvas/html2canvas.min.js"></script>
 </head>
 <body>
 <main>
-<h1>Batch analysis</h1>
-<p>Submit many sequences and compare them position by position, at the level of amino-acid
-change.</p>
-<p class="caveat"><strong>Read every difference on this page as a codon difference.</strong> The
-same fitted model is applied to every sequence you submit, so a batch does not measure many
-different mutation rates. Two sequences get different numbers at a position only when they carry
-a different codon there, or a different base immediately 3&prime; of it. Where they carry the
-same codon in the same context, their rates are identical to the last digit &mdash; not similar,
-identical. What a batch measures is therefore how the codon usage in a real set of viruses
-distributes mutational accessibility across the proteome.</p>
-
-<div id="privacy-slot"></div>
-<div id="caveat-slot"></div>
-
-<h2>Submit</h2>
-<p id="submit-note">Paste a multi-FASTA set or drop a file. Each record is aligned to NL4-3
-independently, so records may cover different regions.</p>
-<textarea id="fasta" spellcheck="false" placeholder="&gt;patient_01&#10;ATGGGTGCGAGAGCGTCGGTATTAAGCGGGGGAGAATTAGAT...&#10;&gt;patient_02&#10;ATGGGTGCGAGAGCGTCGGTATTAAGCGGGGGAGAATTAGAT..."></textarea>
-<div class="controls">
-  <div><button id="run">Compile batch atlas</button></div>
-  <div><button id="load-file" class="secondary">Load FASTA file&hellip;</button>
-       <input type="file" id="file-input" accept=".fa,.fasta,.fas,.txt,.seq" hidden></div>
-  <div><button id="load-demo" class="secondary">Load LANL compendium (182 genomes)</button></div>
-  <div><button id="clear" class="secondary">Clear everything</button></div>
-  <div><span id="batch-note" class="caveat"></span></div>
-</div>
-<div id="progress-slot"></div>
-<div id="run-status"></div>
-
-<div id="results" hidden>
-<h2>The batch</h2>
-<div id="batch-summary"></div>
-<p class="caveat">Codons differ between sequences in two ways, and the distinction decides how a
-result should be read. A <strong>non-synonymous</strong> difference changes the residue, so it is
-visible in the protein and in the diversity measures below. A <strong>synonymous</strong>
-difference leaves the residue untouched &mdash; the sequences encode the same protein &mdash; yet
-still changes how readily that residue mutates, because the rate depends on the bases present,
-not on the amino acid they specify. Positions of the second kind look completely conserved at the
-protein level while differing in mutational supply, and they are usually the more interesting
-ones. Both are counted separately in the summary above.</p>
-<div class="controls">
-  <div><button id="download-all">Download the whole analysis (CSV)</button></div>
-  <div><span class="caveat">One file, four blocks with their own headers: the per-sequence rate
-       summary, the per-codon compiled atlas, the weighted supply to every destination residue,
-       and the per-sample coverage table.</span></div>
-</div>
-
-<div class="controls">
-  <div>
-    <label for="track-window">Smoothing window (codons)</label>
-    <input type="range" id="track-window" min="25" max="501" step="2" value="151">
-    <output id="track-window-out">151</output>
-  </div>
-  <div>
-    <label for="track-class">Supply shown</label>
-    <select id="track-class">
-      <option value="nonsyn">All residue changes</option>
-      <option value="ga">G&rarr;A only</option>
-      <option value="nonga">Non-G&rarr;A only</option>
-    </select>
-  </div>
-  <div><span id="share-slot"></span></div>
-</div>
-<figure class="chart" data-export-name="batch_genome_track"><div id="batch-track"></div>
-  <div class="track-slider" data-export-skip>
-    <input type="range" id="track-slider" min="1" max="8213" step="1" value="1600"
-           aria-label="Genome position (NL4-3 nucleotide)">
-  </div>
-  <figcaption id="track-caption"></figcaption></figure>
-<div class="controls">
-  <div>
-    <label for="divergence-window">Smoothing window (codons)</label>
-    <input type="range" id="divergence-window" min="1" max="201" step="10" value="31">
-    <output id="divergence-window-out">31</output>
-  </div>
-</div>
-<figure class="chart" data-export-name="batch_divergence_track"><div id="divergence-track"></div>
-  <figcaption id="divergence-caption"></figcaption></figure>
-
-<h3>One position across every sample</h3>
-<p>Look up a position by protein and amino-acid position in <strong>HXB2 numbering</strong>
-&mdash; <code>RT 103</code>, <code>PR 46</code>, <code>IN 148</code> &mdash; the same coordinates
-<a href="index.html">Browse the atlas</a> and <a href="sequence.html">Your sequence</a> use. Or
-switch to a raw NL4-3 nucleotide, or jump straight to wherever the samples disagree most. You
-get what the batch carries there &mdash; which residues, on which codons &mdash; and where a
-single substitution would take it.</p>
-<div class="controls">
-  <div>
-    <label for="coord-system">Look up by</label>
-    <select id="coord-system">
-      <option value="protein">Protein and amino-acid position (HXB2)</option>
-      <option value="nt">NL4-3 nucleotide</option>
-      <option value="divergent">Most divergent site</option>
-    </select>
-  </div>
-  <div>
-    <label for="protein">Protein or subunit</label>
-    <select id="protein"></select>
-  </div>
-  <div>
-    <label for="position">Position</label>
-    <input type="number" id="position" min="1" value="46" size="8">
-  </div>
-  <div><button id="go">Go</button></div>
-  <div>
-    <label for="flow-weight">Band width</label>
-    <select id="flow-weight">
-      <option value="sequences">How common each codon is</option>
-      <option value="supply">How much supply each codon contributes</option>
-    </select>
-  </div>
-  <div><button id="download-png" class="secondary">Download both charts (PNG)</button></div>
-</div>
-<p id="coord-note" class="caveat"></p>
-<div id="site-export">
-<div id="site-head"></div>
-<figure class="chart" data-export-name="batch_site_composition"><div id="site-chart"></div>
-  <figcaption id="site-caption"></figcaption></figure>
-<figure class="chart" data-export-name="batch_site_supply_flow"><div id="codon-chart"></div>
-  <figcaption id="codon-caption"></figcaption></figure>
-</div>
-<div id="site-sample-table"></div>
-
-<h3>Compiled atlas, one row per codon</h3>
-<p class="caveat">One row per codon, summarising the samples that cover
-it. <strong>Divergence</strong> is log<sub>2</sub>(max/min) across those samples &mdash; 0 where
-they agree. Positions no sample covers are not listed.</p>
-<div id="batch-table"></div>
-
-<h3>Per sample</h3>
-<div id="sample-table"></div>
-
-<h3>What a set of circulating sequences can and cannot tell you</h3>
-<p>The fitted model is identical for every sequence you submit. A batch is therefore not a
-measurement of many different mutation rates &mdash; it is a measurement of how the codons
-actually present in your sequences distribute mutational supply. Four things follow from that,
-and one important limit.</p>
-<ul>
-  <li><strong>Population-weighted supply.</strong> For any amino-acid change, the batch gives
-      the observed distribution of wild-type codons and each codon's rate, so the weighted mean
-      describes supply as it is distributed in the sampled population rather than in one
-      reference codon. NL4-3 is a single draw; a few hundred sequences are a distribution.</li>
-  <li><strong>Codon-usage sensitivity.</strong> At most positions every sample shares a codon
-      and nothing varies. At the minority that are codon-polymorphic, the fold range says how
-      much a virus's mutational options depend on which synonymous codon it happens to carry
-      &mdash; and what fraction of the population sits on the high-supply version.</li>
-  <li><strong>Supply against observed diversity.</strong> Mutability is a prediction about how
-      readily a residue changes; diversity is an observation of how often it has. Positions
-      that mutate readily yet never vary are where something removes the variants.</li>
-  <li><strong>The accessible neighbourhood.</strong> Which residues a position can reach in one
-      substitution, and how often each arises &mdash; the shape of what is available to
-      selection, before selection acts.</li>
-</ul>
-<p class="caveat"><strong>The limit, stated plainly.</strong> Submitted sequences are related by
-descent, so observed diversity counts shared ancestry as well as independent mutation: two
-sequences agreeing at a position may reflect one ancestral state rather than two independent
-outcomes. Consensus sequences compound this, having already discarded within-host variation by
-construction. A set spanning several subtypes conflates between-subtype divergence with
-within-subtype polymorphism. And the model's position effects were fitted on NL4-3, so they
-transfer only as far as your sequences align to it. None of this prevents the comparison; it
-means the result describes the set you submitted, and is not an estimate of a selection
-coefficient.</p>
-
-<h3>What the shaded band and the intervals mean</h3>
-<p>Two different quantities appear on this page and they are easy to confuse, so they are kept
-apart deliberately.</p>
-<ul>
-  <li><strong>The shaded band on the supply track is spread between your sequences, not
-      uncertainty.</strong> It runs from the lowest to the highest rate observed across the
-      samples covering each site. A wide band means those sequences carry different codons or
-      different 3&prime; contexts there; a band that collapses onto the line means they agree.
-      It is a min&ndash;max range rather than an interquartile range because the quartiles are
-      identical at essentially every site &mdash; usually only one or two samples in a set
-      differ at any given position, so the middle 50% carries no information here.</li>
-  <li><strong>The 95% intervals on a rate are statistical uncertainty in the fitted model.</strong>
-      They come from the ERR-Seq data the model was fitted to &mdash; how precisely that rate was
-      measured &mdash; and they are a property of the atlas, identical for every sequence
-      carrying the same codon and context. They are reported per amino-acid change on
-      <a href="index.html">Browse the atlas</a> and <a href="sequence.html">Your sequence</a>.</li>
-</ul>
-<p class="caveat">The two can point in opposite directions: samples can agree exactly at a site
-whose rate is poorly determined, or differ widely at one measured precisely. A narrow band is
-not evidence that a rate is well estimated, and a wide band is not evidence that it is not.
-Nothing on this page carries per-sample error bars, because the model uncertainty does not vary
-between samples &mdash; only the codon does.</p>
-</div>
+<h1>This page was removed</h1>
+<p>Batch analysis is no longer part of the atlas. Submit sequences on
+<a id="target" href="sequence.html">Your sequence</a> (up to 10). Redirecting&hellip;</p>
 </main>
-<script type="module" src="js/batch.js"></script>
+<script type="module" src="js/batch_redirect.js"></script>
 </body>
 </html>

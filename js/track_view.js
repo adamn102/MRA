@@ -225,9 +225,8 @@ function renderTrackStats(el, rows) {
  * size, not from the data. The flow chart answers a question the atlas can actually speak
  * to: given the codons circulating virus carries here, where does one sequence's
  * one-step change land? The left column is the LANL codon frequency alone. The right
- * column is relative supply, that frequency times each codon's own pie. It is the same
- * chart the batch tab draws in its "how common each codon is" weighting, from a batch
- * over the LANL group M compendium precomputed at build time.
+ * column is relative supply, that frequency times each codon's own pie. The numbers are
+ * the precomputed batch over the LANL group M compendium.
  *
  * The two figures share a colour key -- both are coloured by destination residue, and
  * degenerate codons for one residue take that residue's colour -- so a slice and a band can
@@ -376,7 +375,7 @@ export function drawPositionPie(chartEl, captionEl, rows, label, opts = {}) {
                        weight: "sequences", describeColumns: true,
                        width: FLOW_W, height: FIG_H,
                        title: flowTitleText, drawTitle: false, subtitle: false,
-                       // Pooled harder than the batch tab's 2%, so the block count fits the
+                       // Pooled harder than 2%, so the block count fits the shared box height with its
                        // shared box height with its labels still legible. The threshold is
                        // named in the chart's own caption, which the Details dialog carries.
                        minCodonFreq: 0.05,

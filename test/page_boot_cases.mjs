@@ -44,12 +44,11 @@ function check(name, ok, detail = "") {
 }
 
 // Buttons that must forward a click to a hidden file input, per page.
-const FILE_PICKERS = { batch: ["load-file", "file-input"],
-                       sequence: ["load-file", "file-input"],
+const FILE_PICKERS = { sequence: ["load-file", "file-input"],
                        tables: ["load-file", "file-input"] };
 // The live pages after the tab restructure. The retired addresses (browse, drm, download,
-// compare, explore) are redirect stubs whose forwarding is checked in nav_cases.mjs.
-const PAGES = ["index", "tables", "sequence", "batch", "reference"];
+// compare, explore, batch) are redirect stubs whose forwarding is checked in nav_cases.mjs.
+const PAGES = ["index", "tables", "sequence", "reference"];
 
 for (const page of PAGES) {
   const html = fs.readFileSync(path.join(REPO, `${page}.html`), "utf8");

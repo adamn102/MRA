@@ -32,7 +32,6 @@ const PAGES = [
   { href: "tables.html", label: "MRA Table",
     menu: TABLE_SECTIONS.map((s) => ({ hash: "#" + s.id, label: s.label })) },
   { href: "sequence.html", label: "Your sequence" },
-  { href: "batch.html", label: "Batch analysis" },
   { href: "reference.html", label: "Reference and Download" },
 ];
 

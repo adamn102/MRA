@@ -74,14 +74,13 @@ dev script is a convenience, not a dependency.
    rows, 0 positions needing the spline fallback, 405 dropped for lying past 8,213.
    Then try `test/fixtures/JRFL_pol.fasta` via **Load FASTA file…** for a genuinely
    divergent sequence. The codon-difference view and the genome track are on this page too.
-4. `batch.html` — up to 250 sequences compared codon by codon, with a genome-wide supply
-   track and a divergence track, each independently downloadable as a PNG.
-5. `reference.html` — **Reference and Download**: what the rates mean, the coverage and
+4. `reference.html` — **Reference and Download**: what the rates mean, the coverage and
    coordinate caveats, the privacy statement, how to read the curated tables, and every
    asset with its SHA-256, verified before the download.
 
-`browse.html`, `drm.html`, `download.html`, `compare.html` and `explore.html` are redirect
-stubs kept so older links keep working; `drm.html?class=NNRTI` lands on `tables.html#nnrti`.
+`browse.html`, `drm.html`, `download.html`, `compare.html`, `explore.html` and `batch.html`
+are redirect stubs kept so older links keep working; `drm.html?class=NNRTI` lands on
+`tables.html#nnrti`.
 
 Open the browser console on each page. It should stay empty.
 
@@ -135,8 +134,8 @@ that paper used, forever.
 ## Layout
 
 ```
-index.html  tables.html  sequence.html  batch.html  reference.html
-browse.html drm.html  download.html  compare.html  explore.html   redirect stubs
+index.html  tables.html  sequence.html  reference.html
+browse.html drm.html  download.html  compare.html  explore.html  batch.html   redirect stubs
 css/mra.css                 one stylesheet
 js/                         see docs/ARCHITECTURE.md
 sw.js                       offline support after first load
