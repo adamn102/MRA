@@ -16,22 +16,13 @@
 // The section order and anchors come from TABLE_SECTIONS in page.js, which the nav dropdown
 // is also built from, so the menu cannot offer a section the page does not render.
 
-import { bootstrapPage, note, showError, TABLE_SECTIONS } from "./page.js";
+import { bootstrapPage, showError, TABLE_SECTIONS } from "./page.js";
 import { loadSmallAssets, loadAminoAcidLayer, loadDrmCatalog, loadBnabCatalog } from "./data.js";
 import { MraEngine } from "./mra_engine.js";
 import { initCuratedTables } from "./curated_tables.js";
 import { initCustomQuery } from "./tables_custom.js";
 
 const page = await bootstrapPage("tables.html");
-const region = page.release.modelled_region;
-document.getElementById("scope-slot").appendChild(note(
-  "Rates are the control-corrected biological mutation rate per site per replication, from " +
-  "the NL4-3 atlas (positions " + region.first_position.toLocaleString() + "\u2013" +
-  region.last_position.toLocaleString() + "). Resistance positions are reported in standard " +
-  "protein numbering (PR, RT, IN, CA). Clinical frequencies are Stanford SDR-DB sequence " +
-  "counts; <code>freq = (mutants + 0.5) / sequences</code>. Rates are mutational " +
-  "<em>supply</em> \u2014 how often a change is generated \u2014 not how often it is " +
-  "observed in patients."));
 
 const status = document.getElementById("tables-status");
 let assets, engine, drm, bnab, aaLayer;

@@ -286,7 +286,9 @@ function renderDashboard(slot, items, allRows, truncated) {
   const shown = new Set(items.map((_, i) => i));
   let active = 0;
   let selected = null;
-  let markerNt = nearestCodon(items[0], items[0].frameAt.has(1600) ? 1600 : (items[0].variants[0] || 1600));
+  // Open on RT K65 (middle base 1954) when the sequence covers it.
+  const prefer = 1954;
+  let markerNt = nearestCodon(items[0], items[0].frameAt.has(prefer) ? prefer : (items[0].variants[0] || prefer));
   let flowToken = 0;
   let lowerFor = -1;
 

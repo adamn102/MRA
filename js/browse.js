@@ -160,7 +160,7 @@ const ownPositionFor = (target, geneAa) => engine.ownPositionFor(target, geneAa)
 
 // --- selection state --------------------------------------------------------------
 let selected = null;          // {target, geneAa, codonIndex, codonNt}
-let markerNt = 1600;          // where the track's marker sits
+let markerNt = 1954;         // middle base of RT K65 (AAA, NL4-3 1953–1955)
 
 // --- the genome track ---------------------------------------------------------------
 // The nucleotide layer is several megabytes, so it loads AFTER the dashboard has painted.
@@ -514,8 +514,8 @@ if (Number.isInteger(wantNt) && wantNt >= FIRST && wantNt <= LAST && frameAt.has
   document.getElementById("position").value = String(wantPos);
   jumpFromBoxes();
 } else {
-  select.value = "PR";
-  document.getElementById("position").value = "46";
+  select.value = "RT";
+  document.getElementById("position").value = "65";
   jumpFromBoxes();
 }
 

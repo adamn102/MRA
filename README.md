@@ -57,7 +57,7 @@ dev script is a convenience, not a dependency.
 
 ### What to click first
 
-1. `index.html` — **Browse the atlas**, now the landing page. It opens on **PR 46** by
+1. `index.html` — **Browse the atlas**, now the landing page. It opens on **RT K65** by
    default. Change the protein selector to **RT** and the position to **184**; the bar
    chart should put V at the top with a single-substitution flag. Each figure carries its
    own **Download this figure (PNG)** button.
