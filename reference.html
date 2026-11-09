@@ -64,19 +64,25 @@ control libraries are fit together, so the published rate is control-corrected &
 biological rate per site per replication, with sequencing and PCR error removed.</p>
 
 <h2>Reading the curated tables</h2>
-<p class="caveat">Each row carries its own codon decomposition. <strong>Wild-type codon
-options</strong> lists every synonymous codon the wild-type residue could be written as and the
-rate this change would have from each; <code>*</code> marks the codon NL4-3 carries, and
-<code>(2nt)</code> marks a codon that needs more than one substitution to reach the target.
-<strong>Codon sensitivity</strong> is the fold range across those options &mdash; how much the
-rate would move if the virus spelled the wild-type residue differently. A dash means the residue
-has a single codon, so codon usage cannot move it at all. Where the range is large it is usually
-because one codon needs an extra nucleotide, which the codon list makes visible.</p>
-<p class="caveat">Two further distinctions the tables keep separate: <strong>codon
-optimization</strong> (the rate varies among synonymous codons at equal accessibility) versus a
-change in the <strong>number of nucleotide steps</strong> (categorical, and usually the larger
-effect); and a specific escape change versus <strong>glycan sequon loss</strong>, which is
-summed over three codons and labelled as such.</p>
+<p>Every table on the <a href="tables.html">MRA Table</a> page carries the same five columns.
+<strong>Mutation</strong> is the amino-acid change, in standard protein numbering for the drug
+classes and HXB2 numbering for antibody escape. <strong>Amino Acid Mutability</strong> is
+<code>mu_aa</code>: the rate of reaching that amino acid from the NL4-3 codon, summed over
+every nucleotide path, per site per replication. <strong>Minimum Nucleotides</strong> is the
+fewest substitutions the change requires, and <strong>Paths</strong> the number of distinct
+nucleotide routes to it; 1-, 2- and 3-nucleotide changes are all listed.</p>
+<p class="caveat">The rate is a property of the NL4-3 codon, not of the amino-acid change in
+the abstract: a virus spelling the same wild-type residue with a different synonymous codon
+can have a substantially different rate for the same substitution, sometimes by more than an
+order of magnitude, usually because one codon needs an extra nucleotide. Rates here are from
+the NL4-3 codon throughout.</p>
+<p class="caveat">Two things the tables deliberately do not show. Indel-coded drug-resistance
+mutations (Stanford's <code>~</code> and <code>#</code> codes) are excluded: they are real
+resistance mechanisms but not amino-acid substitutions, so the model estimates no mutability
+for them; each table reports how many were left out. Antibody-escape changes whose published
+wild-type residue NL4-3 does not carry are likewise counted rather than listed, because the
+atlas has no rate for them. Per-row antibody, evidence strength and citation for every escape
+change are in <code>bnab_catalog.csv</code> and <code>docs/BNAB_PROVENANCE.md</code>.</p>
 
 <h2>Tables</h2>
 <p>Each file downloads with a provenance header naming the atlas version, model and your

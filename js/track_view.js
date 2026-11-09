@@ -9,8 +9,9 @@
 // the submitted sequence) and, for a submitted sequence, the variant ticks. Keeping one
 // renderer here is what stops the two views drifting apart.
 
-import { genomeTrack, pieChart, emergenceCurve, LAYOUT } from "./chart.js";
-import { smoothSeries, oneStepSlices, emergenceStats, emergenceProbability, emergenceReadoutHtml }
+import { genomeTrack, pieChart, LAYOUT } from "./chart.js";
+import { residueColour, drawSupplyFlow } from "./batch_view.js";
+import { smoothSeries, oneStepSlices }
   from "./explore_core.js";
 import { formatRate } from "./table.js";
 
@@ -177,15 +178,24 @@ function renderTrackStats(el, rows) {
 }
 
 /**
- * The codon panel: a pie of the one-nucleotide-accessible amino-acid changes, a selector for
- * one of them, and -- for whichever is selected -- the expected number of de novo copies as a
- * function of the replicating population size.
+ * The codon panel: a pie of the one-nucleotide-accessible amino-acid changes at this codon,
+ * and beside it -- where a flow source is supplied -- where residue change at this position
+ * is actually generated across circulating virus.
  *
- * The pie answers "where does supply go at this codon?"; the curve answers "how big does the
- * population have to be before I expect to see this particular change at all?". The second
- * question is the one that connects a rate to something observable, which is why the two sit
- * side by side and share a selection.
+ * WHAT REPLACED THE EMERGENCE CURVE. This slot used to hold "probability of generating this
+ * change de novo" against replicating population size. That curve plotted
+ * 1 - (1 - mu)^N, which is a restatement of the rate the pie already shows against an N the
+ * atlas cannot measure -- so its shape came from the reader's assumption about population
+ * size, not from the data. The flow chart answers a question the atlas can actually speak
+ * to: given the codons circulating virus carries here, where does residue change get
+ * generated? It is the same chart the batch tab draws, from a batch over the LANL group M
+ * compendium precomputed at build time.
  *
+ * The two figures share a colour key -- both are coloured by destination residue, and
+ * degenerate codons for one residue take that residue's colour -- so a slice and a band can
+ * be matched by eye.
+ *
+ * @param {object} [opts.flow]  {stat, matrix} from lanl_flow.js, or null for the pie alone
  * Returns true if a pie was drawn, false if no single-step change exists from this codon.
  */
 export function drawPositionPie(chartEl, captionEl, rows, label, opts = {}) {
@@ -198,11 +208,12 @@ export function drawPositionPie(chartEl, captionEl, rows, label, opts = {}) {
     return false;
   }
 
-  // The pie and the curve together span exactly the track's width, so the three figures on
-  // the page share one left and right edge. The pie takes the larger share because its legend
-  // is text that must not wrap.
-  const PIE_W = Math.round((LAYOUT.width - LAYOUT.gap) * 0.56);
-  const CURVE_W = LAYOUT.width - LAYOUT.gap - PIE_W;
+  // The pie and the flow chart together span exactly the track's width, so the figures on the
+  // page share one left and right edge. Where there is no flow chart the pie takes the whole
+  // width rather than leaving a gap.
+  const hasFlow = !!(opts.flow && opts.flow.stat && opts.flow.matrix);
+  const PIE_W = hasFlow ? Math.round((LAYOUT.width - LAYOUT.gap) * 0.46) : LAYOUT.width;
+  const FLOW_W = LAYOUT.width - LAYOUT.gap - PIE_W;
   const FIG_H = 460;
 
   const keyOf = (r) => `${r.alt_aa}${r.synonymous ? "*" : ""}`;
@@ -234,17 +245,21 @@ export function drawPositionPie(chartEl, captionEl, rows, label, opts = {}) {
   const row = document.createElement("div");
   row.className = "panel-row";
   const pieSlot = document.createElement("div");
-  const curveSlot = document.createElement("div");
+  const flowSlot = document.createElement("div");
   // Explicit bases: a flex item holding an SVG at width:100% has no intrinsic width and
   // would otherwise collapse, which is what made these figures render far smaller than asked.
   pieSlot.style.flex = `1 1 ${PIE_W}px`;
   pieSlot.style.maxWidth = `${PIE_W}px`;
-  curveSlot.style.flex = `1 1 ${CURVE_W}px`;
-  curveSlot.style.maxWidth = `${CURVE_W}px`;
-  row.append(pieSlot, curveSlot);
+  if (hasFlow) {
+    flowSlot.style.flex = `1 1 ${FLOW_W}px`;
+    flowSlot.style.maxWidth = `${FLOW_W}px`;
+  }
+  row.append(pieSlot);
+  if (hasFlow) row.append(flowSlot);
   chartEl.appendChild(row);
-  const readout = document.createElement("div");
-  chartEl.appendChild(readout);
+  const flowCaption = document.createElement("div");
+  flowCaption.className = "caveat";
+  if (hasFlow) chartEl.appendChild(flowCaption);
 
   function pick(key) {
     if (!byKey.has(key)) return;
@@ -256,21 +271,18 @@ export function drawPositionPie(chartEl, captionEl, rows, label, opts = {}) {
   function redraw() {
     pieChart(pieSlot, oneStep.map((r) => ({
       label: keyOf(r), value: r.mu_aa, highlight: false,
+      // Coloured by the destination residue, matching the flow chart beside it. A synonymous
+      // change keeps the residue, so it takes that residue's colour too.
+      colour: residueColour(r.alt_aa),
     })), { title: `Single-nucleotide amino-acid changes at ${label}`,
            width: opts.width || PIE_W, height: opts.height || FIG_H,
            selected: selectedKey, onSelect: pick });
 
-    const r = byKey.get(selectedKey);
-    emergenceCurve(curveSlot, {
-      mu: r.mu_aa, lo95: r.mu_aa_lo95, hi95: r.mu_aa_hi95,
-      change: `${label} ${r.ref_aa}\u2192${r.alt_aa}`,
-      // Out to 1e8 rather than 1e6: the transition sits at 1e3-1e6, but the saturation
-      // regime is where a real infection lives, and cutting the axis at 1e6 hides the
-      // conclusion that one-step changes are not supply-limited in vivo.
-      nMin: 1, nMax: 1e8, width: CURVE_W, height: FIG_H,
-    });
-
-    readout.innerHTML = emergenceReadoutHtml(r);
+    if (hasFlow) {
+      drawSupplyFlow(flowSlot, flowCaption, opts.flow.stat, opts.flow.matrix,
+                     { weight: "supply", width: FLOW_W, height: FIG_H,
+                       refCodon: opts.refCodon || null });
+    }
   }
 
   sel.addEventListener("change", () => pick(sel.value));
@@ -281,17 +293,17 @@ export function drawPositionPie(chartEl, captionEl, rows, label, opts = {}) {
     (opts.custom ? "<strong>your</strong> codon" : "the reference codon") +
     " in one nucleotide substitution, sized by its share of the one-step supply here. " +
     "<code>*</code> marks a synonymous change. Click a slice, or use the selector. " +
-    "<strong>Right:</strong> the chance the selected change is <em>generated at least once</em> " +
-    "in one replication cycle across N events \u2014 P = 1 \u2212 (1 \u2212 rate)<sup>N</sup>. " +
-    "The band is the rate's 95% interval; N* marks where one copy is expected (a 63% chance, " +
-    "not a certainty). N counts replication events, not a fraction, so it is not bounded by 1. " +
     (opts.custom
       ? "Rates use the codon in your sequence, so they differ from the NL4-3 atlas where it does. "
       : "Rates are read from the atlas. ") +
-    "<strong>This is generation, not establishment</strong> \u2014 a variant generated here can " +
-    "still be lost to drift, purged by selection, or never sampled. It is per cycle (so it " +
-    "understates supply over a whole infection) and covers only the one-step changes in the pie; " +
-    "do not read a multi-step change off it. The shaded band is the order of magnitude of " +
-    "replication in a chronic untreated infection, from the literature, not measured here.";
+    (hasFlow
+      ? "<strong>Right:</strong> the same position across circulating virus \u2014 the " +
+        "codons the LANL group M compendium carries here, and where the residue change each " +
+        "one supplies actually goes. The pie is one codon's draw; the flow chart is the " +
+        "population's. Both are coloured by destination residue, so a slice and a band for " +
+        "the same residue match. "
+      : "") +
+    "<strong>These are rates of generation, not of establishment</strong> \u2014 a variant " +
+    "generated here can still be lost to drift, purged by selection, or never sampled.";
   return true;
 }

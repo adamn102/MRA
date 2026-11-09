@@ -20,6 +20,7 @@ import { bootstrapPage, note, caveat, showError, exportProvenance, shareButton, 
 import { loadSmallAssets, loadAminoAcidLayer, loadNucleotideLayer, loadPathShard } from "./data.js";
 import { renderTable, formatRate } from "./table.js";
 import { drawSupplyTrack, drawPositionPie } from "./track_view.js";
+import { loadLanlFlow, lanlFlowAt } from "./lanl_flow.js";
 import { attachFigureDownloads } from "./figure_export.js";
 import { trackSliderGeometry } from "./chart.js";
 import { MraEngine } from "./mra_engine.js";
@@ -175,6 +176,11 @@ function drawTrack() {
   syncFigureButtons();
 }
 
+// Guards against an out-of-order redraw: the precomputed batch is fetched asynchronously, so
+// a visitor clicking quickly along the track can have an early response land after a later
+// one. Only the newest selection is allowed to redraw.
+let flowToken = 0;
+
 /** Offer a PNG for each figure that currently holds a plot. Cheap and idempotent. */
 function syncFigureButtons() {
   attachFigureDownloads({
@@ -323,8 +329,21 @@ async function showPosition(target, genePosition) {
     `.</p>`;
 
   const sorted = rows.slice().sort((a, b) => b.mu_aa - a.mu_aa);
+  // Draw immediately with the pie alone, then redraw with the flow chart once the
+  // precomputed batch has arrived. The asset is ~370 KB and fetched on the first position a
+  // visitor opens, so waiting on it before drawing anything would make the panel feel broken
+  // on a slow connection; the pie needs nothing but the rows already in hand.
   drawPositionPie(chart, caption, rows, hxb2, { custom: false });
   syncFigureButtons();
+  const token = ++flowToken;
+  loadLanlFlow(page.version).then((index) => {
+    // A newer selection has already been drawn: this result is stale, drop it.
+    if (token !== flowToken) return;
+    const flow = lanlFlowAt(index, target.protein, genePosition);
+    if (!flow) return;                      // compendium does not cover this position
+    drawPositionPie(chart, caption, rows, hxb2, { custom: false, flow, refCodon: codon });
+    syncFigureButtons();
+  }).catch(() => { /* no flow chart; the pie stands on its own */ });
 
   renderTable(tableSlot, {
     columns: [

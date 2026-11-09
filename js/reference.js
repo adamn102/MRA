@@ -51,6 +51,8 @@ const DESCRIPTIONS = {
     "The fitted model. Coefficients, context deltas, G->A intercepts and six position splines.",
   "interval_ratios.json":
     "95% interval ratios, so a rate computed for a submitted sequence can carry an interval.",
+  "lanl_flow.json":
+    "Precomputed batch over the 182 LANL group M compendium genomes: per amino-acid position, the codons circulating virus carries and the rate each supplies to each destination residue. Backs the supply-flow chart on the landing page.",
   "nl43_reference.json":
     "Reference sequence, per-position protein assignment and codon frames (including the tat/rev splice junctions).",
   "hxb2_align.json":

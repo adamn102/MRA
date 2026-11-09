@@ -28,8 +28,10 @@
 // were pinned under the previous cache-first-forever rule.
 // Bumped when the shell changes. v6: the tab restructure -- Browse became the landing page,
 // Overview and Download merged into reference.html, Table analysis and Curated tables merged
-// into tables.html. Without a bump a returning reader keeps yesterday's nav from cache.
-const CACHE = "mra-portal-v6";
+// into tables.html. v7: sticky header, five-column MRA tables, and the supply-flow chart
+// replacing the emergence curve on the landing page (adds js/lanl_flow.js to the shell).
+// Without a bump a returning reader keeps the previous shell from cache.
+const CACHE = "mra-portal-v7";
 
 // Curated annotation overlays: under a version directory, but revised over time rather than
 // frozen. Served network-first with the HTTP cache bypassed, so an edit is never masked by an
@@ -51,7 +53,7 @@ const SHELL = [
   "./js/explore_redirect.js", "./js/compare_redirect.js", "./js/browse_redirect.js",
   "./js/drm_redirect.js", "./js/reference_redirect.js",
   "./js/batch.js", "./js/batch_core.js", "./js/batch_view.js",
-  "./js/codon_sensitivity.js",
+  "./js/codon_sensitivity.js", "./js/lanl_flow.js",
   "./data/releases.json",
 ];
 

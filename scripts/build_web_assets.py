@@ -542,6 +542,16 @@ def main():
         build_lanl_demo(lanl_src, outdir)
     else:
         print(f"  SKIPPED: {lanl_src.relative_to(REPO)} not present")
+    # Must follow the worked example and the model bundle: it runs the batch pipeline over
+    # that FASTA using the shipped bundle. Node, because it imports the app's own modules --
+    # reimplementing the fold in Python would be a second copy of the thing most likely to
+    # drift from what the browser actually computes.
+    print("\n[6e/7] precomputed LANL batch for the landing-page supply flow")
+    if (outdir / "lanl_batch_demo.fasta").exists():
+        subprocess.run(["node", str(REPO / "scripts/build_lanl_flow.mjs"),
+                        "--version", version], cwd=REPO, check=True)
+    else:
+        print("  SKIPPED: lanl_batch_demo.fasta not built")
     build_citation(outdir, version, args.doi, args.release_date, model)
     print("\n[7/7] manifest and release list")
     manifest = write_manifest(outdir, version, args.doi, args.release_date, model)

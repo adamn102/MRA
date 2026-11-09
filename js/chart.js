@@ -61,7 +61,7 @@ export const LAYOUT = {
   width: 1140,          // full figure width, shared by the track and the codon panel
   padLeft: 62,          // track plot-area insets, needed to align the position slider
   padRight: 118,
-  gap: 16,              // gap between the pie and the emergence curve
+  gap: 16,              // gap between the pie and the supply-flow chart beside it
 };
 
 /** Percentage offsets that place a slider exactly under the track's plot area. */
@@ -407,10 +407,14 @@ export function pieChart(container, slices, options = {}) {
   const fsLegend = r >= 130 ? 12.5 : 11;
   const legendStep = r >= 130 ? 19 : 17;
 
-  // A categorical palette; the highlighted slice (if any) takes the lead colour.
+  // A slice may carry its own colour. That is how the position pie is kept in step with the
+  // supply-flow chart beside it: both are coloured by destination residue, so a reader can
+  // carry one colour between the two figures instead of learning a new key for each. Without
+  // a per-slice colour the palette is positional, which means the same residue changes colour
+  // as soon as the ordering changes -- actively misleading when two figures sit side by side.
   const palette = ["#0b5c8a", "#c2561a", "#1f7a3f", "#6b3fa0", "#8a6d1f", "#2f7fa8",
                    "#a4262c", "#5c6670", "#c08a1e", "#3a7d5d", "#7a4ea0", "#1d6a8a"];
-  const colour = (i, s) => s.highlight ? "#c2561a" : palette[i % palette.length];
+  const colour = (i, s) => s.colour || (s.highlight ? "#c2561a" : palette[i % palette.length]);
   // Slice selection: `options.onSelect(label)` makes the wedges and legend rows clickable,
   // and `options.selected` names the one drawn as chosen.
   const pick = options.onSelect;
@@ -482,130 +486,3 @@ export function pieChart(container, slices, options = {}) {
   container.appendChild(svg);
 }
 
-// ---------------------------------------------------------------------------------
-/**
- * Probability of GENERATING a variant de novo, against how much the virus replicates.
- *
- * Each of N replication events is an independent trial that produces this amino-acid change
- * with probability mu, so the count of new mutant genomes is Binomial(N, mu) and
- *
- *     P(at least one) = 1 - (1 - mu)^N
- *
- * The exact binomial is used rather than the Poisson approximation; over the plotted range the
- * two differ by at most 3e-4, but the exact form costs nothing and needs no caveat.
- *
- * Expected copy number E = N * mu is linear in N and so has no shape to read -- it is a
- * straight line on any axes. The probability is the S-shaped quantity, and it is the one that
- * answers "would this variant actually be generated?". E and N* appear in the table beneath.
- *
- * N is a COUNT of replication events per cycle -- population size times the fraction
- * replicating -- not a fraction and not a viral load.
- *
- * @param {object} o  mu, lo95, hi95, change, nMin, nMax, width, height
- */
-export function emergenceCurve(container, o) {
-  container.innerHTML = "";
-  const width = o.width || 430, height = o.height || 300;
-  const padLeft = 46, padRight = 14, padTop = 26, padBottom = 44;
-  const plotW = width - padLeft - padRight, plotH = height - padTop - padBottom;
-  const nMin = o.nMin || 1, nMax = o.nMax || 1e6;
-  const mu = o.mu;
-  const lo = o.lo95 > 0 ? o.lo95 : mu, hi = o.hi95 > 0 ? o.hi95 : mu;
-
-  const e0 = Math.log10(nMin), e1 = Math.log10(nMax);
-  const lx = (n) => padLeft + (Math.log10(n) - e0) / (e1 - e0) * plotW;
-  const ly = (prob) => padTop + plotH - prob * plotH;          // linear 0..1
-  const pAt = (rate, n) => 1 - Math.pow(1 - rate, n);    // exact binomial
-
-  const svg = svgRoot(width, height, o.title || "Probability of de novo emergence");
-  svg.appendChild(el("text", { x: 0, y: 13, "font-size": 12 },
-    o.title || `Probability of generating ${o.change || "this change"} de novo`));
-
-  // y gridlines, as probabilities
-  for (const prob of [0, 0.25, 0.5, 0.75, 1]) {
-    const y = ly(prob);
-    svg.appendChild(el("line", { x1: padLeft, x2: padLeft + plotW, y1: y, y2: y,
-                                 stroke: "#e6ebf0", "stroke-width": 1 }));
-    svg.appendChild(el("text", { x: padLeft - 6, y: y + 3, "text-anchor": "end",
-                                 "font-size": 9, fill: "#5c6670" }, prob.toFixed(2)));
-  }
-  for (let e = e0; e <= e1 + 1e-9; e++) {
-    const x = lx(Math.pow(10, e));
-    svg.appendChild(el("line", { x1: x, x2: x, y1: padTop, y2: padTop + plotH,
-                                 stroke: "#f0f3f6", "stroke-width": 1 }));
-    svg.appendChild(el("text", { x, y: padTop + plotH + 13, "text-anchor": "middle",
-                                 "font-size": 9, fill: "#5c6670" }, `1e${e}`));
-  }
-
-  // Sample the curve evenly in log N so the steep part is drawn smoothly.
-  const STEPS = 240;
-  const path = (rate) => {
-    const pts = [];
-    for (let i = 0; i <= STEPS; i++) {
-      const n = Math.pow(10, e0 + (e1 - e0) * i / STEPS);
-      pts.push(`${lx(n).toFixed(2)} ${ly(pAt(rate, n)).toFixed(2)}`);
-    }
-    return pts;
-  };
-
-  // 95% band: the same sigmoid shifted left (faster) and right (slower).
-  if (hi !== lo) {
-    const up = path(hi), down = path(lo).reverse();
-    svg.appendChild(el("path", { d: `M ${up.join(" L ")} L ${down.join(" L ")} Z`,
-                                 fill: "#0b5c8a", "fill-opacity": 0.13 }));
-  }
-
-  // Where a chronic untreated infection actually sits. This is an order-of-magnitude
-  // reference from the HIV dynamics literature, NOT a quantity measured by this atlas, and it
-  // is what turns the curve into a conclusion: at these N every one-step change is generated.
-  if (o.inVivo !== false && nMax >= 1e7) {
-    const bx0 = lx(1e7), bx1 = lx(Math.min(1e8, nMax));
-    svg.appendChild(el("rect", { x: bx0, y: padTop, width: Math.max(bx1 - bx0, 1), height: plotH,
-                                 fill: "#3f8f7a", "fill-opacity": 0.10 }));
-    svg.appendChild(el("text", { x: (bx0 + bx1) / 2, y: padTop + 11, "text-anchor": "middle",
-                                 "font-size": 8.5, fill: "#2f6b5c" }, "typical in vivo"));
-  }
-
-  // Certainty, and the point where one copy is expected.
-  svg.appendChild(el("line", { x1: padLeft, x2: padLeft + plotW, y1: ly(1), y2: ly(1),
-                               stroke: "#1b1f23", "stroke-width": 1.2, "stroke-dasharray": "5 4" }));
-  svg.appendChild(el("text", { x: padLeft + plotW - 2, y: ly(1) - 4, "text-anchor": "end",
-                               "font-size": 9.5, fill: "#1b1f23" }, "certainty (P = 1)"));
-
-  svg.appendChild(el("path", { d: `M ${path(mu).join(" L ")}`, fill: "none",
-                               stroke: "#0b5c8a", "stroke-width": 1.9 }));
-
-  const nStar = 1 / mu;
-  if (nStar >= nMin && nStar <= nMax) {
-    const y63 = ly(1 - Math.exp(-1));
-    svg.appendChild(el("line", { x1: padLeft, x2: lx(nStar), y1: y63, y2: y63,
-                                 stroke: "#b5485d", "stroke-width": 1, "stroke-dasharray": "4 3" }));
-    svg.appendChild(el("line", { x1: lx(nStar), x2: lx(nStar), y1: y63, y2: padTop + plotH,
-                                 stroke: "#b5485d", "stroke-width": 1.2, "stroke-dasharray": "4 3" }));
-    svg.appendChild(el("circle", { cx: lx(nStar), cy: y63, r: 3.4, fill: "#b5485d" }));
-    const anchor = lx(nStar) > padLeft + plotW * 0.6 ? "end" : "start";
-    svg.appendChild(el("text", { x: lx(nStar) + (anchor === "end" ? -6 : 6), y: y63 - 6,
-                                 "text-anchor": anchor, "font-size": 10, fill: "#b5485d",
-                                 "font-weight": 600 },
-                       `N* = ${formatCount(nStar)}  (P = 0.63)`));
-  } else {
-    svg.appendChild(el("text", { x: padLeft + plotW / 2, y: padTop + plotH / 2,
-                                 "text-anchor": "middle", "font-size": 10, fill: "#b5485d" },
-                       `N* = ${formatCount(nStar)} \u2014 beyond this axis`));
-  }
-
-  svg.appendChild(el("text", { x: padLeft + plotW / 2, y: height - 16, "text-anchor": "middle",
-                               "font-size": 10, fill: "#5c6670" },
-                     "replication events per cycle, N  (population \u00d7 fraction replicating)"));
-  svg.appendChild(el("text", { x: 11, y: padTop + plotH / 2, "font-size": 10, fill: "#5c6670",
-                               "text-anchor": "middle",
-                               transform: `rotate(-90 11 ${padTop + plotH / 2})` },
-                     "P(variant generated)"));
-  container.appendChild(svg);
-}
-
-/** Population sizes read better as 8.4e4 than as 84000.00 */
-function formatCount(n) {
-  if (!Number.isFinite(n)) return "\u2014";
-  return n >= 1e4 ? n.toExponential(1) : Math.round(n).toLocaleString();
-}

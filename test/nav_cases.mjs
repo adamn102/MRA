@@ -152,9 +152,39 @@ if (!JSDOM) {
           .every((s) => doc.querySelector(`#${s.id} table`)));
   check("the custom section comes last in document order",
         [...doc.querySelectorAll("section.table-section")].pop()?.id === "custom");
-  check("each DRM section has its own stratum control, not one shared page-wide",
-        TABLE_SECTIONS.filter((s) => s.kind === "drm")
-          .every((s) => doc.querySelectorAll(`#${s.id} select`).length >= 2));
+  console.log("Every curated table carries exactly the five agreed columns");
+  const WANTED_COLS = ["Mutation", "Amino Acid Mutability (Mutation Rate)",
+                       "95% Confidence Interval", "Minimum Nucleotides", "Paths"];
+  const curated = TABLE_SECTIONS.filter((s) => s.kind === "drm" || s.kind === "bnab");
+  for (const s of curated) {
+    const heads = [...doc.querySelectorAll(`#${s.id} table thead th`)]
+      .map((th) => th.textContent.replace(/[\u25b2\u25bc\u2191\u2193]/g, "").trim());
+    check(`#${s.id} has the five columns, in order`,
+          heads.length === 5 && heads.every((h, i) => h === WANTED_COLS[i]),
+          heads.join(" | "));
+  }
+  check("no table shows a clinical frequency column",
+        !/freq/i.test(doc.querySelector("#table-sections").textContent.slice(0, 20000)));
+  check("no treatment-stratum control survives anywhere on the page",
+        ![...doc.querySelectorAll("label")].some((l) => /stratum/i.test(l.textContent)));
+  check("no accessibility control survives anywhere on the page",
+        ![...doc.querySelectorAll("label")].some((l) => /accessib/i.test(l.textContent)));
+
+  console.log("Indels are excluded and 2- and 3-nucleotide changes are included");
+  const minNtSeen = new Set();
+  for (const s of curated) {
+    for (const tr of doc.querySelectorAll(`#${s.id} table tbody tr`)) {
+      const cells = [...tr.children].map((td) => td.textContent.trim());
+      if (cells.length === 5 && cells[3]) minNtSeen.add(cells[3]);
+    }
+  }
+  check("rows span 1-, 2- and 3-nucleotide changes",
+        ["1", "2", "3"].every((n) => minNtSeen.has(n)),
+        [...minNtSeen].sort().join(","));
+  check("no row is an indel-coded mechanism",
+        !/insertion|deletion|indel/i.test(
+          [...doc.querySelectorAll("#table-sections table tbody")]
+            .map((b) => b.textContent).join(" ")));
 
   console.log("The nav dropdown is built and matches the index on the page");
   const menuLinks = [...doc.querySelectorAll("nav.site .nav-menu a")];

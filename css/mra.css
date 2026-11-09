@@ -35,7 +35,13 @@ a  { color: var(--accent); }
 code, .mono, input[type=text], textarea { font-family: var(--mono); }
 
 /* --- header / nav ------------------------------------------------------- */
-header.site { border-bottom: 1px solid var(--rule); background: var(--panel); }
+/* The header stays put while the page scrolls. These pages are long -- the MRA Table page is
+   eight tables deep -- and the nav, the version selector and the MRA Table dropdown are all
+   in it, so having to scroll back up to change tab or version was a real cost. An opaque
+   background is required: the default panel colour is already opaque, but say so explicitly,
+   because a translucent sticky header lets table rows show through it. */
+header.site { position: sticky; top: 0; z-index: 30;
+  border-bottom: 1px solid var(--rule); background: var(--panel); }
 header.site .inner { max-width: 1180px; margin: 0 auto; padding: 10px 20px; display: flex;
   flex-wrap: wrap; gap: 16px; align-items: baseline; }
 header.site .brand { font-weight: 600; }
