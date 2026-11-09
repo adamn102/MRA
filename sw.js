@@ -32,8 +32,12 @@
 // replacing the emergence curve on the landing page (adds js/lanl_flow.js to the shell).
 // v8: the landing page's coverage note, intro paragraph and track quantity table removed,
 // the track moved above its controls, and the flow chart widened to the full figure.
+// v9: Your sequence matches the browse cards — up to 10 sequences overlaid on one track,
+// one of them selected for the pie and the flow chart.
+// v10: the dashboard flow chart sizes its left column by LANL codon frequency and its
+// right column by relative supply (frequency times that codon's pie).
 // Without a bump a returning reader keeps the previous shell from cache.
-const CACHE = "mra-portal-v8";
+const CACHE = "mra-portal-v10";
 
 // Curated annotation overlays: under a version directory, but revised over time rather than
 // frozen. Served network-first with the HTTP cache bypassed, so an edit is never masked by an

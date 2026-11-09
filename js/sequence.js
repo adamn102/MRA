@@ -4,12 +4,16 @@
 //
 // The scientific framing is load-bearing here, not decoration. This view must never
 // let a reader mistake a modelled rate for a measured one, so:
-//   - the standing caveat is above the input, not buried under the results;
+//   - the privacy note and the standing caveat sit at the end of the page, after the
+//     results, which is where a reader meets them with the numbers already in view;
 //   - every result row carries flags naming which components it rests on;
 //   - the codon-identity component is named first, because it is the one the submitted
 //     sequence genuinely determines;
 //   - a sequence that aligns entirely outside the modelled region gets a refusal that
 //     names the covered region, not an empty table.
+//
+// Up to MAX_DETAIL_SEQUENCES submissions share one genome track. Checkboxes choose which
+// lines are drawn; one selector chooses which sequence the pie and the flow chart use.
 
 import { bootstrapPage, privacyPanel, note, caveat, showError, exportProvenance,
          CUSTOM_CAVEAT, NEF_NOTE } from "./page.js";
@@ -19,9 +23,19 @@ import { parseFasta, alignToReference } from "./align.js";
 import { renderTable, formatRate, toCsv, downloadText } from "./table.js";
 import { MraEngine, GENETIC_CODE } from "./mra_engine.js";
 import { perSiteSupply, groupByPosition, buildFrameIndex, geneSegments, targetFor,
-         codonDifferences, accessibilityRows } from "./explore_core.js";
-import { drawSupplyTrack, drawPositionPie } from "./track_view.js";
+         codonDifferences, accessibilityRows, smoothSeries } from "./explore_core.js";
+import { drawSupplyTrack, drawPositionPie, CLASS_LABEL } from "./track_view.js";
 import { trackSliderGeometry, dotPlot } from "./chart.js";
+import { loadLanlFlow, lanlFlowAt } from "./lanl_flow.js";
+import { attachFigureDownloads } from "./figure_export.js";
+import { setDetails } from "./figure_details.js";
+
+// Distinct from the dashed NL4-3 grey (#8a94a0). One colour per submitted sequence, in
+// submission order, and stable when a line is toggled off.
+const OVERLAY_COLOURS = [
+  "#2f4b7c", "#c2561a", "#1f7a3f", "#6b3fa0", "#a4262c",
+  "#0b6e8a", "#8a6d1f", "#3d6b4f", "#7a3e6d", "#3f6fbf",
+];
 
 const page = await bootstrapPage("sequence.html");
 const region = page.release.modelled_region;
@@ -72,7 +86,6 @@ document.getElementById("load-nl43").addEventListener("click", () => {
 });
 document.getElementById("clear").addEventListener("click", () => {
   fasta.value = "";
-  document.getElementById("summary-table").innerHTML = "";
   document.getElementById("detail-slot").innerHTML = "";
   document.getElementById("results-heading").hidden = true;
   sessionStorage.removeItem("mra.sequences");
@@ -81,17 +94,30 @@ document.getElementById("clear").addEventListener("click", () => {
   analysis.start();
 });
 
+function syncFigures() {
+  attachFigureDownloads({
+    release: page.release,
+    onError: (err) => console.error("figure export failed:", err),
+  });
+}
+
+let lanlPromise = null;
+function lanlIndex() {
+  if (!lanlPromise) lanlPromise = loadLanlFlow(page.version);
+  return lanlPromise;
+}
+
 // --- run -------------------------------------------------------------------------
 document.getElementById("run").addEventListener("click", async () => {
   const text = fasta.value.trim();
   const detailSlot = document.getElementById("detail-slot");
-  const summarySlot = document.getElementById("summary-table");
-  summarySlot.innerHTML = ""; detailSlot.innerHTML = "";
-  if (!text) { showError(summarySlot, "Paste a sequence first."); return; }
+  detailSlot.innerHTML = "";
+  document.getElementById("results-heading").hidden = true;
+  if (!text) { showError(detailSlot, "Paste a sequence first."); return; }
 
   const records = parseFasta(text).filter((r) => r.sequence.length >= 30);
   if (!records.length) {
-    showError(summarySlot, "No sequence of at least 30 bases was found in that input.");
+    showError(detailSlot, "No sequence of at least 30 bases was found in that input.");
     return;
   }
 
@@ -106,24 +132,52 @@ document.getElementById("run").addEventListener("click", async () => {
   try {
     out = await analysis.run(records, (p) => bar.update(p));
   } catch (err) {
-    showError(summarySlot, "Analysis failed: " + err.message);
+    showError(detailSlot, "Analysis failed: " + err.message);
     return;
   }
   const ms = Math.round(performance.now() - t0);
   bar.finish(`Done: ${out.summaries.length} sequence(s) in ${ms} ms.`);
   document.getElementById("results-heading").hidden = false;
-  if (out.truncated) {
-    summarySlot.appendChild(note(
-      `Only the first ${MAX_DETAIL_SEQUENCES} sequences were analysed. The cap is a named ` +
-      `constant (<code>MAX_DETAIL_SEQUENCES</code> in <code>js/align.js</code>) and is set from ` +
-      `measured timing, not guessed.`));
+
+  const rows = summariseRows(out, records);
+  const analysed = rows.filter((r) => r.status === "analysed");
+  if (!analysed.length) {
+    if (out.truncated) detailSlot.appendChild(truncationNote());
+    appendSummary(detailSlot, rows);
+    return;
   }
 
-  renderSummaries(out, records, summarySlot, detailSlot);
+  const loading = caveat("Building the tracks\u2026");
+  detailSlot.appendChild(loading);
+  const items = [];
+  try {
+    for (const r of analysed) {
+      const detail = await analysis.detail(r.index);
+      const item = prepareItem(r, detail, out.geometry[r.index], OVERLAY_COLOURS[items.length]);
+      if (item.sites.length) items.push(item);
+    }
+  } catch (err) {
+    showError(detailSlot, "Could not retrieve results: " + err.message);
+    return;
+  }
+  loading.remove();
+  if (!items.length) {
+    if (out.truncated) detailSlot.appendChild(truncationNote());
+    appendSummary(detailSlot, rows);
+    detailSlot.appendChild(caveat("No modelled nucleotide position was covered, so there is nothing to plot."));
+    return;
+  }
+  renderDashboard(detailSlot, items, rows, out.truncated);
 });
 
-function renderSummaries(out, records, summarySlot, detailSlot) {
-  const rows = out.summaries.map((s, i) => ({
+function truncationNote() {
+  return note(
+    `Only the first ${MAX_DETAIL_SEQUENCES} sequences were analysed. The cap is a named ` +
+    `constant (<code>MAX_DETAIL_SEQUENCES</code> in <code>js/align.js</code>).`);
+}
+
+function summariseRows(out, records) {
+  return out.summaries.map((s, i) => ({
     index: i,
     name: s.name,
     length: records[i].sequence.length,
@@ -141,36 +195,30 @@ function renderSummaries(out, records, summarySlot, detailSlot) {
     fallback: s.fallbackPositions || 0,
     summary: s,
   }));
+}
 
-  renderTable(summarySlot, {
-    columns: [
-      { key: "name", label: "Sequence" },
-      { key: "length", label: "bp", type: "num" },
-      { key: "status", label: "Status" },
-      { key: "identity", label: "% identity", type: "num" },
-      { key: "coverage", label: "% of query placed", type: "num" },
-      { key: "ref_span", label: "NL4-3 span" },
-      { key: "orientation", label: "Orientation" },
-      { key: "codons", label: "Codons", type: "num" },
-      { key: "dropped", label: "Dropped > 8,213", type: "num",
-        title: "Positions that aligned outside the modelled region and were removed" },
-      { key: "fallback", label: "Spline fallback", type: "num",
-        title: "Positions where the genome-mean spline was substituted because the site could not be aligned" },
-      { key: "index", label: "",
-        render: (r) => {
-          const btn = document.createElement("button");
-          btn.className = "secondary";
-          btn.textContent = "Show atlas";
-          btn.disabled = r.status !== "analysed";
-          btn.addEventListener("click", () => showDetail(r.index, r, out, detailSlot));
-          return btn;
-        } },
-    ],
-    rows,
-    filterPlaceholder: rows.length > 10 ? "filter sequences" : false,
-  });
+const SUMMARY_COLUMNS = [
+  { key: "name", label: "Sequence" },
+  { key: "length", label: "bp", type: "num" },
+  { key: "status", label: "Status" },
+  { key: "identity", label: "% identity", type: "num" },
+  { key: "coverage", label: "% of query placed", type: "num" },
+  { key: "ref_span", label: "NL4-3 span" },
+  { key: "orientation", label: "Orientation" },
+  { key: "codons", label: "Codons", type: "num" },
+  { key: "dropped", label: "Dropped > 8,213", type: "num",
+    title: "Positions that aligned outside the modelled region and were removed" },
+  { key: "fallback", label: "Spline fallback", type: "num",
+    title: "Positions where the genome-mean spline was substituted because the site could not be aligned" },
+];
 
-  // Anything that could not be analysed gets an explanation, never an empty table.
+function appendSummary(slot, rows) {
+  const heading = document.createElement("h3");
+  heading.textContent = "Sequences";
+  slot.appendChild(heading);
+  const tableSlot = document.createElement("div");
+  slot.appendChild(tableSlot);
+  renderTable(tableSlot, { columns: SUMMARY_COLUMNS, rows, filterPlaceholder: false });
   for (const r of rows.filter((x) => x.status !== "analysed")) {
     const div = document.createElement("div");
     div.className = "error-box";
@@ -181,67 +229,18 @@ function renderSummaries(out, records, summarySlot, detailSlot) {
         `The atlas covers NL4-3 reference positions ${region.first_position.toLocaleString()}` +
         `&ndash;${region.last_position.toLocaleString()}; this sequence aligned beyond it, so ` +
         `no position-resolved rates can be given. ${NEF_NOTE}`;
-    summarySlot.appendChild(div);
+    slot.appendChild(div);
   }
-
-  if (rows.length === 1 && rows[0].status === "analysed") showDetail(0, rows[0], out, detailSlot);
 }
 
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-}
-
-const COMPONENT_FLAGS = (r) => {
-  const flags = [];
-  flags.push('<span class="flag codon" title="Determined entirely by your sequence\'s codon">codon</span>');
-  if (r.context_source === "sequence") {
-    flags.push('<span class="flag context" title="3\u2032 context read from your sequence">context</span>');
-  } else if (r.context_source === "pooled") {
-    flags.push('<span class="flag" title="The model fitted this context cell type-only (fewer than 20 WT counts), so no context delta applies">context pooled</span>');
-  } else if (r.context_source === "unavailable") {
-    flags.push('<span class="flag fallback" title="The 3\u2032 base ran off the end of your sequence or was ambiguous; the type-only rate was used">context missing</span>');
-  }
-  flags.push(r.position_source === "aligned"
-    ? '<span class="flag position" title="Fitted NL4-3 position spline applied at the aligned position">position</span>'
-    : '<span class="flag fallback" title="Could not be aligned; the genome mean of the spline was substituted">position fallback</span>');
-  return flags.join(" ");
-};
-
-
-/**
- * The interactive genome view for one submitted sequence: the same track and pie as the
- * published atlas, but every number comes from THIS sequence's custom atlas rather than from
- * NL4-3. Ticks along the baseline mark where the submission differs from the reference, so
- * the genome can be scanned for variants and each one opened.
- *
- * Elements are built as local references rather than by id, because a batch renders one of
- * these per sequence and ids would collide.
- */
-function renderInteractiveView(slot, detail, row) {
-  const heading = document.createElement("h4");
-  heading.textContent = "Scan the genome";
-  slot.appendChild(heading);
-
-  // --- per-site supply, from this sequence's own rates -----------------------------
+function prepareItem(row, detail, geom, colour) {
   const perSite = perSiteSupply(groupByPosition(detail.nt), "rate");
-  const SITES = [...perSite.keys()].sort((a, b) => a - b);
-  if (!SITES.length) {
-    slot.appendChild(caveat("No modelled nucleotide position was covered, so there is " +
-                            "nothing to plot for this sequence."));
-    return;
-  }
-
-  // --- where this sequence differs from NL4-3 --------------------------------------
-  // The custom atlas stores the SUBMITTED base at each aligned reference position, so a
-  // mismatch against the reference string is exactly a substitution in the submission.
-  // Indels are not included: they have no single reference position to mark.
+  const sites = [...perSite.keys()].sort((a, b) => a - b);
   const refSeq = assets.reference.sequence;
   const baseAt = new Map();
   for (const r of detail.nt) if (!baseAt.has(r.ref_position)) baseAt.set(r.ref_position, r.ref_nucleotide);
   const variants = [...baseAt.entries()]
     .filter(([pos, base]) => base !== refSeq[pos - 1]).map(([pos]) => pos).sort((a, b) => a - b);
-
-  // --- codon lookup for this sequence ----------------------------------------------
   const aaByPosition = new Map();
   for (const r of detail.aa) {
     const k = r.protein + "|" + r.position;
@@ -255,14 +254,87 @@ function renderInteractiveView(slot, detail, row) {
     if (!cur) proteinSpans.set(r.protein, { min: r.position, max: r.position });
     else { cur.min = Math.min(cur.min, r.position); cur.max = Math.max(cur.max, r.position); }
   }
-  const frameAt = buildFrameIndex(assets.reference.proteins, aaByPosition);
-  const SEGMENTS = geneSegments(assets.reference.proteins);
-  const targets = engine.proteinTargets(proteinSpans);
-  const targetByKey = new Map(targets.map((t) => [t.key, t]));
+  return {
+    row, detail, geom, colour, perSite, sites, baseAt, variants, aaByPosition, proteinSpans,
+    frameAt: buildFrameIndex(assets.reference.proteins, aaByPosition),
+    targets: engine.proteinTargets(proteinSpans),
+    variantIdx: 0,
+  };
+}
 
-  // --- controls ---------------------------------------------------------------------
+/** Nearest nucleotide that is inside a codon this sequence's atlas can chart. A partial
+ *  amplicon covers bases at its edge that belong to a codon the alignment did not complete,
+ *  and those bases have a rate but no pie. */
+function nearestCodon(item, nt) {
+  if (item.frameAt.has(nt)) return nt;
+  let best = null, bestD = Infinity;
+  for (const s of item.frameAt.keys()) {
+    const d = Math.abs(s - nt);
+    if (d < bestD) { best = s; bestD = d; }
+  }
+  return best;
+}
+
+/**
+ * One genome track for the whole submission, then the browse cards. Checkboxes choose
+ * which sequences are drawn; the "Pie and flow" selector chooses which sequence those
+ * two charts analyse. The plot is the first thing under Results.
+ */
+function renderDashboard(slot, items, allRows, truncated) {
+  slot.innerHTML = "";
+  const SEGMENTS = geneSegments(assets.reference.proteins);
+  const shown = new Set(items.map((_, i) => i));
+  let active = 0;
+  let selected = null;
+  let markerNt = nearestCodon(items[0], items[0].frameAt.has(1600) ? 1600 : (items[0].variants[0] || 1600));
+  let flowToken = 0;
+  let lowerFor = -1;
+
+  const fig = document.createElement("figure");
+  fig.className = "chart plot-card";
+  fig.setAttribute("data-export-name", "genome_track");
+  const trackSlot = document.createElement("div");
+  const sliderWrap = document.createElement("div");
+  sliderWrap.className = "track-slider";
+  sliderWrap.setAttribute("data-export-skip", "");
+  const elSlider = document.createElement("input");
+  elSlider.type = "range";
+  elSlider.step = "1";
+  elSlider.min = String(region.first_position);
+  elSlider.max = String(region.last_position);
+  elSlider.setAttribute("aria-label", "Genome position (NL4-3 nucleotide)");
+  Object.assign(elSlider.style, trackSliderGeometry());
+  sliderWrap.appendChild(elSlider);
+  const figCap = document.createElement("figcaption");
+  const toggles = document.createElement("div");
+  toggles.className = "overlay-row";
+  toggles.setAttribute("data-export-skip", "");
+  const toggleLabel = document.createElement("span");
+  toggleLabel.className = "overlay-label";
+  toggleLabel.textContent = "On the track";
+  toggles.appendChild(toggleLabel);
+  items.forEach((item, i) => {
+    const lab = document.createElement("label");
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = true;
+    cb.addEventListener("change", () => {
+      if (cb.checked) shown.add(i); else shown.delete(i);
+      drawTrack();
+    });
+    const swatch = document.createElement("i");
+    swatch.className = "swatch";
+    swatch.style.background = item.colour;
+    const name = document.createElement("span");
+    name.textContent = item.row.name;
+    lab.append(cb, swatch, name);
+    toggles.appendChild(lab);
+  });
+  fig.append(trackSlot, sliderWrap, figCap, toggles);
+
   const ctrl = document.createElement("div");
-  ctrl.className = "controls";
+  ctrl.className = "control-bar";
+  ctrl.setAttribute("data-export-skip", "");
   ctrl.innerHTML =
     `<div><label>Smoothing window (nt)</label>` +
     `<input type="range" class="sq-win" min="25" max="501" step="2" value="151">` +
@@ -277,165 +349,223 @@ function renderInteractiveView(slot, detail, row) {
     `<option value="variant">Difference from NL4-3</option></select></div>` +
     `<div><label>Protein or subunit</label><select class="sq-target"></select></div>` +
     `<div><label>Position</label><input type="number" class="sq-pos" min="1" size="8"></div>` +
-    `<div><button class="sq-go">Go</button></div>` +
-    `<div><label>Reading frame here</label><select class="sq-frame"></select></div>`;
-  slot.appendChild(ctrl);
+    `<div><label>Reading frame here</label><select class="sq-frame"></select></div>` +
+    `<div><label>Pie and flow</label><select class="sq-which"></select></div>` +
+    `<div class="bar-actions"><button class="sq-go">Go</button></div>`;
+
+  const head = document.createElement("div");
+  const dash = document.createElement("figure");
+  dash.className = "dashboard-figures";
+  dash.setAttribute("data-export-name", "position_dashboard_supply");
+  const chartEl = document.createElement("div");
+  const captionEl = document.createElement("figcaption");
+  dash.append(chartEl, captionEl);
+  const statsSlot = document.createElement("div");
+  const lower = document.createElement("div");
+  slot.append(fig, ctrl, head, dash, statsSlot, lower);
 
   const elWin = ctrl.querySelector(".sq-win"), elWinOut = ctrl.querySelector(".sq-win-out");
   const elClass = ctrl.querySelector(".sq-class"), elSys = ctrl.querySelector(".sq-sys");
   const elTarget = ctrl.querySelector(".sq-target"), elPos = ctrl.querySelector(".sq-pos");
-  const elFrame = ctrl.querySelector(".sq-frame");
-  for (const t of targets) {
+  const elFrame = ctrl.querySelector(".sq-frame"), elWhich = ctrl.querySelector(".sq-which");
+  items.forEach((item, i) => {
     const o = document.createElement("option");
-    o.value = t.key; o.textContent = t.label;
-    elTarget.appendChild(o);
+    o.value = String(i);
+    o.textContent = item.row.name;
+    elWhich.appendChild(o);
+  });
+
+  function markSelected() {
+    toggles.querySelectorAll("label").forEach((lab, i) => {
+      lab.classList.toggle("is-selected", i === active);
+    });
+  }
+  function fillTargets() {
+    elTarget.innerHTML = "";
+    for (const t of items[active].targets) {
+      const o = document.createElement("option");
+      o.value = t.key;
+      o.textContent = t.label;
+      elTarget.appendChild(o);
+    }
   }
 
-  // --- figure ------------------------------------------------------------------------
-  const fig = document.createElement("figure");
-  fig.className = "chart";
-  const trackSlot = document.createElement("div");
-  const sliderWrap = document.createElement("div");
-  sliderWrap.className = "track-slider";
-  const elSlider = document.createElement("input");
-  elSlider.type = "range"; elSlider.step = "1";
-  elSlider.min = String(SITES[0]); elSlider.max = String(SITES[SITES.length - 1]);
-  elSlider.setAttribute("aria-label", "Genome position (NL4-3 nucleotide)");
-  Object.assign(elSlider.style, trackSliderGeometry());
-  sliderWrap.appendChild(elSlider);
-  const figCap = document.createElement("figcaption");
-  fig.append(trackSlot, sliderWrap, figCap);
-  slot.appendChild(fig);
-  const statsSlot = document.createElement("div");
-  slot.appendChild(statsSlot);
-
-  const head = document.createElement("div");
-  const pieFig = document.createElement("figure");
-  pieFig.className = "chart";
-  const pieSlot = document.createElement("div");
-  const pieCap = document.createElement("figcaption");
-  pieFig.append(pieSlot, pieCap);
-  slot.append(head, pieFig);
-
-  // --- state ---------------------------------------------------------------------------
-  let selected = null, markerNt = variants.length ? variants[0] : SITES[0];
-  let variantIdx = 0;
-
-  function draw() {
+  function drawTrack() {
+    const item = items[active];
     const win = Number(elWin.value);
     elWinOut.textContent = String(win);
-    figCap.innerHTML = drawSupplyTrack(trackSlot, {
-      perSite, sites: SITES, win, cls: elClass.value, segments: SEGMENTS,
+    const cls = elClass.value;
+    const series = [];
+    items.forEach((it, i) => {
+      if (!shown.has(i)) return;
+      series.push({
+        label: shortName(it.row.name),
+        colour: it.colour,
+        points: smoothSeries(it.sites, it.perSite, cls, win),
+        width: i === active ? 1.7 : 1.15,
+      });
+    });
+    const trackText = drawSupplyTrack(trackSlot, {
+      perSite: item.perSite, sites: item.sites, series, win, cls, segments: SEGMENTS,
       first: region.first_position, last: region.last_position,
       marker: markerNt,
       markerLabel: selected ? engine.hxb2Label(selected.protein, selected.geneAa) : String(markerNt),
-      variants,
-      title: `Smoothed supply along ${row.name}, with NL4-3 overlaid`,
-      label: shortName(row.name),
-      source: "computed from the codons and 3\u2032 context in your sequence, not from NL4-3",
+      variants: item.variants,
+      title: `Smoothed ${CLASS_LABEL[cls]} along the submitted sequences, with NL4-3 overlaid`,
+      source: "computed from the codons and 3\u2032 context in the sequences you submitted, not from NL4-3",
       refPerSite: referenceAtlas().perSite,
       statsEl: statsSlot,
-      refBase: baseAt.get(markerNt),      // the base in YOUR sequence, not NL4-3
+      subjectName: shortName(item.row.name),
+      refBase: item.baseAt.get(markerNt),
       onSelect: (pos) => selectNt(pos),
     });
+    const where = selected ? ` (${engine.hxb2Label(selected.protein, selected.geneAa)})` : "";
+    figCap.innerHTML =
+      `Genome-wide ${CLASS_LABEL[cls]}, ${win} nt mean. Marker at ` +
+      `${markerNt.toLocaleString()}${where}. Red ticks are where ` +
+      `<strong>${escapeHtml(shortName(item.row.name))}</strong> differs from NL4-3. ` +
+      `The dashed grey line is NL4-3.`;
+    setDetails(fig, trackText, { title: "The genome supply track" });
+    syncFigures();
   }
 
-  function selectNt(nt) {
-    const frames = frameAt.get(Math.round(nt)) || [];
-    markerNt = Math.round(nt);
-    elSlider.value = String(markerNt);
-    if (elSys.value === "nt") elPos.value = String(markerNt);
-    if (!frames.length) {
-      selected = null;
-      head.innerHTML = "";
-      showError(head, `NL4-3 nucleotide ${markerNt.toLocaleString()} is covered by your ` +
-                      `sequence but is not inside a codon this atlas models.`);
-      pieSlot.innerHTML = ""; pieCap.textContent = "";
-      draw();
-      return;
-    }
-    const keep = selected && frames.find((f) => f.protein === selected.protein);
-    apply((keep || frames[0]).protein, (keep || frames[0]).geneAa, markerNt);
+  function showPie(item, rows, label, noteHtml, yourCodon, protein, geneAa) {
+    const token = ++flowToken;
+    const opts = {
+      custom: true, noteHtml, refCodon: yourCodon,
+      markerPhrase: "the codon in " + escapeHtml(item.row.name),
+    };
+    drawPositionPie(chartEl, captionEl, rows, label, opts);
+    syncFigures();
+    lanlIndex().then((index) => {
+      if (token !== flowToken) return;
+      const flow = index ? lanlFlowAt(index, protein, geneAa) : null;
+      if (!flow) return;
+      drawPositionPie(chartEl, captionEl, rows, label, { ...opts, flow });
+      syncFigures();
+    }).catch((err) => console.error("flow chart failed:", err));
   }
 
   function apply(protein, geneAa, preferNt) {
+    const item = items[active];
     const rec = assets.reference.proteins[protein];
     const codonNt = rec.codon_nt[geneAa - rec.first_aa];
     selected = { protein, geneAa };
     markerNt = (preferNt && codonNt.includes(preferNt)) ? preferNt : codonNt[1];
     elSlider.value = String(markerNt);
+    head.innerHTML = "";
 
     elFrame.innerHTML = "";
-    for (const f of (frameAt.get(markerNt) || [])) {
+    for (const f of (item.frameAt.get(markerNt) || [])) {
       const o = document.createElement("option");
       o.value = f.protein + "|" + f.geneAa;
       o.textContent = `${engine.hxb2Label(f.protein, f.geneAa)}  (${f.protein} ${f.geneAa})`;
       elFrame.appendChild(o);
     }
     elFrame.value = protein + "|" + geneAa;
-    elFrame.disabled = (frameAt.get(markerNt) || []).length < 2;
+    elFrame.disabled = (item.frameAt.get(markerNt) || []).length < 2;
 
-    const t = targetFor(targets, protein, geneAa);
+    const t = targetFor(item.targets, protein, geneAa);
     if (t && elSys.value === "protein") {
       elTarget.value = t.key;
       elPos.value = String(engine.ownPositionFor(t, geneAa));
     }
 
-    const rows = aaByPosition.get(protein + "|" + geneAa) || [];
+    const aaRows = item.aaByPosition.get(protein + "|" + geneAa) || [];
     const label = engine.hxb2Label(protein, geneAa);
-    const yourCodon = rows.length ? rows[0].codon : "?";
+    const yourCodon = aaRows.length ? aaRows[0].codon : "?";
     const refCodon = rec.codon_seq[geneAa - rec.first_aa];
-    const differs = yourCodon !== refCodon;
-    head.innerHTML =
-      `<p><strong>${label}</strong> &mdash; your codon <code>${yourCodon}</code>` +
-      (differs ? ` <strong>(NL4-3 has <code>${refCodon}</code>)</strong>` : " (same as NL4-3)") +
-      `, amino acid <strong>${rows.length ? rows[0].ref_aa : "?"}</strong>. ` +
-      `${protein} position ${geneAa}; NL4-3 nucleotides ` +
-      `${codonNt[0].toLocaleString()}\u2013${codonNt[2].toLocaleString()}; ` +
-      `selected nucleotide ${markerNt.toLocaleString()} is codon base ` +
-      `${codonNt.indexOf(markerNt) + 1}.</p>`;
-    drawPositionPie(pieSlot, pieCap, rows, label, { custom: true });
-    draw();
+    const aa = aaRows.length ? aaRows[0].ref_aa : "?";
+    const own = t ? engine.ownPositionFor(t, geneAa) : null;
+    const noteHtml =
+      `<strong>${escapeHtml(label)}</strong> &mdash; <strong>${escapeHtml(item.row.name)}</strong>, ` +
+      `codon <code>${escapeHtml(yourCodon)}</code>` +
+      (yourCodon !== refCodon ? ` (NL4-3 has <code>${escapeHtml(refCodon)}</code>)` : " (same as NL4-3)") +
+      `, amino acid <strong>${escapeHtml(aa)}</strong>. ` +
+      `${escapeHtml(protein)} position ${geneAa}` +
+      (t && t.offset ? ` (${escapeHtml(t.key)} ${own})` : "") +
+      `; NL4-3 reference nucleotides ${codonNt[0].toLocaleString()}\u2013${codonNt[2].toLocaleString()}.`;
+    drawTrack();
+    showPie(item, aaRows, label, noteHtml, yourCodon, protein, geneAa);
+  }
+
+  function selectNt(nt) {
+    const item = items[active];
+    markerNt = Math.min(Math.max(Math.round(nt), region.first_position), region.last_position);
+    elSlider.value = String(markerNt);
+    if (elSys.value === "nt") elPos.value = String(markerNt);
+    if (!item.perSite.has(markerNt) || !(item.frameAt.get(markerNt) || []).length) {
+      selected = null;
+      elFrame.innerHTML = "";
+      elFrame.disabled = true;
+      showError(head,
+        item.perSite.has(markerNt)
+          ? `NL4-3 nucleotide ${markerNt.toLocaleString()} is covered by ${item.row.name} ` +
+            `but is not inside a codon this atlas models.`
+          : `NL4-3 nucleotide ${markerNt.toLocaleString()} is not covered by ${item.row.name}. ` +
+            `It covers ${item.sites[0].toLocaleString()}\u2013${item.sites[item.sites.length - 1].toLocaleString()}.`);
+      chartEl.innerHTML = "";
+      captionEl.textContent = "";
+      drawTrack();
+      return;
+    }
+    const frames = item.frameAt.get(markerNt) || [];
+    const keep = selected && frames.find((f) => f.protein === selected.protein);
+    apply((keep || frames[0]).protein, (keep || frames[0]).geneAa, markerNt);
   }
 
   function jump() {
+    const item = items[active];
     head.innerHTML = "";
     if (elSys.value === "variant") {
-      if (!variants.length) { showError(head, "This sequence matches NL4-3 at every modelled position."); return; }
+      if (!item.variants.length) {
+        showError(head, `${item.row.name} matches NL4-3 at every modelled position.`);
+        return;
+      }
       const want = Number(elPos.value);
-      variantIdx = Number.isInteger(want) && want >= 1 && want <= variants.length
-        ? want - 1 : (variantIdx + 1) % variants.length;
-      elPos.value = String(variantIdx + 1);
-      selectNt(variants[variantIdx]);
+      item.variantIdx = Number.isInteger(want) && want >= 1 && want <= item.variants.length
+        ? want - 1 : (item.variantIdx + 1) % item.variants.length;
+      elPos.value = String(item.variantIdx + 1);
+      selectNt(item.variants[item.variantIdx]);
       return;
     }
     const raw = Number(elPos.value);
     if (!Number.isInteger(raw) || raw < 1) { showError(head, "Enter a positive whole number."); return; }
     if (elSys.value === "nt") {
-      if (!perSite.has(raw)) {
-        showError(head, `NL4-3 nucleotide ${raw.toLocaleString()} is not covered by this ` +
-                        `sequence. It covers ${SITES[0].toLocaleString()}\u2013` +
-                        `${SITES[SITES.length - 1].toLocaleString()} of the reference.`);
+      if (!item.perSite.has(raw)) {
+        showError(head,
+          `NL4-3 nucleotide ${raw.toLocaleString()} is not covered by ${item.row.name}. ` +
+          `It covers ${item.sites[0].toLocaleString()}\u2013${item.sites[item.sites.length - 1].toLocaleString()}.`);
         return;
       }
       selectNt(raw);
       return;
     }
-    const t = targetByKey.get(elTarget.value);
+    const t = new Map(item.targets.map((x) => [x.key, x])).get(elTarget.value);
     if (!t) { showError(head, "Pick a protein or subunit."); return; }
     const geneAa = engine.geneAaFromOwnPosition(t, raw);
-    if (geneAa === null || !aaByPosition.has(t.protein + "|" + geneAa)) {
-      const span = proteinSpans.get(t.protein);
-      showError(head, `${t.key} ${raw} is not covered by this sequence` +
+    if (geneAa === null || !item.aaByPosition.has(t.protein + "|" + geneAa)) {
+      const span = item.proteinSpans.get(t.protein);
+      showError(head, `${t.key} ${raw} is not covered by ${item.row.name}` +
         (span ? ` \u2014 ${t.protein} ${span.min}\u2013${span.max} was analysed.` : "."));
       return;
     }
     apply(t.protein, geneAa, null);
   }
 
+  function renderLower() {
+    if (lowerFor === active) return;
+    lowerFor = active;
+    lower.innerHTML = "";
+    if (truncated) lower.appendChild(truncationNote());
+    appendSummary(lower, allRows);
+    renderSequenceTables(lower, items[active]);
+    syncFigures();
+  }
+
   elWin.addEventListener("input", () => { elWinOut.textContent = elWin.value; });
-  elWin.addEventListener("change", draw);
-  elClass.addEventListener("change", draw);
+  elWin.addEventListener("change", drawTrack);
+  elClass.addEventListener("change", drawTrack);
   elSlider.addEventListener("input", () => selectNt(Number(elSlider.value)));
   ctrl.querySelector(".sq-go").addEventListener("click", jump);
   elPos.addEventListener("keydown", (e) => { if (e.key === "Enter") jump(); });
@@ -444,28 +574,39 @@ function renderInteractiveView(slot, detail, row) {
     const [p, g] = e.target.value.split("|");
     apply(p, Number(g), markerNt);
   });
+  elWhich.addEventListener("change", () => {
+    active = Number(elWhich.value);
+    markSelected();
+    fillTargets();
+    const item = items[active];
+    lowerFor = -1;
+    const nt = nearestCodon(item, markerNt);
+    if (nt === null) {
+      showError(head, `${item.row.name} has no modelled codon to chart.`);
+      chartEl.innerHTML = "";
+      captionEl.textContent = "";
+    } else {
+      selectNt(nt);
+    }
+    renderLower();
+  });
   elSys.addEventListener("change", () => {
+    const item = items[active];
     const mode = elSys.value;
     elTarget.disabled = mode !== "protein";
+    const t = selected ? targetFor(item.targets, selected.protein, selected.geneAa) : null;
     elPos.value = mode === "nt" ? String(markerNt)
-      : mode === "variant" ? String(variantIdx + 1)
-      : (selected ? String(engine.ownPositionFor(targetFor(targets, selected.protein, selected.geneAa), selected.geneAa)) : "1");
+      : mode === "variant" ? String(item.variantIdx + 1)
+      : (t ? String(engine.ownPositionFor(t, selected.geneAa)) : "1");
   });
 
-  slot.appendChild(caveat(
-    variants.length
-      ? `<strong>${variants.length.toLocaleString()} position(s)</strong> in the modelled region ` +
-        `differ from NL4-3; each is a red tick on the baseline. Set &ldquo;Jump to&rdquo; to ` +
-        `&ldquo;Difference from NL4-3&rdquo; and press Go to step through them. A tick marks a ` +
-        `substitution, not an indel \u2014 an indel has no single reference position to mark. ` +
-        `These are differences in <em>your</em> sequence, not predictions: the track shows how ` +
-        `readily each site mutates, which is a separate question from whether it already has.`
-      : "This sequence matches NL4-3 at every modelled position, so there are no difference " +
-        "ticks. The track still shows how readily each site mutates."));
-
+  fillTargets();
+  markSelected();
   elTarget.disabled = false;
-  selectNt(markerNt);
+  if (markerNt !== null) selectNt(markerNt);
+  renderLower();
 }
+
 
 // --- comparison to NL4-3 ----------------------------------------------------------
 // The accessibility view needs the NL4-3 rate at each position. Rather than fetch the heavy
@@ -597,24 +738,34 @@ function renderAccessibility(slot, detail, row, geom) {
     "virus: the per-site model is the same one, fitted on NL4-3."));
 }
 
-async function showDetail(index, row, out, slot) {
-  slot.innerHTML = "";
-  slot.appendChild(Object.assign(document.createElement("h3"),
-    { textContent: `Custom atlas for ${row.name}` }));
-  const loading = caveat("Fetching the full tables\u2026");
-  slot.appendChild(loading);
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
 
-  let detail;
-  try { detail = await analysis.detail(index); }
-  catch (err) { showError(slot, "Could not retrieve results: " + err.message); return; }
-  loading.remove();
+const COMPONENT_FLAGS = (r) => {
+  const flags = [];
+  flags.push('<span class="flag codon" title="Determined entirely by your sequence\'s codon">codon</span>');
+  if (r.context_source === "sequence") {
+    flags.push('<span class="flag context" title="3\u2032 context read from your sequence">context</span>');
+  } else if (r.context_source === "pooled") {
+    flags.push('<span class="flag" title="The model fitted this context cell type-only (fewer than 20 WT counts), so no context delta applies">context pooled</span>');
+  } else if (r.context_source === "unavailable") {
+    flags.push('<span class="flag fallback" title="The 3\u2032 base ran off the end of your sequence or was ambiguous; the type-only rate was used">context missing</span>');
+  }
+  flags.push(r.position_source === "aligned"
+    ? '<span class="flag position" title="Fitted NL4-3 position spline applied at the aligned position">position</span>'
+    : '<span class="flag fallback" title="Could not be aligned; the genome mean of the spline was substituted">position fallback</span>');
+  return flags.join(" ");
+};
 
-  const geom = out.geometry[index];
+/** Tables for the sequence selected in "Pie and flow". They sit below the plots. */
+function renderSequenceTables(slot, item) {
+  const { detail, row, geom } = item;
   const s = row.summary;
-  const proteinBits = Object.entries(s.proteins || {})
-    .filter(([, v]) => v.codonsAnalysed > 0)
-    .map(([k, v]) => `${k} ${v.firstAnalysed}\u2013${v.lastAnalysed} (${v.codonsAnalysed} of ${v.codonsInReference} modelled codons)`)
-    .join("; ");
+  const heading = document.createElement("h3");
+  heading.textContent = `Tables for ${row.name}`;
+  slot.appendChild(heading);
+
   // A sequence far from NL4-3 still aligns and still returns numbers, so the only thing
   // standing between a reader and a misread is saying so. The threshold is empirical: across
   // the LANL group M compendium, subtypes and CRFs sit at 85-93% identity to NL4-3, while
@@ -629,22 +780,16 @@ async function showDetail(index, row, out, slot) {
       `indicative, not quantitative. If you pasted an RNA, protein or non-HIV-1 sequence, that ` +
       `is the more likely explanation.`));
   }
-  slot.appendChild(note(
-    `Placed on NL4-3 ${geom.refStart.toLocaleString()}&ndash;${geom.refEnd.toLocaleString()} at ` +
-    `${(s.identity * 100).toFixed(2)}% identity, ${(geom.coverageOfQuery * 100).toFixed(1)}% of the ` +
-    `submitted bases placed. Proteins covered: ${proteinBits || "none"}. ` +
-    (s.droppedOutsideRegion
-      ? `<strong>${s.droppedOutsideRegion.toLocaleString()} aligned positions were dropped</strong> for ` +
-        `lying outside the modelled region ${region.first_position.toLocaleString()}&ndash;` +
-        `${region.last_position.toLocaleString()}. `
-      : "") +
-    (geom.unalignedSpans.length
-      ? `${geom.unalignedSpans.length} span(s) of your sequence could not be aligned: ` +
-        geom.unalignedSpans.slice(0, 6).map((x) => `${x.queryStart}\u2013${x.queryEnd}`).join(", ") +
-        (geom.unalignedSpans.length > 6 ? ", \u2026" : "") + ". "
-      : "") +
-    ((s.proteins && s.proteins.Nef && s.proteins.Nef.codonsAnalysed > 0) ? NEF_NOTE : "")));
-
+  const spans = (geom && geom.unalignedSpans) || [];
+  if (spans.length) {
+    slot.appendChild(caveat(
+      `${spans.length} span(s) of ${escapeHtml(row.name)} could not be aligned: ` +
+      spans.slice(0, 6).map((x) => `${x.queryStart}\u2013${x.queryEnd}`).join(", ") +
+      (spans.length > 6 ? ", \u2026" : "") + "."));
+  }
+  if (s.proteins && s.proteins.Nef && s.proteins.Nef.codonsAnalysed > 0) {
+    slot.appendChild(caveat(NEF_NOTE));
+  }
   if (s.contextUnavailable || s.gaContextUnavailable) {
     slot.appendChild(caveat(
       `${s.contextUnavailable} site(s) had no readable 3&prime; base and fell back to the ` +
@@ -653,14 +798,9 @@ async function showDetail(index, row, out, slot) {
       `This happens at the very end of a submitted sequence.`));
   }
 
-  // --- interactive genome view ------------------------------------------------------
-  renderInteractiveView(slot, detail, row);
-
-  // --- comparison to NL4-3 (folded in from the former "Compare & genome track" tab) ---
   renderCodonDifferences(slot, detail, row, geom);
   renderAccessibility(slot, detail, row, geom);
 
-  // --- amino-acid layer ----------------------------------------------------------
   const aaHeading = document.createElement("h4");
   aaHeading.textContent = "Amino-acid mutability";
   slot.appendChild(aaHeading);
@@ -687,7 +827,6 @@ async function showDetail(index, row, out, slot) {
     provenance: customProvenance(row, s, geom),
   });
 
-  // --- nucleotide layer ----------------------------------------------------------
   const ntHeading = document.createElement("h4");
   ntHeading.textContent = "Nucleotide rates";
   slot.appendChild(ntHeading);
@@ -719,7 +858,6 @@ async function showDetail(index, row, out, slot) {
     "coordinate and would tell you nothing about your virus. They are in the published " +
     "browse and download layer, where they are a real result."));
 
-  // --- download everything -------------------------------------------------------
   const btn = document.createElement("button");
   btn.textContent = "Download this custom atlas (both tables + paths)";
   btn.addEventListener("click", () => {
@@ -734,6 +872,7 @@ async function showDetail(index, row, out, slot) {
   });
   slot.appendChild(btn);
 }
+
 
 function safeName(name) {
   return String(name).replace(/[^A-Za-z0-9._-]+/g, "_").slice(0, 60);

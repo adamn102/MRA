@@ -258,6 +258,12 @@ if (!JSDOM) {
         dialogs.map((x) => x.textContent.length).join(", "));
   check("no details dialog still promises a probability curve",
         !dialogs.some((x) => /probabilit/i.test(x.textContent)));
+  const flowDialog = dialogs.find((x) => /Left column/i.test(x.textContent));
+  check("the flow explanation sizes the left column by codon frequency and the right by relative supply",
+        !!flowDialog && /codon frequency/i.test(flowDialog.textContent) &&
+        /relative supply/i.test(flowDialog.textContent) &&
+        /fraction of its one-step changes/i.test(flowDialog.textContent),
+        flowDialog ? flowDialog.textContent.slice(0, 180) : "no flow dialog");
 
   const solo = dom.window.document.createElement("div");
   const soloCap = dom.window.document.createElement("div");

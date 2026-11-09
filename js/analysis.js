@@ -110,7 +110,7 @@ export class Analysis {
    * Fold a whole batch into one per-site x per-sample matrix, retaining no atlases.
    *
    * Use this instead of run()+detail() for batch work: run() keeps every atlas so detail()
-   * can serve it later, which for 100 full genomes is ~286 MB inside the worker. This path
+   * can serve it later, which for a full genome is tens of megabytes inside the worker. This path
    * discards each atlas as soon as it has been folded, so the peak is the matrix (~8 MB).
    * The per-sequence tables are therefore NOT available afterwards -- that is the trade.
    *

@@ -779,18 +779,26 @@ export function drawSupplyFlow(container, captionEl, stat, matrix, opts = {}) {
     const f = freqOf.get(c), share = supplyOf.get(c) / supplyTotal;
     if (!lead || share - f > lead.gap) lead = { codon: c, f, share, gap: share - f };
   }
-  captionEl.innerHTML =
-    (mode === "supply"
+  // describeColumns is the dashboard (Browse and Your Sequence). Those pages have no
+  // weighting toggle, and the two columns are different quantities: the left is the LANL
+  // frequency, the right is that frequency times each codon's pie. The batch tab keeps the
+  // toggle and the wording that goes with it.
+  const opening = opts.describeColumns
+    ? `Left blocks are the LANL codon frequency only. Right blocks are relative supply: ` +
+      `codon frequency multiplied by that codon's fraction of its one-step changes. `
+    : (mode === "supply"
       ? `Band width is a codon's frequency multiplied by its rate to that residue, so a left ` +
         `block is its share of the <em>supply</em> rather than of the sequences. `
       : `Band width is how common the codon is, split by where that codon's single ` +
         `substitutions lead. Left blocks are shares of <em>sequences</em>; switch the ` +
-        `weighting to size them by supply instead. `) +
-    (lead && lead.gap > 0.05
+        `weighting to size them by supply instead. `);
+  const comparison = opts.describeColumns ? ""
+    : (lead && lead.gap > 0.05
       ? `<strong>${lead.codon}</strong> is carried by ${(100 * lead.f).toFixed(0)}% of these ` +
         `sequences but accounts for <strong>${(100 * lead.share).toFixed(0)}%</strong> of what ` +
         `this position generates. `
-      : `Supply is spread across the codons roughly in proportion to how common they are. `) +
+      : `Supply is spread across the codons roughly in proportion to how common they are. `);
+  captionEl.innerHTML = opening + comparison +
     // Deliberately the supply fraction from siteSupplyStats, not this chart's own synonymous
     // band share: in "sequences" weighting a band is a per-codon proportion, so its share is a
     // mean of proportions and would read differently from the same quantity in the table and

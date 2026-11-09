@@ -41,12 +41,18 @@ const CLASS_COLOUR = { total: "#2f4b7c", nonga: "#3f8f7a", ga: "#c2561a" };
  *   variants   optional array of positions differing from NL4-3
  *   onSelect   callback(position)
  *   source     short phrase naming where the rates came from
+ *   series     optional already-smoothed lines, one per submitted sequence. When set, these
+ *              replace the single primary series; NL4-3 is still added from refPerSite, and
+ *              perSite/sites still drive the quantity table for the sequence being analysed.
+ *   subjectName  optional name used in the "÷ NL4-3" quantity row
  */
 export function drawSupplyTrack(container, o) {
-  const pts = smoothSeries(o.sites, o.perSite, o.cls, o.win);
-  const series = [
-    { label: o.label || CLASS_LABEL[o.cls], colour: CLASS_COLOUR[o.cls], points: pts, width: 1.1 },
-  ];
+  const pts = o.sites && o.perSite ? smoothSeries(o.sites, o.perSite, o.cls, o.win) : [];
+  // An explicit series list is how Your Sequence draws several submissions on one axis.
+  // Omitting it keeps the single series the published atlas and the one-sequence tests use.
+  const series = Array.isArray(o.series)
+    ? o.series.filter((s) => s && s.points && s.points.length)
+    : [{ label: o.label || CLASS_LABEL[o.cls], colour: CLASS_COLOUR[o.cls], points: pts, width: 1.1 }];
   // NL4-3 OVERLAY. Drawn on exactly the sites the submission covers, not on the whole
   // reference: the smoothing window must contain the same positions in both series or the
   // two lines are not comparable point for point, and a partial amplicon would otherwise be
@@ -93,8 +99,10 @@ export function drawSupplyTrack(container, o) {
         const ratio = at[1] / refAt[1];
         rows.push({ label: "NL4-3 at the marker", value: formatRate(refAt[1]),
                     note: "the reference's own rate over the same positions and window" });
+        const subject = String(o.subjectName || "Your sequence")
+          .replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
         rows.push({
-          label: "Your sequence \u00f7 NL4-3",
+          label: subject + " \u00f7 NL4-3",
           value: (ratio >= 1 ? "\u00d7" : "\u00f7") +
                  (ratio >= 1 ? ratio : 1 / ratio).toFixed(2),
           note: Math.abs(Math.log2(ratio)) < 0.05
@@ -107,16 +115,22 @@ export function drawSupplyTrack(container, o) {
     renderTrackStats(o.statsEl, rows);
   }
 
-  return `Centred running mean of the per-site rate over a ${o.win} nt window, summed across ` +
-    `substitution classes${o.cls === "total" ? "" : " and restricted to " + CLASS_LABEL[o.cls]}. ` +
-    `Rates are ${o.source}. Insertions and deletions are excluded. ` +
-    (refPts
-      ? `The dashed grey line is <strong>NL4-3</strong> over the same positions and the same ` +
+  const multi = Array.isArray(o.series);
+  const refSentence = !refPts ? ""
+    : multi
+      ? `The dashed grey line is <strong>NL4-3</strong>, smoothed over the same positions and ` +
+        `the same window as the sequence selected for the pie and the flow chart. Each coloured ` +
+        `line is a submitted sequence. They meet the reference wherever that sequence's codons ` +
+        `and 3\u2032 contexts match NL4-3. `
+      : `The dashed grey line is <strong>NL4-3</strong> over the same positions and the same ` +
         `window, so the two are comparable point for point. They coincide wherever your ` +
         `codons and 3\u2032 contexts match the reference, which for a close relative is most ` +
         `of the genome \u2014 the gaps between them are the whole of what your sequence ` +
-        `changes about mutational supply. `
-      : "") +
+        `changes about mutational supply. `;
+  return `Centred running mean of the per-site rate over a ${o.win} nt window, summed across ` +
+    `substitution classes${o.cls === "total" ? "" : " and restricted to " + CLASS_LABEL[o.cls]}. ` +
+    `Rates are ${o.source}. Insertions and deletions are excluded. ` +
+    refSentence +
     `The band above the plot shows coding segments; overlapping reading frames sit on ` +
     `separate rows, and spliced genes (tat, rev) appear as one box per exon, with the gene ` +
     `holding the marker filled solid.` + spanNote;
@@ -174,14 +188,18 @@ export function trackStats(a) {
  * pooling, totals, how many sequences -- and that is worth keeping rather than rewriting
  * here, where it would drift from what was actually drawn.
  */
-function flowDetailHtml(label, chartCaption) {
+function flowDetailHtml(label, chartCaption, markerPhrase) {
   return "<p>The same position across circulating virus, from a batch over the 182 LANL " +
-    "group M compendium genomes. <strong>Left column:</strong> the codons those sequences " +
-    "carry at " + label + ", with the share carrying each; \u25c0 marks the codon NL4-3 " +
-    "has. <strong>Right column:</strong> the residue each becomes. <strong>Band width</strong> " +
-    "is that route's share of the residue change this position generates.</p>" +
-    "<p>The pie beside it is one codon's draw; this is the population's. Both are coloured " +
-    "by destination residue, so a slice and a band for the same residue match.</p>" +
+    "group M compendium genomes. <strong>Left column:</strong> codon frequency in those " +
+    "genomes, and nothing else. A block's height is the share of genomes carrying that " +
+    "codon at " + label + "; \u25c0 marks " +
+    (markerPhrase || "the codon NL4-3 has") +
+    ". <strong>Right column:</strong> relative supply. A block's height is each codon's " +
+    "frequency multiplied by that codon's fraction of its one-step changes \u2014 the same " +
+    "split as its pie \u2014 summed over the codons that reach that residue.</p>" +
+    "<p>The pie beside it is one codon's draw. The flow splits every circulating codon by " +
+    "its own pie, then weights the result by how often the LANL genomes carry it. Both are " +
+    "coloured by destination residue, so a slice and a band for the same residue match.</p>" +
     (chartCaption ? "<p>" + chartCaption + "</p>" : "");
 }
 
@@ -197,17 +215,19 @@ function renderTrackStats(el, rows) {
 
 /**
  * The codon panel: a pie of the one-nucleotide-accessible amino-acid changes at this codon,
- * and beside it -- where a flow source is supplied -- where residue change at this position
- * is actually generated across circulating virus.
+ * and beside it -- where a flow source is supplied -- the same position in circulating virus.
+ * The flow's left column is LANL codon frequency. Its right column is relative supply.
  *
  * WHAT REPLACED THE EMERGENCE CURVE. This slot used to hold "probability of generating this
  * change de novo" against replicating population size. That curve plotted
  * 1 - (1 - mu)^N, which is a restatement of the rate the pie already shows against an N the
  * atlas cannot measure -- so its shape came from the reader's assumption about population
  * size, not from the data. The flow chart answers a question the atlas can actually speak
- * to: given the codons circulating virus carries here, where does residue change get
- * generated? It is the same chart the batch tab draws, from a batch over the LANL group M
- * compendium precomputed at build time.
+ * to: given the codons circulating virus carries here, where does one sequence's
+ * one-step change land? The left column is the LANL codon frequency alone. The right
+ * column is relative supply, that frequency times each codon's own pie. It is the same
+ * chart the batch tab draws in its "how common each codon is" weighting, from a batch
+ * over the LANL group M compendium precomputed at build time.
  *
  * The two figures share a colour key -- both are coloured by destination residue, and
  * degenerate codons for one residue take that residue's colour -- so a slice and a band can
@@ -349,7 +369,12 @@ export function drawPositionPie(chartEl, captionEl, rows, label, opts = {}) {
       // Title lives in the card heading. Height is fixed to the pie's so the two boxes match;
       // the chart used to size itself from its block count and the pair never lined up.
       drawSupplyFlow(flowSlot, flowCaption, opts.flow.stat, opts.flow.matrix,
-                     { weight: "supply", width: FLOW_W, height: FIG_H,
+                     { // Left blocks are LANL codon frequency. Right blocks are relative
+                       // supply: frequency times that codon's fraction of its one-step pie.
+                       // "supply" weighting would size the left column by frequency times
+                       // the codon's rate, which is a different question.
+                       weight: "sequences", describeColumns: true,
+                       width: FLOW_W, height: FIG_H,
                        title: flowTitleText, drawTitle: false, subtitle: false,
                        // Pooled harder than the batch tab's 2%, so the block count fits the
                        // shared box height with its labels still legible. The threshold is
@@ -385,7 +410,7 @@ export function drawPositionPie(chartEl, captionEl, rows, label, opts = {}) {
     { title: `One-step changes from the codon at ${label}` });
 
   if (hasFlow) {
-    setDetails(flowCard, flowDetailHtml(label, flowCaption.innerHTML),
+    setDetails(flowCard, flowDetailHtml(label, flowCaption.innerHTML, opts.markerPhrase),
                { title: `${label} across circulating virus` });
   }
 

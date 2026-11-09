@@ -8,7 +8,7 @@
 // bouncing the alignment back to the main thread and the result forward again.
 //
 // Results are KEPT IN THE WORKER and summaries are posted as each sequence finishes.
-// The page asks for one sequence's full tables at a time. A batch of 100 near-full-length
+// The page asks for one sequence's full tables at a time. A batch of near-full-length
 // genomes would otherwise mean millions of rows crossing the thread boundary at once.
 //
 // PRIVACY: this worker never makes a network request. It receives the assets the page
@@ -58,9 +58,9 @@ self.onmessage = (event) => {
     }
     // BATCH. The difference from "run" is that nothing is retained: each sequence's atlas is
     // folded into the per-site matrix and then dropped, so worker memory stays O(sites x
-    // samples) rather than O(rows x samples). Retaining 100 full-genome atlases the way "run"
-    // does would be ~286 MB here; the matrix is ~8 MB. That is why this is a separate path and
-    // not a flag on the existing one.
+    // samples) rather than O(rows x samples). Retaining a full-genome atlas per sequence the
+    // way "run" does is tens of megabytes here; the matrix is ~8 MB. That is why this is a
+    // separate path and not a flag on the existing one.
     if (msg.type === "batch") {
       if (!engine) throw new Error("worker received 'batch' before 'init'");
       const seqs = msg.sequences.slice(0, MAX_BATCH_SEQUENCES);
