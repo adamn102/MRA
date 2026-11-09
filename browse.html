@@ -38,8 +38,8 @@ the number of paths.</p>
   </div>
 </div>
 
-<figure class="chart"><div id="genome-track"></div>
-  <div class="track-slider">
+<figure class="chart" data-export-name="genome_track"><div id="genome-track"></div>
+  <div class="track-slider" data-export-skip>
     <input type="range" id="track-slider" min="1" max="8213" step="1" value="1600"
            aria-label="Genome position (NL4-3 nucleotide)">
   </div>
@@ -78,10 +78,12 @@ frame coding at the selected nucleotide; overlapping genes give more than one.</
 
 <div id="dashboard-status" class="caveat">Loading the atlas tables&hellip;</div>
 <div id="dashboard-head"></div>
-<figure class="chart"><div id="dashboard-chart"></div>
+<figure class="chart" data-export-name="position_dashboard_supply"><div id="dashboard-chart"></div>
   <figcaption id="dashboard-caption"></figcaption>
-  <div style="margin-top: 0.5em;"><button id="download-png" class="secondary">Download as PNG</button></div>
 </figure>
+<div class="controls" data-export-skip>
+  <div><button id="download-png" class="secondary">Download the whole dashboard (PNG)</button></div>
+</div>
 </div>
 
 <div id="dashboard-table"></div>

@@ -28,6 +28,7 @@ import { batchSiteStats, topDivergentSites, perSampleSummary,
   from "./batch_core.js";
 import { drawMutabilityTrack, drawMutabilityDivergenceTrack,
          drawPositionComposition, drawSupplyFlow } from "./batch_view.js";
+import { attachFigureDownloads } from "./figure_export.js";
 import { geneSegments, targetFor as targetForIn } from "./explore_core.js";
 
 const page = await bootstrapPage("batch.html");
@@ -354,6 +355,11 @@ function drawAll() {
     `Positions covered by one sample show nothing, because a fold range needs two.`;
 
   drawSite(label);
+  // Every figure on this tab has just been (re)drawn or cleared; bring the per-figure PNG
+  // buttons into line with that. drawSite() clears the two site charts at an unmodelled
+  // position, so this both adds and removes.
+  attachFigureDownloads({ release: page.release, onError: (err) => showError(el("site-head"),
+    "Could not build the PNG: " + err.message) });
 }
 
 function drawSite(label) {
@@ -524,8 +530,12 @@ el("download-png").addEventListener("click", async () => {
   const label = button.textContent;
   button.textContent = "Generating\u2026";
   try {
-    const canvas = await html2canvas(target, { backgroundColor: "#ffffff", scale: 2,
-                                               logging: false, useCORS: true });
+    // The two figures inside #site-export now carry their own download buttons; those rows
+    // are marked data-export-skip so this combined capture leaves them out too.
+    const canvas = await html2canvas(target, {
+      backgroundColor: "#ffffff", scale: 2, logging: false, useCORS: true,
+      ignoreElements: (node) => !!(node.hasAttribute && node.hasAttribute("data-export-skip")),
+    });
     const blob = await new Promise((res) => canvas.toBlob(res));
     if (!blob) throw new Error("the canvas could not be converted to an image");
     const url = URL.createObjectURL(blob);

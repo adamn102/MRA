@@ -20,6 +20,7 @@ import { bootstrapPage, note, caveat, showError, exportProvenance, shareButton, 
 import { loadSmallAssets, loadAminoAcidLayer, loadNucleotideLayer, loadPathShard } from "./data.js";
 import { renderTable, formatRate } from "./table.js";
 import { drawSupplyTrack, drawPositionPie } from "./track_view.js";
+import { attachFigureDownloads } from "./figure_export.js";
 import { trackSliderGeometry } from "./chart.js";
 import { MraEngine } from "./mra_engine.js";
 import { perSiteSupply, smoothSeries, buildFrameIndex, geneSegments, oneStepSlices,
@@ -57,6 +58,9 @@ async function downloadDashboardPNG() {
       allowTaint: true,
       proxy: null,                 // Disable proxy to avoid CORS issues
       timeout: 30000,              // 30 second timeout
+      // The per-figure download buttons, and this button's own row, are marked
+      // data-export-skip; keep them out of the combined image.
+      ignoreElements: (node) => !!(node.hasAttribute && node.hasAttribute("data-export-skip")),
     });
     
     // Convert canvas to PNG blob and download (properly awaited)
@@ -166,6 +170,15 @@ function drawTrack() {
       refBase: assets.reference.sequence[markerNt - 1],
       onSelect: (pos) => selectNucleotide(pos),
     });
+  syncFigureButtons();
+}
+
+/** Offer a PNG for each figure that currently holds a plot. Cheap and idempotent. */
+function syncFigureButtons() {
+  attachFigureDownloads({
+    release: page.release,
+    onError: (err) => console.error("figure export failed:", err),
+  });
 }
 
 async function loadTrack() {
@@ -309,6 +322,7 @@ async function showPosition(target, genePosition) {
 
   const sorted = rows.slice().sort((a, b) => b.mu_aa - a.mu_aa);
   drawPositionPie(chart, caption, rows, hxb2, { custom: false });
+  syncFigureButtons();
 
   renderTable(tableSlot, {
     columns: [

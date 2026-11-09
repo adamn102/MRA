@@ -91,6 +91,17 @@ table.data tbody tr:hover { background: #eef4f8; }
 /* --- charts ------------------------------------------------------------- */
 figure.chart { margin: 14px 0; }
 figure.chart figcaption { font-size: 13px; color: var(--muted); margin-top: 4px; }
+
+/* Per-figure PNG export. The button row sits under its own figure and is marked
+   data-export-skip, so it never appears in the image it produces. It is quiet by default and
+   comes forward on hover or keyboard focus: every figure carries one, and six loud buttons
+   down a page would compete with the plots they belong to. */
+figure.chart .figure-tools { margin-top: 6px; opacity: 0.55; transition: opacity 0.12s; }
+figure.chart:hover .figure-tools,
+figure.chart .figure-tools:focus-within { opacity: 1; }
+figure.chart .figure-download { font-size: 12px; padding: 3px 8px; }
+/* Drawn into the PNG only; present in the page for the duration of one capture. */
+figure.chart .figure-stamp { font-size: 11px; color: var(--muted); margin-top: 6px; }
 canvas { max-width: 100%; }
 
 /* --- progress ----------------------------------------------------------- */

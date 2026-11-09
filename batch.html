@@ -75,8 +75,8 @@ ones. Both are counted separately in the summary above.</p>
   </div>
   <div><span id="share-slot"></span></div>
 </div>
-<figure class="chart"><div id="batch-track"></div>
-  <div class="track-slider">
+<figure class="chart" data-export-name="batch_genome_track"><div id="batch-track"></div>
+  <div class="track-slider" data-export-skip>
     <input type="range" id="track-slider" min="1" max="8213" step="1" value="1600"
            aria-label="Genome position (NL4-3 nucleotide)">
   </div>
@@ -88,7 +88,7 @@ ones. Both are counted separately in the summary above.</p>
     <output id="divergence-window-out">31</output>
   </div>
 </div>
-<figure class="chart"><div id="divergence-track"></div>
+<figure class="chart" data-export-name="batch_divergence_track"><div id="divergence-track"></div>
   <figcaption id="divergence-caption"></figcaption></figure>
 
 <h3>One position across every sample</h3>
@@ -123,14 +123,14 @@ single substitution would take it.</p>
       <option value="supply">How much supply each codon contributes</option>
     </select>
   </div>
-  <div><button id="download-png" class="secondary">Download as PNG</button></div>
+  <div><button id="download-png" class="secondary">Download both charts (PNG)</button></div>
 </div>
 <p id="coord-note" class="caveat"></p>
 <div id="site-export">
 <div id="site-head"></div>
-<figure class="chart"><div id="site-chart"></div>
+<figure class="chart" data-export-name="batch_site_composition"><div id="site-chart"></div>
   <figcaption id="site-caption"></figcaption></figure>
-<figure class="chart"><div id="codon-chart"></div>
+<figure class="chart" data-export-name="batch_site_supply_flow"><div id="codon-chart"></div>
   <figcaption id="codon-caption"></figcaption></figure>
 </div>
 <div id="site-sample-table"></div>
