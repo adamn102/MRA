@@ -57,26 +57,31 @@ dev script is a convenience, not a dependency.
 
 ### What to click first
 
-1. `index.html` — the overview, the privacy statement and the coverage note.
-2. `browse.html` — it opens on **PR 46** by default. Change the protein selector to
-   **RT** and the position to **184**; the bar chart should put V at the top with a
-   single-substitution flag. Paste-a-list is below, pre-filled with seven real
-   drug-resistance mutations.
-3. `drm.html` — the resistance & escape page. Pick a drug class (try **INI**), then
-   click **codon sensitivity** on a glycine DRM such as **IN G140R** to see the 68× spread
-   across synonymous codons with NL4-3's marked. The bNAb section below lists 24 curated
-   escape mutations across 6 antibodies, each citing a study that measured an effect on
-   neutralisation; rows where NL4-3 lacks the published wild type keep the citation but
-   show no rate.
-4. `sequence.html` — press **Load NL4-3 (worked example)** then **Compute custom atlas**.
+1. `index.html` — **Browse the atlas**, now the landing page. It opens on **PR 46** by
+   default. Change the protein selector to **RT** and the position to **184**; the bar
+   chart should put V at the top with a single-substitution flag. Each figure carries its
+   own **Download this figure (PNG)** button.
+2. `tables.html` — **MRA Table**. Every compiled table on one page: the five drug classes
+   (PI, NRTI, NNRTI, INI, CAI), the three bNAb epitope classes (CD4bs, V3 Glycan, V2 Apex),
+   and a custom query last. Hover **MRA Table** in the nav for a dropdown that jumps to any
+   of the nine sections. In the INI table, click **codon sensitivity** on a glycine DRM such
+   as **IN G140R** to see the 68× spread across synonymous codons with NL4-3's marked. The
+   bNAb sections list 24 curated escape mutations across 6 antibodies, each citing a study
+   that measured an effect on neutralisation; rows where NL4-3 lacks the published wild type
+   keep the citation but show no rate.
+3. `sequence.html` — press **Load NL4-3 (worked example)** then **Compute custom atlas**.
    This is the round-trip test running in your browser: 2,984 codons, 62,518 amino-acid
    rows, 0 positions needing the spline fallback, 405 dropped for lying past 8,213.
    Then try `test/fixtures/JRFL_pol.fasta` via **Load FASTA file…** for a genuinely
-   divergent sequence.
-5. `compare.html` — it carries over the sequence from the previous page in the same tab.
-   With JR-FL loaded, the first table is the codon-difference view; the genome track at
-   the bottom defaults to G→A.
-5. `download.html` — every asset with its SHA-256, verified before the download.
+   divergent sequence. The codon-difference view and the genome track are on this page too.
+4. `batch.html` — up to 250 sequences compared codon by codon, with a genome-wide supply
+   track and a divergence track, each independently downloadable as a PNG.
+5. `reference.html` — **Reference and Download**: what the rates mean, the coverage and
+   coordinate caveats, the privacy statement, how to read the curated tables, and every
+   asset with its SHA-256, verified before the download.
+
+`browse.html`, `drm.html`, `download.html`, `compare.html` and `explore.html` are redirect
+stubs kept so older links keep working; `drm.html?class=NNRTI` lands on `tables.html#nnrti`.
 
 Open the browser console on each page. It should stay empty.
 
@@ -130,7 +135,8 @@ that paper used, forever.
 ## Layout
 
 ```
-index.html  browse.html  sequence.html  compare.html  download.html
+index.html  tables.html  sequence.html  batch.html  reference.html
+browse.html drm.html  download.html  compare.html  explore.html   redirect stubs
 css/mra.css                 one stylesheet
 js/                         see docs/ARCHITECTURE.md
 sw.js                       offline support after first load

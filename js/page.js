@@ -10,14 +10,30 @@
 import { loadReleases, requestedVersionFromUrl, resolveVersion, renderVersionBanner,
          renderVersionSelector, citationText, provenanceHeader, shareableUrl } from "./version.js";
 
+// The sections of the MRA Table page, in the order they appear on it. This list is the single
+// source of truth for three things that must agree or the menu lies: the nav dropdown, the
+// index at the top of the page, and the anchors the page renders. The ids match the drug
+// classes in drm_taxonomy.json and the epitope classes in bnab_catalog.csv; test/nav_cases.mjs
+// checks that correspondence against the shipped catalogs rather than trusting this comment.
+export const TABLE_SECTIONS = [
+  { id: "pi",             label: "Protease Inhibitors (PI)",                   kind: "drm",  key: "PI" },
+  { id: "nrti",           label: "Nucleoside RT Inhibitors (NRTI)",            kind: "drm",  key: "NRTI" },
+  { id: "nnrti",          label: "Non-nucleoside RT Inhibitors (NNRTI)",       kind: "drm",  key: "NNRTI" },
+  { id: "ini",            label: "Integrase strand-transfer Inhibitors (INI)", kind: "drm",  key: "INI" },
+  { id: "cai",            label: "Capsid Inhibitors (CAI)",                    kind: "drm",  key: "CAI" },
+  { id: "bnab-cd4bs",     label: "bNAb \u2013 CD4bs",                          kind: "bnab", key: "CD4bs" },
+  { id: "bnab-v3-glycan", label: "bNAb \u2013 V3 Glycan",                      kind: "bnab", key: "V3-glycan" },
+  { id: "bnab-v2-apex",   label: "bNAb \u2013 V2 Apex",                        kind: "bnab", key: "V2-apex" },
+  { id: "custom",         label: "Custom",                                     kind: "custom" },
+];
+
 const PAGES = [
-  { href: "index.html", label: "Overview" },
-  { href: "browse.html", label: "Browse the atlas" },
-  { href: "tables.html", label: "Table analysis" },
-  { href: "drm.html", label: "Curated tables" },
+  { href: "index.html", label: "Browse the atlas" },
+  { href: "tables.html", label: "MRA Table",
+    menu: TABLE_SECTIONS.map((s) => ({ hash: "#" + s.id, label: s.label })) },
   { href: "sequence.html", label: "Your sequence" },
   { href: "batch.html", label: "Batch analysis" },
-  { href: "download.html", label: "Download" },
+  { href: "reference.html", label: "Reference and Download" },
 ];
 
 export const PRIVACY_TEXT =
@@ -65,7 +81,29 @@ export async function bootstrapPage(activeHref) {
     a.href = p.href + "?v=" + v;
     a.textContent = p.label;
     if (p.href === activeHref) a.setAttribute("aria-current", "page");
-    nav.appendChild(a);
+    if (!p.menu) { nav.appendChild(a); continue; }
+
+    // A tab with sections gets a dropdown. The tab itself stays an ordinary link to the whole
+    // page -- the menu is a shortcut into it, not a replacement for it, so a reader who
+    // clicks rather than hovers still gets somewhere sensible. CSS opens it on hover; the
+    // :focus-within rule in the same block opens it for keyboard users, which is why no
+    // JavaScript toggle is needed and none is attached here.
+    const group = document.createElement("div");
+    group.className = "nav-group";
+    a.setAttribute("aria-haspopup", "true");
+    group.appendChild(a);
+    const menu = document.createElement("div");
+    menu.className = "nav-menu";
+    menu.setAttribute("role", "menu");
+    for (const item of p.menu) {
+      const link = document.createElement("a");
+      link.href = p.href + "?v=" + v + item.hash;
+      link.textContent = item.label;
+      link.setAttribute("role", "menuitem");
+      menu.appendChild(link);
+    }
+    group.appendChild(menu);
+    nav.appendChild(group);
   }
   renderVersionSelector(slot, resolved, releases);
   renderVersionBanner(bannerSlot, resolved, releases);

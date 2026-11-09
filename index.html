@@ -5,63 +5,95 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'none'">
-<title>Overview &mdash; HIV-1 Mutation Rate Atlas</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'none'">
+<title>Browse the atlas &mdash; HIV-1 Mutation Rate Atlas</title>
 <link rel="stylesheet" href="css/mra.css">
+<script src="vendor/html2canvas/html2canvas.min.js"></script>
 </head>
 <body>
 <main>
-<h1>HIV-1 Mutation Rate Atlas</h1>
-<p>How often every mutation arises across the HIV-1 genome, per round of replication. Rates
-vary more than 1,000-fold from one site to the next. This is mutational supply &mdash; what the
-virus generates, before selection acts on it.</p>
-
-<div id="privacy-slot"></div>
-
-<h2>Start here</h2>
-<ul>
-  <li><strong><a id="link-browse" href="browse.html">Browse the atlas</a></strong> &mdash; look
-      up any protein and position: the reference residue and codon, where a single
-      substitution's supply goes, and the rate of every reachable amino-acid change.</li>
-  <li><strong><a id="link-tables" href="tables.html">Table analysis</a></strong> &mdash; paste a
-      list of mutations like <code>RT K65R</code>, or load one from a file, and get a rate for
-      each with its interval and the number of substitutions required.</li>
-  <li><strong><a id="link-drm" href="drm.html">Curated tables</a></strong> &mdash; drug-resistance
-      mutations and antibody-escape changes, each with its rate, its evidence and its
-      citation.</li>
-  <li><strong><a id="link-sequence" href="sequence.html">Your sequence</a></strong> &mdash;
-      submit one sequence or a FASTA batch. Each gets its own atlas from your codons and
-      context, a supply track along the genome, and a comparison to NL4-3.</li>
-  <li><strong><a id="link-batch" href="batch.html">Batch analysis</a></strong> &mdash; submit up
-      to 250 sequences at once and compare them codon by codon: what residues and codons the set
-      carries at each position, how mutable each one is, and where its supply goes.</li>
-  <li><strong><a id="link-download" href="download.html">Download</a></strong> &mdash; the
-      tables, data dictionary and citation.</li>
-</ul>
-
-<h2>What the rates mean</h2>
-<p><strong>Nucleotide rate</strong> &mdash; for a position and one of 12 substitutions (or an
-insertion or deletion), the per-replication rate.</p>
-<p><strong>Amino-acid mutability</strong> (<code>mu_aa</code>) &mdash; for a codon and a target
-amino acid, the rate summed over every nucleotide path to that amino acid. One codon often
-reaches an amino acid by more than one route, so the paths are summed. The path count and the
-fewest substitutions needed are reported with it.</p>
-
-<h2>Coverage and coordinates</h2>
+<h1>Browse the atlas</h1>
 <div id="scope-slot"></div>
-<p>Results use <strong>HXB2 protein numbering</strong> (<code>RT 103</code>, <code>PR 46</code>,
-<code>IN 148</code>), the clinical and Stanford HIVDB standard. Sequence results also carry your
-own coordinates; the NL4-3 reference position is kept as a traceability column.</p>
-<p class="caveat">Whole-genome HXB2 nucleotide coordinates are not reported: the reference
-starts at the gag start codon with indels downstream, so no single offset holds, and the
-shipped HXB2 map is amino-acid level.</p>
 
-<h2>How it was measured</h2>
-<p>Rates come from <strong>ERR-Seq</strong>: UMI-based consensus sequencing that reads the
-mutations from a single round of replication on an unmodified viral genome. Wild-type and
-control libraries are fit together, so the published rate is control-corrected &mdash; the
-biological rate per site per replication, with sequencing and PCR error removed.</p>
+<div id="dashboard-export">
+<h2>Position dashboard</h2>
+<p>Pick a position: click the track, drag the slider, or type a coordinate. You get the
+reference amino acid and codon, where a single substitution's supply goes, and the rate of
+every reachable amino-acid change with its 95% interval, the fewest substitutions needed and
+the number of paths.</p>
+
+<div class="controls">
+  <div>
+    <label for="track-window">Smoothing window (nt)</label>
+    <input type="range" id="track-window" min="25" max="501" step="2" value="151">
+    <output id="track-window-out">151</output>
+  </div>
+  <div>
+    <label for="track-class">Supply shown</label>
+    <select id="track-class">
+      <option value="total">Total substitution supply</option>
+      <option value="nonga">non-G&rarr;A only</option>
+      <option value="ga">G&rarr;A only</option>
+    </select>
+  </div>
+</div>
+
+<figure class="chart" data-export-name="genome_track"><div id="genome-track"></div>
+  <div class="track-slider" data-export-skip>
+    <input type="range" id="track-slider" min="1" max="8213" step="1" value="1600"
+           aria-label="Genome position (NL4-3 nucleotide)">
+  </div>
+  <figcaption id="track-caption"></figcaption></figure>
+<div id="track-stats"></div>
+
+<div class="controls">
+  <div>
+    <label for="coord-system">Jump to</label>
+    <select id="coord-system">
+      <option value="protein">Protein position</option>
+      <option value="nt">NL4-3 nucleotide</option>
+    </select>
+  </div>
+  <div>
+    <label for="protein">Protein or subunit</label>
+    <select id="protein"></select>
+  </div>
+  <div>
+    <label for="position">Position</label>
+    <input type="number" id="position" min="1" value="46" size="8">
+  </div>
+  <div><button id="go">Go</button></div>
+  <div>
+    <label for="reading-frame">Reading frame here</label>
+    <select id="reading-frame"></select>
+  </div>
+  <div><span id="share-slot"></span></div>
+</div>
+<p class="caveat">Protein positions use each subunit's own numbering, as a paper or clinic
+does: <strong>RT</strong> 103 for K103N, <strong>PR</strong> 46 for M46I, <strong>IN</strong>
+155 for N155H. For <em>env</em> and
+<em>vpu</em> the number is read as HXB2 and mapped through the alignment, so Env 332 finds the
+10-1074 glycan even though NL4-3 numbers it 330. &ldquo;Reading frame here&rdquo; lists every
+frame coding at the selected nucleotide; overlapping genes give more than one.</p>
+
+<div id="dashboard-status" class="caveat">Loading the atlas tables&hellip;</div>
+<div id="dashboard-head"></div>
+<figure class="chart" data-export-name="position_dashboard_supply"><div id="dashboard-chart"></div>
+  <figcaption id="dashboard-caption"></figcaption>
+</figure>
+<div class="controls" data-export-skip>
+  <div><button id="download-png" class="secondary">Download the whole dashboard (PNG)</button></div>
+</div>
+</div>
+
+<div id="dashboard-table"></div>
+<h3 id="paths-heading" hidden>Individual codon paths at this position</h3>
+<div id="dashboard-paths"></div>
+
+<p class="caveat">Looking up a whole list of mutations at once?
+<a href="tables.html">MRA Table</a> takes a pasted list or a file and returns a rate for
+each one.</p>
 </main>
-<script type="module" src="js/index.js"></script>
+<script type="module" src="js/browse.js"></script>
 </body>
 </html>

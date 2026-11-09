@@ -47,7 +47,9 @@ function check(name, ok, detail = "") {
 const FILE_PICKERS = { batch: ["load-file", "file-input"],
                        sequence: ["load-file", "file-input"],
                        tables: ["load-file", "file-input"] };
-const PAGES = ["index", "browse", "tables", "drm", "sequence", "batch", "download"];
+// The live pages after the tab restructure. The retired addresses (browse, drm, download,
+// compare, explore) are redirect stubs whose forwarding is checked in nav_cases.mjs.
+const PAGES = ["index", "tables", "sequence", "batch", "reference"];
 
 for (const page of PAGES) {
   const html = fs.readFileSync(path.join(REPO, `${page}.html`), "utf8");
@@ -86,7 +88,12 @@ for (const page of PAGES) {
   let threw = null;
   try {
     // Cache-bust so each page gets a fresh module instance rather than a shared one.
-    await import(`${REPO}/js/${page}.js?boot=${Date.now()}${Math.random()}`);
+    // Read the module from the page's own <script src>, not from the page name: the landing
+    // page is index.html but is served by js/browse.js, and assuming the two match is exactly
+    // the kind of drift this suite exists to catch.
+    const srcMatch = html.match(/<script[^>]+src="(js\/[^"]+)"/);
+    if (!srcMatch) throw new Error("no module script tag in " + page + ".html");
+    await import(`${REPO}/${srcMatch[1]}?boot=${Date.now()}${Math.random()}`);
   } catch (e) {
     threw = e;
   }

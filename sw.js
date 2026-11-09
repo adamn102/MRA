@@ -26,7 +26,10 @@
 // Bumped v1 -> v2 when the bNAb/DRM catalogs became mutable overlays: the activate handler
 // deletes every cache whose key is not this one, so the bump purges the old frozen copies that
 // were pinned under the previous cache-first-forever rule.
-const CACHE = "mra-portal-v5";
+// Bumped when the shell changes. v6: the tab restructure -- Browse became the landing page,
+// Overview and Download merged into reference.html, Table analysis and Curated tables merged
+// into tables.html. Without a bump a returning reader keeps yesterday's nav from cache.
+const CACHE = "mra-portal-v6";
 
 // Curated annotation overlays: under a version directory, but revised over time rather than
 // frozen. Served network-first with the HTTP cache bypassed, so an edit is never masked by an
@@ -34,12 +37,19 @@ const CACHE = "mra-portal-v5";
 const MUTABLE_OVERLAYS = /\/(bnab_catalog|drm_catalog)\.csv$/;
 
 const SHELL = [
-  "./", "./index.html", "./browse.html", "./tables.html", "./sequence.html", "./compare.html",
-  "./download.html", "./drm.html", "./explore.html", "./batch.html", "./css/mra.css", "./vendor/html2canvas/html2canvas.min.js",
+  // The five live pages, then the redirect stubs for addresses that have moved. A stub is
+  // cheap and must stay cached: an offline reader following an old bookmark should still be
+  // forwarded rather than meeting a blank page.
+  "./", "./index.html", "./tables.html", "./sequence.html", "./batch.html", "./reference.html",
+  "./browse.html", "./compare.html", "./download.html", "./drm.html", "./explore.html",
+  "./css/mra.css", "./vendor/html2canvas/html2canvas.min.js",
   "./js/version.js", "./js/page.js", "./js/data.js", "./js/table.js", "./js/chart.js", "./js/track_view.js", "./js/explore_core.js",
   "./js/mra_engine.js", "./js/align.js", "./js/align.worker.js", "./js/analysis.js",
-  "./js/mutations.js", "./js/index.js", "./js/browse.js", "./js/tables.js", "./js/explore_redirect.js", "./js/sequence.js",
-  "./js/compare_redirect.js", "./js/download.js", "./js/drm.js",
+  "./js/mutations.js", "./js/browse.js", "./js/tables.js", "./js/sequence.js",
+  "./js/curated_tables.js", "./js/tables_custom.js", "./js/reference.js",
+  "./js/figure_export.js",
+  "./js/explore_redirect.js", "./js/compare_redirect.js", "./js/browse_redirect.js",
+  "./js/drm_redirect.js", "./js/reference_redirect.js",
   "./js/batch.js", "./js/batch_core.js", "./js/batch_view.js",
   "./js/codon_sensitivity.js",
   "./data/releases.json",

@@ -5,15 +5,29 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'none'">
-<title>Table analysis &mdash; HIV-1 Mutation Rate Atlas</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'none'">
+<title>MRA Table &mdash; HIV-1 Mutation Rate Atlas</title>
 <link rel="stylesheet" href="css/mra.css">
 </head>
 <body>
 <main>
-<h1>Table analysis</h1>
+<h1>MRA Table</h1>
+<p>Mutation rates for documented resistance mutations and broadly neutralizing antibody escape
+positions, one table per class, followed by a custom query for your own list. The rate is
+mutational supply &mdash; how often the variant is generated per replication &mdash; not how
+often it is seen clinically. Selection acts on top of it. Both are shown.</p>
+<p class="caveat">Each row carries its own codon decomposition; see
+<a href="reference.html">Reference and Download</a> for how to read the codon-options and
+codon-sensitivity columns, and for the rest of the portal's fine print.</p>
+
 <div id="scope-slot"></div>
-<div id="tables-status"></div>
+<nav id="section-index" class="section-index" aria-label="Tables on this page"></nav>
+<div id="tables-status" class="caveat">Loading the catalogs&hellip;</div>
+
+<div id="table-sections"></div>
+
+<section class="table-section" id="custom">
+<h2>Custom</h2>
 <p>One mutation per line, as <code>RT K65R</code>, <code>PR M46I</code>, <code>IN N155H</code>,
 <code>Env N160K</code> or <code>Gag M1K</code>. The reference amino acid is optional; if given, a
 mismatch against the atlas is reported, not ignored.</p>
@@ -30,6 +44,7 @@ IN Q148H</textarea>
        <input type="file" id="file-input" accept=".txt,.csv,.tsv" hidden></div>
 </div>
 <div id="analysis-result"></div>
+</section>
 </main>
 <script type="module" src="js/tables.js"></script>
 </body>

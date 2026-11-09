@@ -52,7 +52,9 @@ check("a release-less stamp is still a sentence, not 'undefined'",
       !/undefined/.test(bare) && bare.length > 10, bare);
 
 console.log("The shipped pages declare a name for every figure");
-for (const page of ["batch.html", "browse.html"]) {
+// index.html is the landing page and carries the browse figures; browse.html is now a
+// redirect stub with no figures of its own.
+for (const page of ["batch.html", "index.html"]) {
   const html = fs.readFileSync(path.join(REPO, page), "utf8");
   const figs = html.match(/<figure class="chart"[^>]*>/g) || [];
   const named = figs.filter((f) => /data-export-name="[^"]+"/.test(f));

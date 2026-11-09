@@ -98,7 +98,9 @@ async function downloadDashboardPNG() {
   }
 }
 
-const page = await bootstrapPage("browse.html");
+// Browse is the site's landing page, so this module is served from index.html; browse.html is
+// now a redirect stub that forwards here. The argument is what marks the active nav tab.
+const page = await bootstrapPage("index.html");
 const region = page.release.modelled_region;
 const FIRST = region.first_position, LAST = region.last_position;
 document.getElementById("scope-slot").appendChild(note(

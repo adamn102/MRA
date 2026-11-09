@@ -1,95 +1,86 @@
 // SPDX-License-Identifier: MIT
 //
-// tables.js -- the table-analysis tab.
+// tables.js -- the MRA Table tab.
 //
-// Takes a pasted list of amino-acid mutations and returns the atlas rate for each. This was a
-// section of "Browse the atlas" until it earned its own tab: browsing is a one-position-at-a-
-// time activity, while this is a batch lookup against a list a user already has, and the two
-// were competing for the same page.
+// One page carrying every compiled table: the five drug-resistance classes, the three bNAb
+// epitope classes, and last a custom query for a list the reader brings themselves. This
+// merges what were two tabs, "Curated tables" and "Table analysis". They were separated on
+// the theory that a curated catalog and an ad-hoc lookup are different activities; in
+// practice a reader arrives wanting "the rate for these mutations" and should not have to
+// know in advance whether their mutations are in the catalog.
 //
-// The parser itself lives in js/mutations.js so it can be tested without a DOM; see
-// test/mutation_cases.mjs. This module is the page around it.
+// This module only assembles. The two halves live in curated_tables.js and tables_custom.js
+// and are exported as init functions, because both used to run at module load and claim the
+// page for themselves -- putting them on one page means exactly one bootstrapPage call, here.
+//
+// The section order and anchors come from TABLE_SECTIONS in page.js, which the nav dropdown
+// is also built from, so the menu cannot offer a section the page does not render.
 
-import { bootstrapPage, note, showError, exportProvenance } from "./page.js";
-import { loadSmallAssets, loadAminoAcidLayer } from "./data.js";
-import { renderTable, formatRate } from "./table.js";
+import { bootstrapPage, note, showError, TABLE_SECTIONS } from "./page.js";
+import { loadSmallAssets, loadAminoAcidLayer, loadDrmCatalog, loadBnabCatalog } from "./data.js";
 import { MraEngine } from "./mra_engine.js";
-import { resolveMutation } from "./mutations.js";
+import { initCuratedTables } from "./curated_tables.js";
+import { initCustomQuery } from "./tables_custom.js";
 
 const page = await bootstrapPage("tables.html");
 const region = page.release.modelled_region;
 document.getElementById("scope-slot").appendChild(note(
-  `Positions ${region.first_position.toLocaleString()}\u2013` +
-  `${region.last_position.toLocaleString()} of the NL4-3 reference. Rates are mutational ` +
-  `<em>supply</em> \u2014 how often a change is generated \u2014 not how often it is ` +
-  `observed in patients.`));
+  "Rates are the control-corrected biological mutation rate per site per replication, from " +
+  "the NL4-3 atlas (positions " + region.first_position.toLocaleString() + "\u2013" +
+  region.last_position.toLocaleString() + "). Resistance positions are reported in standard " +
+  "protein numbering (PR, RT, IN, CA). Clinical frequencies are Stanford SDR-DB sequence " +
+  "counts; <code>freq = (mutants + 0.5) / sequences</code>. Rates are mutational " +
+  "<em>supply</em> \u2014 how often a change is generated \u2014 not how often it is " +
+  "observed in patients."));
 
 const status = document.getElementById("tables-status");
-let assets, aaLayer, engine;
+let assets, engine, drm, bnab, aaLayer;
 try {
   assets = await loadSmallAssets(page.version);
   engine = new MraEngine({ bundle: assets.bundle, reference: assets.reference,
                            intervals: assets.intervals, hxb2: assets.hxb2 });
-  aaLayer = await loadAminoAcidLayer(page.version);
-  status.textContent = "";
+  [drm, bnab, aaLayer] = await Promise.all([
+    loadDrmCatalog(page.version),
+    loadBnabCatalog(page.version),
+    loadAminoAcidLayer(page.version),
+  ]);
+  status.textContent =
+    `${new Set(drm.records.map((r) => r.mutation)).size} DRMs across ` +
+    `${drm.taxonomy.classes.length} drug classes, and ` +
+    `${bnab.records.length} curated bNAb escape rows, loaded.`;
 } catch (err) {
-  showError(status, "Could not load the atlas tables: " + err.message);
+  showError(status, "Could not load the catalogs: " + err.message);
   throw err;
 }
 
-// The parser lives in js/mutations.js so it can be tested without a DOM; see
-// test/mutation_cases.mjs.
-const mutationContext = {
-  engine,
-  proteins: [...aaLayer.proteins.keys()],
-  lookup: (protein, genePosition) => aaLayer.byPosition.get(protein + "|" + genePosition),
-};
+const rendered = initCuratedTables({
+  page, engine, drm, bnab, host: document.getElementById("table-sections"),
+});
 
-function analyse() {
-  const slot = document.getElementById("analysis-result");
-  const lines = document.getElementById("mutation-list").value
-    .split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  if (!lines.length) { showError(slot, "Paste at least one mutation."); return; }
-  const results = lines.map((l) => resolveMutation(l, mutationContext));
-  const good = results.filter((r) => !r.error);
-  const bad = results.filter((r) => r.error);
-
-  slot.innerHTML = "";
-  renderTable(slot, {
-    columns: [
-      { key: "line", label: "Input" },
-      { key: "hxb2_change", label: "Mutation (HXB2)" },
-      { key: "min_nt_changes", label: "min nt", type: "num",
-        title: "Minimum number of nucleotide substitutions required" },
-      { key: "mu_aa", label: "mu_aa", type: "rate" },
-      { key: "interval", label: "95% interval" },
-      { key: "n_paths", label: "paths", type: "num" },
-      { key: "note", label: "Note" },
-    ],
-    rows: good.map((r) => ({ ...r,
-      interval: `${formatRate(r.mu_aa_lo95)} \u2013 ${formatRate(r.mu_aa_hi95)}` })),
-    sort: { key: "mu_aa", dir: "desc" },
-    filterPlaceholder: false,
-    downloadName: `mra_${page.version}_mutation_list.csv`,
-    provenance: exportProvenance(page.release, ["Table analysis of a user-supplied mutation list."]),
-  });
-  if (bad.length) {
-    const div = document.createElement("div");
-    div.className = "error-box";
-    div.innerHTML = `<strong>${bad.length} line(s) could not be looked up.</strong><ul>` +
-      bad.map((r) => `<li><code>${r.line.replace(/</g, "&lt;")}</code> &mdash; ${r.error}</li>`).join("") +
-      "</ul>";
-    slot.appendChild(div);
-  }
+// The index mirrors the nav dropdown, but is built from what was actually rendered plus the
+// custom section, so it can never advertise a table the catalogs did not supply.
+const indexSlot = document.getElementById("section-index");
+const ids = new Set([...rendered, "custom"]);
+for (const s of TABLE_SECTIONS) {
+  if (!ids.has(s.id)) continue;
+  const a = document.createElement("a");
+  a.href = "#" + s.id;
+  a.textContent = s.label;
+  indexSlot.appendChild(a);
 }
 
-document.getElementById("analyse").addEventListener("click", analyse);
-document.getElementById("load-file").addEventListener("click",
-  () => document.getElementById("file-input").click());
-document.getElementById("file-input").addEventListener("change", async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  // Read locally with FileReader; the file is never uploaded.
-  document.getElementById("mutation-list").value = await file.text();
-  analyse();
-});
+initCustomQuery({ page, engine, aaLayer });
+
+// A link from the retired drm.html arrives as ?class=NNRTI; land on that section. Done after
+// both halves render, because the anchor does not exist until its section does.
+const qs = new URLSearchParams(window.location.search);
+const wanted = qs.get("class");
+if (wanted) {
+  const match = TABLE_SECTIONS.find(
+    (s) => s.key === wanted || s.id === wanted.toLowerCase());
+  const target = match && document.getElementById(match.id);
+  if (target) target.scrollIntoView();
+} else if (window.location.hash) {
+  const target = document.getElementById(window.location.hash.slice(1));
+  if (target) target.scrollIntoView();
+}

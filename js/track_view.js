@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 //
 // track_view.js -- the genome supply track and the position pie, shared by the published
-// atlas (browse.html) and a submitted sequence (sequence.html).
+// atlas (the landing page, index.html) and a submitted sequence (sequence.html).
 //
 // Both pages show the same two things: a smoothed per-site supply track along the genome,
 // and a pie of where one substitution's supply goes at the selected codon. The only

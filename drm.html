@@ -1,66 +1,23 @@
 <!DOCTYPE html>
 <!-- SPDX-License-Identifier: MIT -->
+<!-- "Curated tables" merged with "Table analysis" into "MRA Table": every drug class and
+     every bNAb epitope class is now its own section of that page, with the custom query at
+     the end. This stub keeps shared links, including ?class=, working. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'none'">
-<title>Curated tables &mdash; HIV-1 Mutation Rate Atlas</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'none'">
+<title>Moved to MRA Table &mdash; HIV-1 Mutation Rate Atlas</title>
 <link rel="stylesheet" href="css/mra.css">
 </head>
 <body>
 <main>
-<h1>Curated tables</h1>
-<p>Mutation rates for documented resistance mutations and broadly neutralizing antibody escape
-positions. The rate is mutational supply &mdash; how often the variant is generated per
-replication &mdash; not how often it is seen clinically. Selection acts on top of it. Both are
-shown.</p>
-
-<p class="caveat">Each row carries its own codon decomposition. <strong>Wild-type codon
-options</strong> lists every synonymous codon the wild-type residue could be written as and the
-rate this change would have from each; <code>*</code> marks the codon NL4-3 carries, and
-<code>(2nt)</code> marks a codon that needs more than one substitution to reach the target.
-<strong>Codon sensitivity</strong> is the fold range across those options &mdash; how much the
-rate would move if the virus spelled the wild-type residue differently. A dash means the residue
-has a single codon, so codon usage cannot move it at all. Where the range is large it is usually
-because one codon needs an extra nucleotide, which the codon list makes visible.</p>
-
-<div id="scope-slot"></div>
-
-<h2>Drug-resistance mutations</h2>
-<div class="controls">
-  <div>
-    <label for="drug-class">Drug class</label>
-    <select id="drug-class"></select>
-  </div>
-  <div>
-    <label for="drug-stratum">Treatment stratum (for clinical frequency)</label>
-    <select id="drug-stratum"></select>
-  </div>
-  <div>
-    <label for="access-filter">Accessibility</label>
-    <select id="access-filter">
-      <option value="1" selected>1-nucleotide changes only</option>
-      <option value="all">include 2- and 3-nucleotide changes</option>
-    </select>
-  </div>
-  <div><span id="drm-share"></span></div>
-</div>
-<div id="drm-status" class="caveat">Loading the catalog&hellip;</div>
-<div id="drm-table"></div>
-
-<h2>Broadly neutralizing antibody escape</h2>
-<div id="bnab-note"></div>
-<div class="controls">
-  <div>
-    <label for="bnab-class">Epitope class</label>
-    <select id="bnab-class"></select>
-  </div>
-</div>
-<div id="bnab-table"></div>
-
+<h1>This page moved</h1>
+<p>The drug-resistance and antibody-escape tables are now sections of
+<a id="target" href="tables.html">MRA Table</a>, alongside the custom query. Redirecting&hellip;</p>
 </main>
-<script type="module" src="js/drm.js"></script>
+<script type="module" src="js/drm_redirect.js"></script>
 </body>
 </html>

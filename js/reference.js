@@ -1,17 +1,38 @@
 // SPDX-License-Identifier: MIT
 //
-// download.js -- bulk download with provenance, checksums and a data dictionary.
+// reference.js -- the "Reference and Download" tab.
 //
-// A downloaded table must be self-identifying: a user who comes back to a CSV in six
-// months has to be able to say which model produced it. So every file goes out with a
-// header comment carrying the atlas version, the model name and the retrieval date,
-// and the CSV body is otherwise byte-identical to the shipped asset.
+// The Overview and Download tabs were two halves of the same thing: one said what the numbers
+// mean, the other handed over the files, and a reader needed both before trusting either. They
+// are now one page, and it is where the portal's fine print lives -- the privacy statement,
+// the supply-versus-frequency distinction, the coordinate caveat and the notes on reading the
+// curated tables -- so no other page has to repeat it.
+//
+// This module is index.js and download.js merged. The download half is unchanged: a file must
+// be self-identifying, so every CSV goes out with a header naming the atlas version, the model
+// and the retrieval date, and is otherwise byte-identical to the shipped asset.
 
-import { bootstrapPage, note, caveat, exportProvenance } from "./page.js";
+import { bootstrapPage, privacyPanel, note, caveat, exportProvenance, NEF_NOTE } from "./page.js";
 import { assetUrl, verifyAssetChecksum, citationText } from "./version.js";
 import { renderTable, downloadText } from "./table.js";
 
-const page = await bootstrapPage("download.html");
+const page = await bootstrapPage("reference.html");
+document.getElementById("privacy-slot").appendChild(privacyPanel());
+
+const region = page.release.modelled_region;
+document.getElementById("scope-slot").appendChild(note(
+  `The portal covers <strong>NL4-3 reference positions ${region.first_position.toLocaleString()}` +
+  `&ndash;${region.last_position.toLocaleString()}</strong>, where position 1 is the gag start ` +
+  `codon. That is the extent of the fitted model. ` + NEF_NOTE
+));
+
+// Every link carries its version explicitly, so a copied URL keeps resolving to this release.
+const v = page.version.replace(/^v/, "");
+for (const [id, href] of [["link-browse", "index.html"], ["link-tables", "tables.html"],
+                          ["link-sequence", "sequence.html"], ["link-batch", "batch.html"]]) {
+  document.getElementById(id).href = href + "?v=" + v;
+}
+
 const release = page.release;
 
 document.getElementById("version-info").appendChild(note(

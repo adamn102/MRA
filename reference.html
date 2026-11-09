@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: MIT -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'none'">
+<title>Reference and Download &mdash; HIV-1 Mutation Rate Atlas</title>
+<link rel="stylesheet" href="css/mra.css">
+</head>
+<body>
+<main>
+<h1>Reference and Download</h1>
+<p>What the numbers mean, how they were measured, what they do and do not support &mdash; and
+the files themselves. Everything on this page applies to every other tab.</p>
+
+<div id="version-info"></div>
+<div id="privacy-slot"></div>
+
+<h2>What is on this site</h2>
+<ul>
+  <li><strong><a id="link-browse" href="index.html">Browse the atlas</a></strong> &mdash; look
+      up any protein and position: the reference residue and codon, where a single
+      substitution's supply goes, and the rate of every reachable amino-acid change.</li>
+  <li><strong><a id="link-tables" href="tables.html">MRA Table</a></strong> &mdash; the curated
+      resistance and antibody-escape tables for all five drug classes and three bNAb epitope
+      classes, each with rates, evidence and citations; and a custom query for your own list
+      of mutations.</li>
+  <li><strong><a id="link-sequence" href="sequence.html">Your sequence</a></strong> &mdash;
+      submit one sequence or a FASTA batch. Each gets its own atlas from your codons and
+      context, a supply track along the genome, and a comparison to NL4-3.</li>
+  <li><strong><a id="link-batch" href="batch.html">Batch analysis</a></strong> &mdash; submit up
+      to 250 sequences at once and compare them codon by codon: what residues and codons the set
+      carries at each position, how mutable each one is, and where its supply goes.</li>
+</ul>
+
+<h2>What the rates mean</h2>
+<p><strong>Nucleotide rate</strong> &mdash; for a position and one of 12 substitutions (or an
+insertion or deletion), the per-replication rate.</p>
+<p><strong>Amino-acid mutability</strong> (<code>mu_aa</code>) &mdash; for a codon and a target
+amino acid, the rate summed over every nucleotide path to that amino acid. One codon often
+reaches an amino acid by more than one route, so the paths are summed. The path count and the
+fewest substitutions needed are reported with it.</p>
+<p class="caveat"><strong>Supply is not frequency.</strong> Every rate here is mutational
+supply &mdash; how often a change is generated per round of replication. How often a variant is
+actually seen in patients is supply filtered through selection, treatment history, founder
+effects and sampling. Where both are available they are shown side by side and never
+conflated.</p>
+
+<h2>Coverage and coordinates</h2>
+<div id="scope-slot"></div>
+<p>Results use <strong>HXB2 protein numbering</strong> (<code>RT 103</code>, <code>PR 46</code>,
+<code>IN 148</code>), the clinical and Stanford HIVDB standard. Sequence results also carry your
+own coordinates; the NL4-3 reference position is kept as a traceability column.</p>
+<p class="caveat">Whole-genome HXB2 nucleotide coordinates are not reported: the reference
+starts at the gag start codon with indels downstream, so no single offset holds, and the
+shipped HXB2 map is amino-acid level.</p>
+
+<h2>How it was measured</h2>
+<p>Rates come from <strong>ERR-Seq</strong>: UMI-based consensus sequencing that reads the
+mutations from a single round of replication on an unmodified viral genome. Wild-type and
+control libraries are fit together, so the published rate is control-corrected &mdash; the
+biological rate per site per replication, with sequencing and PCR error removed.</p>
+
+<h2>Reading the curated tables</h2>
+<p class="caveat">Each row carries its own codon decomposition. <strong>Wild-type codon
+options</strong> lists every synonymous codon the wild-type residue could be written as and the
+rate this change would have from each; <code>*</code> marks the codon NL4-3 carries, and
+<code>(2nt)</code> marks a codon that needs more than one substitution to reach the target.
+<strong>Codon sensitivity</strong> is the fold range across those options &mdash; how much the
+rate would move if the virus spelled the wild-type residue differently. A dash means the residue
+has a single codon, so codon usage cannot move it at all. Where the range is large it is usually
+because one codon needs an extra nucleotide, which the codon list makes visible.</p>
+<p class="caveat">Two further distinctions the tables keep separate: <strong>codon
+optimization</strong> (the rate varies among synonymous codons at equal accessibility) versus a
+change in the <strong>number of nucleotide steps</strong> (categorical, and usually the larger
+effect); and a specific escape change versus <strong>glycan sequon loss</strong>, which is
+summed over three codons and labelled as such.</p>
+
+<h2>Tables</h2>
+<p>Each file downloads with a provenance header naming the atlas version, model and your
+retrieval date, so the file identifies itself. Checksums below are from the release manifest;
+the browser verifies them before download where it can.</p>
+<div id="asset-table"></div>
+
+<h2>The model bundle</h2>
+<p>The fitted model as one JSON file: every type coefficient and context delta, all 13
+G&rarr;A intercepts and all six position splines, as coefficients and pre-evaluated per position.
+The sequence tool runs on this, and it reproduces every rate in the nucleotide table.</p>
+<div id="bundle-slot"></div>
+
+<h2>Data dictionary</h2>
+<div id="dictionary"></div>
+
+<h2>How to cite</h2>
+<div id="citation-slot"></div>
+</main>
+<script type="module" src="js/reference.js"></script>
+</body>
+</html>
