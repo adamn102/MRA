@@ -120,11 +120,8 @@ figure.chart { margin: 14px 0; }
 figure.chart figcaption { font-size: 13px; color: var(--muted); margin-top: 4px; }
 
 /* Per-figure PNG export. The button row sits under its own figure and is marked
-   data-export-skip, so it never appears in the image it produces. It is quiet by default and
-   comes forward on hover or keyboard focus: every figure carries one, and six loud buttons
-   down a page would compete with the plots they belong to. */
-/* The PNG button shares the one .plot-tools row with Details; see the dashboard-cards
-   section below for that row's styling. */
+   data-export-skip, so it never appears in the image it produces. The PNG button shares
+   that row with Details; see the dashboard-cards section for the row's styling. */
 figure.chart .figure-download { font-size: 12px; padding: 3px 8px; }
 /* Drawn into the PNG only; present in the page for the duration of one capture. */
 figure.chart .figure-stamp { font-size: 11px; color: var(--muted); margin-top: 6px; }
@@ -141,7 +138,10 @@ footer.site .inner { max-width: 1180px; margin: 0 auto; }
 pre.citation { background: var(--panel); border: 1px solid var(--rule); padding: 8px 10px;
   font-size: 12px; white-space: pre-wrap; }
 
-@media (max-width: 900px) { .controls { flex-direction: column; align-items: stretch; } }
+@media (max-width: 900px) {
+  .controls { flex-direction: column; align-items: stretch; }
+  .panel-row { grid-template-columns: 1fr; }
+}
 
 /* --- genome-track position slider ---------------------------------------- */
 /* The offsets that align the thumb with the track's plot area are set in JS from
@@ -161,13 +161,16 @@ table.data.track-stats th { cursor: default; position: static; }
 table.data.track-stats td:last-child { color: var(--muted); white-space: normal; }
 table.data.track-stats tbody tr:hover { background: transparent; }
 
-/* --- pie + emergence curve, side by side --------------------------------- */
-/* Wraps on a narrow screen rather than shrinking the SVGs, because both carry axis text
-   that stops being readable well before the layout runs out of room. */
-.panel-row { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start;
-             max-width: 1140px; }
-.panel-row > div { min-width: 0; }     /* flex basis and max-width are set in JS */
-.panel-row svg { display: block; width: 100%; }
+/* --- pie + supply flow, side by side ------------------------------------ */
+/* Two equal columns. A flex row with a fixed basis wrapped the second card onto its own
+   line whenever the figure was a few pixels short of the track, so the pair has to be a
+   grid that shares the row exactly. Below 900px they stack; the SVGs stay readable. */
+.panel-row {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: stretch;
+  max-width: 1140px;
+}
+.panel-row > .plot-card:only-child { grid-column: 1 / -1; }
+.panel-row svg { display: block; width: 100%; height: auto; }
 
 /* --- inline codon decomposition in the curated tables --------------------- */
 /* A list of codon:rate pairs, not a single value: it needs to wrap rather than stretch the
@@ -198,15 +201,25 @@ td .codon-options {
 .plot-card > figcaption, .plot-card .plot-label {
   font-size: 12px; color: var(--muted); margin-top: 6px;
 }
-/* Inside the dashboard row the cards carry their own margin from the flex gap. */
-.panel-row > .plot-card { margin: 0; }
+/* The pair sits in one row of equal boxes. Each card is a column so the title stays at the
+   top and the download row sits on the bottom edge of both, whatever the plot inside. */
+.dashboard-figures { margin: 4px 0 0; }
+.panel-row > .plot-card {
+  margin: 0; min-width: 0; height: 100%;
+  display: flex; flex-direction: column;
+}
+/* The header is only the title, so both plots start on the same line. The pie's codon
+   line and its change selector sit under the plot, not in this row. */
+.plot-head { margin: 0 0 6px; text-align: center; }
+.plot-title { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.35; color: var(--ink);
+  text-align: center; }
+.plot-note { margin: 8px 0 0; font-size: 13px; line-height: 1.45; }
+.panel-row > .plot-card .plot-body { min-width: 0; }
+.plot-card .card-controls > div { flex-direction: row; align-items: center; gap: 6px; }
 
-/* The button row on a plot. Quiet until wanted: every card carries one, and a page of loud
-   buttons competes with the plots they belong to. */
-.plot-tools { display: flex; gap: 8px; align-items: center; margin-top: 8px;
-  opacity: 0.6; transition: opacity 0.12s; }
-.plot-card:hover .plot-tools, .plot-tools:focus-within,
-figure.chart:hover .plot-tools { opacity: 1; }
+/* The button row on a plot. Secondary styling keeps it quieter than the figure; it stays
+   fully visible, because a download offered only on hover is easy to miss. */
+.plot-tools { display: flex; gap: 8px; align-items: center; margin-top: auto; padding-top: 8px; }
 .plot-tools button { font-size: 12px; padding: 3px 8px; }
 
 /* The explanation, as a dialog rather than a paragraph under the figure. */
@@ -237,6 +250,6 @@ figure.chart:hover .plot-tools { opacity: 1; }
 /* The trailing items -- Go, share, details -- sit on the baseline with the inputs. */
 .control-bar .bar-actions { flex-direction: row; align-items: center; gap: 8px;
   margin-left: auto; }
-/* A control that belongs to one plot sits inside that plot's card, above the figure. */
-.plot-card .card-controls { margin: 0 0 8px; gap: 8px; }
-.plot-card .card-controls label { font-size: 11px; color: var(--muted); }
+/* The change selector sits under the pie, after the codon line. */
+.plot-card .card-controls { margin: 8px 0 0; gap: 8px; }
+.plot-card .card-controls label { font-size: 11px; color: var(--muted); white-space: nowrap; }

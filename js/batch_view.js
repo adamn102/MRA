@@ -637,9 +637,13 @@ export function drawSupplyFlow(container, captionEl, stat, matrix, opts = {}) {
     c === OTHER_CODONS ? NEUTRAL_COLOUR : residueColour(stat.codon_aa.get(c));
 
   const width = opts.width || LAYOUT.width;
-  // Without a header block the top inset only has to clear the first block's label.
-  const padTop = (opts.title && opts.subtitle !== false) ? 34
-               : opts.title ? 22 : 12;
+  // A drawn title needs room above the first block. The dashboard keeps the title in the
+  // card heading (drawTitle: false) and only needs enough inset that the top label is not
+  // clipped by the viewBox.
+  const showTitle = !!(opts.title && opts.drawTitle !== false);
+  const padTop = (showTitle && opts.subtitle !== false) ? 34
+               : showTitle ? 22
+               : (opts.title ? 20 : 12);
   const padBottom = 14;
   const height = opts.height || Math.max(260, 42 * Math.max(live.length, order.length) + 70);
   const plotH = height - padTop - padBottom;
@@ -665,6 +669,7 @@ export function drawSupplyFlow(container, captionEl, stat, matrix, opts = {}) {
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
   svg.setAttribute("width", "100%");
   svg.setAttribute("role", "img");
+  if (opts.title) svg.setAttribute("aria-label", opts.title);
   const mk = (n, a, t) => {
     const e = document.createElementNS(NS, n);
     for (const [k, v] of Object.entries(a)) e.setAttribute(k, v);
@@ -689,13 +694,13 @@ export function drawSupplyFlow(container, captionEl, stat, matrix, opts = {}) {
   // title. A figure with its own heading and caption does not need them repeated inside the
   // plot, and on a narrow figure they are the first thing to collide; the caption carries
   // them instead. The batch tab passes a title and keeps the full set.
-  if (opts.title) {
+  if (showTitle) {
     svg.appendChild(mk("text", { x: 0, y: 13, "font-size": 12 }, opts.title));
   }
   // The subtitle and the two column headings are the verbose half of the header. A figure
   // that sits beside another one, under a shared caption, wants only enough to tell the two
   // apart; the caption says what the blocks mean.
-  if (opts.title && opts.subtitle !== false) {
+  if (showTitle && opts.subtitle !== false) {
     svg.appendChild(mk("text", { x: 0, y: 27, "font-size": 9.5, fill: "#5c6670" },
                        mode === "supply"
                          ? "Sized by mutational supply: a block is its share of the change this "
@@ -747,6 +752,9 @@ export function drawSupplyFlow(container, captionEl, stat, matrix, opts = {}) {
                                  fill: "#5c6670" },
                        `${(100 * freqOf.get(c)).toFixed(0)}%`));
   });
+  // Thin blocks sit closer together than a line of type. Keep each label on its block
+  // when there is room, and step it down only far enough that two lines never share pixels.
+  let labelY = padTop + 9;
   for (const a of order) {
     const [y0, y1] = dy.get(a);
     const dCol = (a === OTHER || a === SYNONYMOUS) ? NEUTRAL_COLOUR : residueColour(a);
@@ -755,8 +763,13 @@ export function drawSupplyFlow(container, captionEl, stat, matrix, opts = {}) {
                                  "fill-opacity": 0.75 }));
     const label = a === OTHER ? "other" : a === SYNONYMOUS ? "synonymous"
                 : a === "*" ? "stop" : a;
-    svg.appendChild(mk("text", { x: xR + 10, y: (y0 + y1) / 2 + 4, "font-size": 11 },
+    const y = Math.max((y0 + y1) / 2 + 4, labelY);
+    // A label that cannot clear the one above it without leaving the box is omitted.
+    // Drawing it anyway stacks the smallest percentages on one line.
+    if (y > height - 4) continue;
+    svg.appendChild(mk("text", { x: xR + 10, y: y.toFixed(1), "font-size": 11 },
                        `${label}  ${(100 * dTotal.get(a) / total).toFixed(0)}%`));
+    labelY = y + 13;
   }
   container.appendChild(svg);
 

@@ -251,11 +251,15 @@ export function drawPositionPie(chartEl, captionEl, rows, label, opts = {}) {
   let selectedKey = keyOf(oneStep[0]);            // the largest slice, already sorted
 
   // --- controls ---------------------------------------------------------------------
+  // The selector belongs to the pie and sits under the plot. It is left out of the PNG:
+  // a dropdown is a control, and html2canvas draws native selects at the wrong size.
   const ctrl = document.createElement("div");
-  ctrl.className = "controls";
+  ctrl.className = "controls card-controls";
+  ctrl.setAttribute("data-export-skip", "");
   const lab = document.createElement("label");
-  lab.textContent = "Amino-acid change";
+  lab.append("Amino-acid change ");
   const sel = document.createElement("select");
+  sel.setAttribute("aria-label", "Amino-acid change");
   for (const r of oneStep) {
     const o = document.createElement("option");
     o.value = keyOf(r);
@@ -263,42 +267,55 @@ export function drawPositionPie(chartEl, captionEl, rows, label, opts = {}) {
                     `  \u2014  ${r.mu_aa.toExponential(2)}`;
     sel.appendChild(o);
   }
+  lab.appendChild(sel);
   const wrap = document.createElement("div");
-  wrap.append(lab, sel);
+  wrap.appendChild(lab);
   ctrl.appendChild(wrap);
+
+  const pieTitleText = opts.custom
+    ? `One-step changes from your codon at ${label}`
+    : `One-step changes from the NL4-3 codon at ${label}`;
+  const flowTitleText = `One-step changes from circulating codons at ${label}`;
 
   // --- side-by-side figures -----------------------------------------------------------
   const row = document.createElement("div");
   row.className = "panel-row";
-  // Each plot gets its own bordered card, so two charts standing side by side read as two
-  // plots rather than one sprawling graphic. The card is the box; the slot inside it is what
-  // the drawing function is handed, so neither chart has to know it is in a card.
-  // Each card is a <figure class="chart">, which is the unit js/figure_export.js offers a PNG
-  // for. That is the whole reason they are figures and not plain boxes: the pie and the flow
-  // chart are separately useful, so each gets its own download rather than sharing one
-  // capture of the pair.
+  // Each plot is its own bordered card, and each card is a <figure class="chart">, which is
+  // the unit js/figure_export.js offers a PNG for. The pie and the flow chart are separately
+  // useful, so each gets its own title and its own download rather than sharing one capture.
+  // The grid in mra.css gives the two cards the same box; widths here are the SVG viewBoxes,
+  // which stay equal so a downloaded pair still matches.
   const pieCard = document.createElement("figure");
   pieCard.className = "chart plot-card";
   pieCard.setAttribute("data-export-name", "position_one_step_pie");
   const flowCard = document.createElement("figure");
   flowCard.className = "chart plot-card";
   flowCard.setAttribute("data-export-name", "position_supply_flow");
+  const pieHead = document.createElement("div");
+  pieHead.className = "plot-head";
+  const pieTitle = document.createElement("h3");
+  pieTitle.className = "plot-title";
+  pieTitle.textContent = pieTitleText;
+  pieHead.appendChild(pieTitle);
+  const flowHead = document.createElement("div");
+  flowHead.className = "plot-head";
+  const flowTitle = document.createElement("h3");
+  flowTitle.className = "plot-title";
+  flowTitle.textContent = flowTitleText;
+  flowHead.appendChild(flowTitle);
   const pieSlot = document.createElement("div");
+  pieSlot.className = "plot-body";
   const flowSlot = document.createElement("div");
-  // The change selector belongs to the pie, so it lives in the pie's card rather than
-  // floating above both figures as a page-level control.
-  ctrl.classList.add("card-controls");
-  pieCard.appendChild(ctrl);
-  pieCard.appendChild(pieSlot);
-  flowCard.appendChild(flowSlot);
-  // Explicit bases: a flex item holding an SVG at width:100% has no intrinsic width and
-  // would otherwise collapse, which is what made these figures render far smaller than asked.
-  pieCard.style.flex = `1 1 ${PIE_W}px`;
-  pieCard.style.maxWidth = `${PIE_W}px`;
-  if (hasFlow) {
-    flowCard.style.flex = `1 1 ${FLOW_W}px`;
-    flowCard.style.maxWidth = `${FLOW_W}px`;
+  flowSlot.className = "plot-body";
+  pieCard.append(pieHead, pieSlot);
+  if (opts.noteHtml) {
+    const note = document.createElement("p");
+    note.className = "plot-note";
+    note.innerHTML = opts.noteHtml;
+    pieCard.appendChild(note);
   }
+  pieCard.appendChild(ctrl);
+  flowCard.append(flowHead, flowSlot);
   row.append(pieCard);
   if (hasFlow) row.append(flowCard);
   chartEl.appendChild(row);
@@ -319,23 +336,21 @@ export function drawPositionPie(chartEl, captionEl, rows, label, opts = {}) {
       // Coloured by the destination residue, matching the flow chart beside it. A synonymous
       // change keeps the residue, so it takes that residue's colour too.
       colour: residueColour(r.alt_aa),
-    })), { // Short title: the position is in the heading above and the caption below, so the
-           // chart only has to say which of the two figures it is. The compact legend drops
-           // the rate, which the selector above and the table below both already give, and
-           // the width it frees goes into the circle.
-           title: hasFlow ? `${label}: from the NL4-3 codon`
-                          : `Single-nucleotide changes at ${label}`,
+    })), { // The title is the card heading, so it lines up with the flow chart's title and
+           // is not drawn a second time inside the circle. The compact legend drops the
+           // rate, which the selector and the table below both already give, and the width
+           // it frees goes into the circle.
+           title: pieTitleText, drawTitle: false,
            width: opts.width || PIE_W, height: opts.height || FIG_H,
            legendWidth: hasFlow ? 132 : undefined, compactLegend: hasFlow,
            selected: selectedKey, onSelect: pick });
 
     if (hasFlow) {
-      // No title: the figure has a heading and a caption, and the chart's own header block
-      // would be the first thing to collide at this width. Height is left to the chart,
-      // which sizes itself from the number of blocks it has to stack.
+      // Title lives in the card heading. Height is fixed to the pie's so the two boxes match;
+      // the chart used to size itself from its block count and the pair never lined up.
       drawSupplyFlow(flowSlot, flowCaption, opts.flow.stat, opts.flow.matrix,
                      { weight: "supply", width: FLOW_W, height: FIG_H,
-                       title: `${label}: across circulating virus`, subtitle: false,
+                       title: flowTitleText, drawTitle: false, subtitle: false,
                        // Pooled harder than the batch tab's 2%, so the block count fits the
                        // shared box height with its labels still legible. The threshold is
                        // named in the chart's own caption, which the Details dialog carries.
@@ -347,11 +362,8 @@ export function drawPositionPie(chartEl, captionEl, rows, label, opts = {}) {
   sel.addEventListener("change", () => pick(sel.value));
   redraw();
 
-  // The explanation now lives behind each card's Details button rather than as prose under
-  // the row. The visible caption is one line naming the position, so the figure still says
-  // what it is at a glance and a downloaded PNG is not anonymous.
-  // Each card now carries its own title inside the plot, so the shared caption under the
-  // pair would only say it a third time.
+  // The explanation lives behind each card's Details button. The plot title is the card
+  // heading, so the shared caption under the pair would only repeat it.
   captionEl.innerHTML = hasFlow
     ? ""
     : `<strong>${label}</strong> \u2014 where a single substitution's supply goes.`;
@@ -361,7 +373,7 @@ export function drawPositionPie(chartEl, captionEl, rows, label, opts = {}) {
     (opts.custom ? "<strong>your</strong> codon" : "the reference codon") +
     " in one nucleotide substitution, sized by its share of the one-step supply at this " +
     "position. <code>*</code> marks a synonymous change. Click a slice, or use the " +
-    "selector above the chart.</p><p>" +
+    "selector under the chart.</p><p>" +
     (opts.custom
       ? "Rates use the codon in your sequence, so they differ from the NL4-3 atlas wherever "
         + "that codon differs. "

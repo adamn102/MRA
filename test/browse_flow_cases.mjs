@@ -219,7 +219,7 @@ if (!JSDOM) {
   const drewPanel = drawPositionPie(panel, panelCap, rows, "RT 103",
                                     { custom: false, flow: got });
   check("the panel draws with a flow source", drewPanel === true);
-  check("it holds both figures, the flow chart stacked under the pie",
+  check("it holds both figures, the flow chart beside the pie",
         panel.querySelectorAll(".panel-row svg").length >= 2,
         String(panel.querySelectorAll(".panel-row svg").length));
   // The page draws the panel and then syncs the PNG buttons; do both, or the download check
@@ -238,9 +238,12 @@ if (!JSDOM) {
         String(cards.reduce((t, c) => t + Number(vb(c)[2]), 0) + 16));
   check("each card carries its own PNG download",
         cards.every((c) => c.querySelector(".plot-tools .figure-download")));
-  check("each card carries its own title inside the plot",
-        cards.every((c) => /\S/.test((c.querySelector("svg text") || {}).textContent || "")),
-        cards.map((c) => (c.querySelector("svg text") || {}).textContent).join(" | "));
+  check("each card carries its own plot title",
+        cards.every((c) => /\S/.test((c.querySelector(".plot-title") || {}).textContent || "")),
+        cards.map((c) => (c.querySelector(".plot-title") || {}).textContent).join(" | "));
+  check("each card offers Download this figure (PNG)",
+        cards.every((c) => (c.querySelector(".figure-download") || {}).textContent ===
+                           "Download this figure (PNG)"));
   check("no emergence readout table is left in the panel",
         !panel.querySelector("table.track-stats"));
   // The explanation moved into each card's Details dialog; the shared caption under the

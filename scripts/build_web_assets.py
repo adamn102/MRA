@@ -401,7 +401,7 @@ def build_citation(outdir, version, doi, release_date, model):
         "release_date": release_date,
         "doi": doi,
         "model": model,
-        "paper": "[Paper citation to be completed on publication]",
+        "paper": "Nitido et al. 2027",
         "code_licence": "MIT",
         "data_licence": "CC-BY-4.0",
         "how_to_cite": ("Cite the atlas and state the version used. Atlas data are CC-BY-4.0: "
@@ -458,7 +458,7 @@ def rewrite_releases(repo, version, doi, release_date, model, description, manif
         "version": version,
         "release_date": release_date,
         "doi": doi,
-        "paper": "[Paper citation to be completed on publication]",
+        "paper": "Nitido et al. 2027",
         "model": model,
         "description": description,
         "modelled_region": {"first_position": MODELLED_FIRST, "last_position": MODELLED_LAST},

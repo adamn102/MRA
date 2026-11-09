@@ -47,9 +47,14 @@ const stamp = figureStamp({ version: "v0.1", doi: "10.5281/zenodo.0" }, "2026-11
 check("the stamp names the atlas version", /v0\.1/.test(stamp), stamp);
 check("the stamp carries the DOI when the release has one", /10\.5281/.test(stamp));
 check("the stamp carries the retrieval date", /2026-11-09/.test(stamp));
+check("the stamp carries the citation", /Nitido et al\. 2027/.test(stamp), stamp);
+const cited = figureStamp({ version: "v0.1", paper: "Nitido et al. 2027" }, "2026-11-09");
+check("a release without a DOI still names the DOI as unassigned",
+      /DOI: \[not yet assigned\]/.test(cited) && /Nitido et al\. 2027/.test(cited), cited);
 const bare = figureStamp(undefined, "2026-11-09");
 check("a release-less stamp is still a sentence, not 'undefined'",
-      !/undefined/.test(bare) && bare.length > 10, bare);
+      !/undefined/.test(bare) && /Nitido et al\. 2027/.test(bare) &&
+      /DOI: \[not yet assigned\]/.test(bare), bare);
 
 console.log("The shipped pages declare a name for every figure");
 // index.html is the landing page and carries the browse figures; browse.html is now a

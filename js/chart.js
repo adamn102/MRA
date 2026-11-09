@@ -433,7 +433,11 @@ export function pieChart(container, slices, options = {}) {
   };
 
   const svg = svgRoot(width, height, options.title);
-  if (options.title) svg.appendChild(el("text", { x: 0, y: 13, "font-size": 12 }, options.title));
+  // The dashboard puts the title in the card heading, where it lines up with the chart
+  // beside it. Drawing it again inside the SVG left a second, smaller title and a gap.
+  if (options.title && options.drawTitle !== false) {
+    svg.appendChild(el("text", { x: 0, y: 13, "font-size": 12 }, options.title));
+  }
 
   let angle = -Math.PI / 2;   // start at 12 o'clock
   data.forEach((s, i) => {

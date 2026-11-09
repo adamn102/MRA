@@ -131,8 +131,9 @@ try {
   engine = new MraEngine({ bundle: assets.bundle, reference: assets.reference,
                            intervals: assets.intervals, hxb2: assets.hxb2 });
   aaLayer = await loadAminoAcidLayer(page.version);      // ~1.2 MB gzipped, loaded once
-  status.textContent = `${aaLayer.records.length.toLocaleString()} amino-acid changes loaded.`;
+  status.hidden = true;
 } catch (err) {
+  status.hidden = false;
   showError(status, "Could not load the atlas tables: " + err.message);
   throw err;
 }
@@ -344,24 +345,22 @@ async function showPosition(target, genePosition) {
   const refAa = rows[0].ref_aa;
   const hxb2 = engine.hxb2Label(target.protein, genePosition);
   const refNt = protRec.codon_nt[genePosition - protRec.first_aa];
-  const site = perSite ? perSite.get(markerNt) : null;
 
-  head.innerHTML =
-    `<p><strong>${hxb2}</strong> &mdash; reference amino acid <strong>${refAa}</strong>, ` +
+  // The position line used to sit above both charts. It describes the codon the pie is
+  // drawn from, so it belongs under that plot, inside the card.
+  const noteHtml =
+    `<strong>${hxb2}</strong> &mdash; reference amino acid <strong>${refAa}</strong>, ` +
     `codon <code>${codon}</code>. ` +
     `${target.protein} position ${genePosition}` +
     (target.offset ? ` (${key} ${ownPosition})` : "") +
-    `; NL4-3 reference nucleotides ${refNt[0].toLocaleString()}\u2013${refNt[2].toLocaleString()}` +
-    (site ? `. Selected nucleotide ${markerNt.toLocaleString()} is codon base ` +
-            `${refNt.indexOf(markerNt) + 1}, per-site supply ${formatRate(site.total)}` : "") +
-    `.</p>`;
+    `; NL4-3 reference nucleotides ${refNt[0].toLocaleString()}\u2013${refNt[2].toLocaleString()}.`;
 
   const sorted = rows.slice().sort((a, b) => b.mu_aa - a.mu_aa);
   // Draw immediately with the pie alone, then redraw with the flow chart once the
   // precomputed batch has arrived. The asset is ~370 KB and fetched on the first position a
   // visitor opens, so waiting on it before drawing anything would make the panel feel broken
   // on a slow connection; the pie needs nothing but the rows already in hand.
-  drawPositionPie(chart, caption, rows, hxb2, { custom: false });
+  drawPositionPie(chart, caption, rows, hxb2, { custom: false, noteHtml });
   syncFigureButtons();
   const token = ++flowToken;
   loadLanlFlow(page.version).then((index) => {
@@ -369,7 +368,8 @@ async function showPosition(target, genePosition) {
     if (token !== flowToken) return;
     const flow = lanlFlowAt(index, target.protein, genePosition);
     if (!flow) return;                      // compendium does not cover this position
-    drawPositionPie(chart, caption, rows, hxb2, { custom: false, flow, refCodon: codon });
+    drawPositionPie(chart, caption, rows, hxb2,
+                    { custom: false, flow, refCodon: codon, noteHtml });
     syncFigureButtons();
   }).catch(() => { /* no flow chart; the pie stands on its own */ });
 

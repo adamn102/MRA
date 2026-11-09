@@ -41,13 +41,24 @@ export function exportFileName(name, dateISO) {
   return `mra_${slug}_${day}.png`;
 }
 
-/** The one-line provenance footer drawn into the image. */
+/**
+ * Provisional citation printed on every figure until the paper is out.
+ * Replace this, and `paper` on the release, when the citation is final.
+ */
+export const PROVISIONAL_CITATION = "Nitido et al. 2027";
+
+/** The provenance footer drawn into the image: atlas, citation, DOI, version, date. */
 export function figureStamp(release, dateISO) {
   const day = /^\d{4}-\d{2}-\d{2}$/.test(dateISO || "")
     ? dateISO : new Date().toISOString().slice(0, 10);
-  const parts = ["HIV-1 Mutation Rate Atlas"];
+  // A release that still carries the pre-citation placeholder uses the provisional
+  // line, so a downloaded figure is never anonymous. Both are replaced together
+  // once the paper is accepted.
+  const paper = release && release.paper && !/to be completed on publication/i.test(release.paper)
+    ? release.paper : PROVISIONAL_CITATION;
+  const doi = release && release.doi ? release.doi : "[not yet assigned]";
+  const parts = ["HIV-1 Mutation Rate Atlas", paper, "DOI: " + doi];
   if (release && release.version) parts.push("atlas " + release.version);
-  if (release && release.doi) parts.push(release.doi);
   parts.push("retrieved " + day);
   return parts.join(" \u00b7 ");
 }
