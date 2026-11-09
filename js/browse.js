@@ -16,11 +16,12 @@
 // amino-acid numbering, which is what a clinical or publication reader expects, with the NL4-3
 // figures kept alongside for traceability.
 
-import { bootstrapPage, note, caveat, showError, exportProvenance, shareButton, NEF_NOTE } from "./page.js";
+import { bootstrapPage, note, caveat, showError, exportProvenance, shareButton } from "./page.js";
 import { loadSmallAssets, loadAminoAcidLayer, loadNucleotideLayer, loadPathShard } from "./data.js";
 import { renderTable, formatRate } from "./table.js";
 import { drawSupplyTrack, drawPositionPie } from "./track_view.js";
 import { loadLanlFlow, lanlFlowAt } from "./lanl_flow.js";
+import { setDetails } from "./figure_details.js";
 import { attachFigureDownloads } from "./figure_export.js";
 import { trackSliderGeometry } from "./chart.js";
 import { MraEngine } from "./mra_engine.js";
@@ -104,10 +105,24 @@ async function downloadDashboardPNG() {
 const page = await bootstrapPage("index.html");
 const region = page.release.modelled_region;
 const FIRST = region.first_position, LAST = region.last_position;
-document.getElementById("scope-slot").appendChild(note(
-  `Positions ${FIRST.toLocaleString()}&ndash;${LAST.toLocaleString()} of the NL4-3 reference. ` +
-  NEF_NOTE + " The track shows mutational <em>supply</em> &mdash; how often a change is " +
-  "generated &mdash; not how often it is observed in patients."));
+// The coverage and supply-vs-frequency note that stood here is on the Reference and
+// Download tab, which is where the portal's fine print lives. It was the first thing on the
+// landing page, which put a paragraph of caveats between the reader and the atlas; the
+// out-of-range case still explains itself, in context, when a query actually falls outside
+// the modelled region.
+
+// The paragraph on protein numbering used to sit between the controls and the figures. It
+// is read once and then never again, so it belongs behind a button rather than in the
+// reader's way on every visit.
+setDetails(document.getElementById("coord-help"),
+  "<p>Protein positions use each subunit's own numbering, as a paper or clinic does: " +
+  "<strong>RT</strong> 103 for K103N, <strong>PR</strong> 46 for M46I, <strong>IN</strong> " +
+  "155 for N155H.</p>" +
+  "<p>For <em>env</em> and <em>vpu</em> the number is read as HXB2 and mapped through the " +
+  "alignment, so Env 332 finds the 10-1074 glycan even though NL4-3 numbers it 330.</p>" +
+  "<p>&ldquo;Reading frame here&rdquo; lists every frame coding at the selected nucleotide; " +
+  "overlapping genes give more than one.</p>",
+  { title: "Coordinates and numbering", label: "Numbering" });
 
 const status = document.getElementById("dashboard-status");
 let assets, aaLayer, engine;
@@ -162,17 +177,30 @@ function drawTrack() {
   if (!perSite) return;
   const win = Number(elWin.value);
   elWinOut.textContent = String(win);
-  document.getElementById("track-caption").innerHTML = drawSupplyTrack(
+  const trackFigure = document.getElementById("genome-track").closest("figure");
+  // The track's own description goes behind the figure's Details button; the caption keeps
+  // one line saying what is plotted and where the marker is.
+  const trackText = drawSupplyTrack(
     document.getElementById("genome-track"), {
       perSite, sites: SITES, win, cls: elClass.value, segments: GENE_SEGMENTS,
       first: FIRST, last: LAST, marker: markerNt,
       markerLabel: selected
         ? engine.hxb2Label(selected.target.protein, selected.geneAa) : String(markerNt),
       source: "read from the published NL4-3 atlas",
-      statsEl: document.getElementById("track-stats"),
+      // No quantity table under the track here. It restated numbers the caption and the
+      // position dashboard below already give, directly under the figure they belong to.
+      // "Your sequence" still shows one, where the values are the reader's own and not
+      // repeated anywhere else on that page.
       refBase: assets.reference.sequence[markerNt - 1],
       onSelect: (pos) => selectNucleotide(pos),
     });
+  const classLabel = { total: "total substitution supply", nonga: "non-G\u2192A supply",
+                       ga: "G\u2192A supply" }[elClass.value] || "supply";
+  document.getElementById("track-caption").innerHTML =
+    `Genome-wide ${classLabel}, ${win} nt mean. Marker at ` +
+    `${markerNt.toLocaleString()}` +
+    (selected ? ` (${engine.hxb2Label(selected.target.protein, selected.geneAa)})` : "") + ".";
+  setDetails(trackFigure, trackText, { title: "The genome supply track" });
   syncFigureButtons();
 }
 

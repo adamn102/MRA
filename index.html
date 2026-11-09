@@ -13,18 +13,25 @@
 <body>
 <main>
 <h1>Browse the atlas</h1>
-<div id="scope-slot"></div>
 
 <div id="dashboard-export">
 <h2>Position dashboard</h2>
-<p>Pick a position: click the track, drag the slider, or type a coordinate. You get the
-reference amino acid and codon, where a single substitution's supply goes from that codon,
-and &mdash; beside it &mdash; the same position across circulating virus: the codons the LANL
-group M compendium carries here and where the change each supplies actually goes. Below, the
-rate of every reachable amino-acid change with its 95% interval, the fewest substitutions
-needed and the number of paths.</p>
 
-<div class="controls">
+<!-- The track comes first, before the controls: it is both the headline figure and the
+     primary way to pick a position, so a reader arriving at this heading should meet the
+     plot rather than a row of selects. The control bar below refines what is on screen. -->
+<figure class="chart plot-card" data-export-name="genome_track"><div id="genome-track"></div>
+  <div class="track-slider" data-export-skip>
+    <input type="range" id="track-slider" min="1" max="8213" step="1" value="1600"
+           aria-label="Genome position (NL4-3 nucleotide)">
+  </div>
+  <figcaption id="track-caption"></figcaption></figure>
+
+<!-- One control strip for the whole dashboard: what the track shows on the left, which
+     position is selected on the right. These were two rows separated by a paragraph on
+     protein numbering; that paragraph is now behind the bar's own Details button, which is
+     where a reader looks once and then never again. -->
+<div class="control-bar" data-export-skip>
   <div>
     <label for="track-window">Smoothing window (nt)</label>
     <input type="range" id="track-window" min="25" max="501" step="2" value="151">
@@ -38,17 +45,6 @@ needed and the number of paths.</p>
       <option value="ga">G&rarr;A only</option>
     </select>
   </div>
-</div>
-
-<figure class="chart" data-export-name="genome_track"><div id="genome-track"></div>
-  <div class="track-slider" data-export-skip>
-    <input type="range" id="track-slider" min="1" max="8213" step="1" value="1600"
-           aria-label="Genome position (NL4-3 nucleotide)">
-  </div>
-  <figcaption id="track-caption"></figcaption></figure>
-<div id="track-stats"></div>
-
-<div class="controls">
   <div>
     <label for="coord-system">Jump to</label>
     <select id="coord-system">
@@ -64,28 +60,28 @@ needed and the number of paths.</p>
     <label for="position">Position</label>
     <input type="number" id="position" min="1" value="46" size="8">
   </div>
-  <div><button id="go">Go</button></div>
   <div>
     <label for="reading-frame">Reading frame here</label>
     <select id="reading-frame"></select>
   </div>
-  <div><span id="share-slot"></span></div>
+  <div class="bar-actions">
+    <button id="go">Go</button>
+    <span id="share-slot"></span>
+    <span id="coord-help"></span>
+    <button id="download-png" class="secondary">Download dashboard (PNG)</button>
+  </div>
 </div>
-<p class="caveat">Protein positions use each subunit's own numbering, as a paper or clinic
-does: <strong>RT</strong> 103 for K103N, <strong>PR</strong> 46 for M46I, <strong>IN</strong>
-155 for N155H. For <em>env</em> and
-<em>vpu</em> the number is read as HXB2 and mapped through the alignment, so Env 332 finds the
-10-1074 glycan even though NL4-3 numbers it 330. &ldquo;Reading frame here&rdquo; lists every
-frame coding at the selected nucleotide; overlapping genes give more than one.</p>
 
 <div id="dashboard-status" class="caveat">Loading the atlas tables&hellip;</div>
 <div id="dashboard-head"></div>
-<figure class="chart" data-export-name="position_dashboard_supply"><div id="dashboard-chart"></div>
+<!-- A bare container, deliberately not class="chart": the two plot cards drawn into it are
+     the figures, each with its own border, title and PNG button. Giving this one the chart
+     class too would add a third download button for the pair, on top of the whole-dashboard
+     one in the control bar. -->
+<figure data-export-name="position_dashboard_supply"><div id="dashboard-chart"></div>
   <figcaption id="dashboard-caption"></figcaption>
 </figure>
-<div class="controls" data-export-skip>
-  <div><button id="download-png" class="secondary">Download the whole dashboard (PNG)</button></div>
-</div>
+
 </div>
 
 <div id="dashboard-table"></div>

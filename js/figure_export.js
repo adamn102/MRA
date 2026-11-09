@@ -31,6 +31,8 @@ const UNSAFE = /[^a-z0-9]+/gi;
  * Pure, so the naming rule is testable without a DOM: the caller passes the figure's declared
  * export name (data-export-name, falling back to its id) and the date.
  */
+import { toolRow } from "./figure_details.js";
+
 export function exportFileName(name, dateISO) {
   const slug = String(name || "figure").trim().replace(UNSAFE, "_")
     .replace(/^_+|_+$/g, "").toLowerCase() || "figure";
@@ -106,11 +108,9 @@ export async function downloadFigure(fig, options = {}) {
  * data-export-skip so it never appears in the image it produces.
  */
 export function attachFigureDownload(fig, options = {}) {
-  if (!fig || fig.querySelector(":scope > .figure-tools")) return null;
+  if (!fig || fig.querySelector(":scope > .plot-tools .figure-download")) return null;
   const doc = fig.ownerDocument;
-  const row = doc.createElement("div");
-  row.className = "figure-tools";
-  row.setAttribute("data-export-skip", "");
+  const row = toolRow(fig);
 
   const btn = doc.createElement("button");
   btn.type = "button";
@@ -134,8 +134,7 @@ export function attachFigureDownload(fig, options = {}) {
     }
   });
 
-  row.appendChild(btn);
-  fig.appendChild(row);
+  row.appendChild(btn);        // the row is already attached to the figure
   return btn;
 }
 
@@ -154,12 +153,16 @@ export function attachFigureDownloads(options = {}) {
   const root = options.root || document;
   let attached = 0, removed = 0, drawn = 0;
   for (const fig of root.querySelectorAll("figure.chart")) {
-    const tools = fig.querySelector(":scope > .figure-tools");
+    // Only this module's own button is added and taken away. The row is shared with the
+    // Details button, so removing the row wholesale would take that with it.
+    const btn = fig.querySelector(":scope > .plot-tools .figure-download");
     if (figureIsDrawn(fig)) {
       drawn++;
-      if (!tools && attachFigureDownload(fig, options)) attached++;
-    } else if (tools) {
-      tools.remove();
+      if (!btn && attachFigureDownload(fig, options)) attached++;
+    } else if (btn) {
+      const row = btn.parentNode;
+      btn.remove();
+      if (!row.children.length) row.remove();
       removed++;
     }
   }

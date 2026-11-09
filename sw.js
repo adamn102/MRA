@@ -30,8 +30,10 @@
 // Overview and Download merged into reference.html, Table analysis and Curated tables merged
 // into tables.html. v7: sticky header, five-column MRA tables, and the supply-flow chart
 // replacing the emergence curve on the landing page (adds js/lanl_flow.js to the shell).
+// v8: the landing page's coverage note, intro paragraph and track quantity table removed,
+// the track moved above its controls, and the flow chart widened to the full figure.
 // Without a bump a returning reader keeps the previous shell from cache.
-const CACHE = "mra-portal-v7";
+const CACHE = "mra-portal-v8";
 
 // Curated annotation overlays: under a version directory, but revised over time rather than
 // frozen. Served network-first with the HTTP cache bypassed, so an edit is never masked by an

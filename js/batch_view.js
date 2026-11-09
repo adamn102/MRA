@@ -637,10 +637,29 @@ export function drawSupplyFlow(container, captionEl, stat, matrix, opts = {}) {
     c === OTHER_CODONS ? NEUTRAL_COLOUR : residueColour(stat.codon_aa.get(c));
 
   const width = opts.width || LAYOUT.width;
-  const padTop = 34, padBottom = 14;
+  // Without a header block the top inset only has to clear the first block's label.
+  const padTop = (opts.title && opts.subtitle !== false) ? 34
+               : opts.title ? 22 : 12;
+  const padBottom = 14;
   const height = opts.height || Math.max(260, 42 * Math.max(live.length, order.length) + 70);
   const plotH = height - padTop - padBottom;
-  const BW = 16, xL = 320, xR = width - 290;
+  // Label gutters, sized to what the labels actually need rather than to a round number. The
+  // widest left label over the whole compendium is "ATG (M) <" at about 60 px and the widest
+  // right one "synonymous  49%" at about 90 px; the gutters were 320 and 290, roughly three
+  // times that, which is what squeezed the bands out of the chart when it was given less than
+  // the full page. Everything the labels do not need goes to the bands, because the bands are
+  // the chart -- the columns on their own are a table.
+  const BW = 16;
+  const GUT_L = 104, GUT_R = 116;      // label width plus its 10 px standoff, rounded up
+  const MIN_BAND = 150;
+  // Below about 400 px the gutters have to give way too, or they would meet in the middle and
+  // the bands would be drawn with negative width -- two columns and nothing between them.
+  const need = GUT_L + GUT_R + BW * 2 + MIN_BAND;
+  const squeeze = width < need ? (width - BW * 2 - MIN_BAND) / (GUT_L + GUT_R) : 1;
+  const gutL = Math.max(0, Math.round(GUT_L * Math.min(1, squeeze)));
+  const gutR = Math.max(0, Math.round(GUT_R * Math.min(1, squeeze)));
+  const xL = gutL;
+  const xR = width - gutR;
   const NS = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(NS, "svg");
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
@@ -666,19 +685,28 @@ export function drawSupplyFlow(container, captionEl, stat, matrix, opts = {}) {
   };
   const cy = stack(live, cTotal), dy = stack(order, dTotal);
 
-  svg.appendChild(mk("text", { x: 0, y: 13, "font-size": 12 },
-                     opts.title || "Where residue change at this position comes from, " +
-                                   "and where it goes"));
-  svg.appendChild(mk("text", { x: 0, y: 27, "font-size": 9.5, fill: "#5c6670" },
-                     mode === "supply"
-                       ? "Sized by mutational supply: a block is its share of the change this "
-                         + "position generates."
-                       : "Sized by how common each codon is: a block is its share of the "
-                         + "sequences."));
-  svg.appendChild(mk("text", { x: xL + BW, y: padTop - 5, "text-anchor": "end", "font-size": 9,
-                               fill: "#5c6670" }, "codon carried"));
-  svg.appendChild(mk("text", { x: xR - BW, y: padTop - 5, "font-size": 9, fill: "#5c6670" },
-                     "residue it becomes"));
+  // Title, subtitle and the two column headings are drawn only where the caller asks for a
+  // title. A figure with its own heading and caption does not need them repeated inside the
+  // plot, and on a narrow figure they are the first thing to collide; the caption carries
+  // them instead. The batch tab passes a title and keeps the full set.
+  if (opts.title) {
+    svg.appendChild(mk("text", { x: 0, y: 13, "font-size": 12 }, opts.title));
+  }
+  // The subtitle and the two column headings are the verbose half of the header. A figure
+  // that sits beside another one, under a shared caption, wants only enough to tell the two
+  // apart; the caption says what the blocks mean.
+  if (opts.title && opts.subtitle !== false) {
+    svg.appendChild(mk("text", { x: 0, y: 27, "font-size": 9.5, fill: "#5c6670" },
+                       mode === "supply"
+                         ? "Sized by mutational supply: a block is its share of the change this "
+                           + "position generates."
+                         : "Sized by how common each codon is: a block is its share of the "
+                           + "sequences."));
+    svg.appendChild(mk("text", { x: xL + BW, y: padTop - 5, "text-anchor": "end",
+                                 "font-size": 9, fill: "#5c6670" }, "codon carried"));
+    svg.appendChild(mk("text", { x: xR - BW, y: padTop - 5, "font-size": 9, fill: "#5c6670" },
+                       "residue it becomes"));
+  }
 
   const cCur = new Map(live.map((c) => [c, cy.get(c)[0]]));
   const dCur = new Map(order.map((a) => [a, dy.get(a)[0]]));
@@ -711,10 +739,13 @@ export function drawSupplyFlow(container, captionEl, stat, matrix, opts = {}) {
                                  "font-family": isPool ? "inherit" : "monospace" },
                        isPool ? `${pooledCodons} rarer codons`
                               : `${c} (${stat.codon_aa.get(c)})` +
-                                (c === opts.refCodon ? "  \u25c0 NL4-3" : "")));
+                                // The marker alone: a reader who needs telling what the
+                                // triangle means has the caption, and spelling it out on
+                                // every chart cost 50 px of gutter on every one of them.
+                                (c === opts.refCodon ? " \u25c0" : "")));
     svg.appendChild(mk("text", { x: xL - 10, y: mid + 11, "text-anchor": "end", "font-size": 9,
                                  fill: "#5c6670" },
-                       `${(100 * freqOf.get(c)).toFixed(0)}% of sequences`));
+                       `${(100 * freqOf.get(c)).toFixed(0)}%`));
   });
   for (const a of order) {
     const [y0, y1] = dy.get(a);
@@ -722,10 +753,10 @@ export function drawSupplyFlow(container, captionEl, stat, matrix, opts = {}) {
     svg.appendChild(mk("rect", { x: xR - BW, y: y0.toFixed(1), width: BW,
                                  height: (y1 - y0).toFixed(1), fill: dCol,
                                  "fill-opacity": 0.75 }));
-    const label = a === OTHER ? "other" : a === SYNONYMOUS ? "no change (synonymous)"
+    const label = a === OTHER ? "other" : a === SYNONYMOUS ? "synonymous"
                 : a === "*" ? "stop" : a;
     svg.appendChild(mk("text", { x: xR + 10, y: (y0 + y1) / 2 + 4, "font-size": 11 },
-                       `${label}   ${(100 * dTotal.get(a) / total).toFixed(0)}%`));
+                       `${label}  ${(100 * dTotal.get(a) / total).toFixed(0)}%`));
   }
   container.appendChild(svg);
 

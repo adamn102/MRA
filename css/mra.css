@@ -123,9 +123,8 @@ figure.chart figcaption { font-size: 13px; color: var(--muted); margin-top: 4px;
    data-export-skip, so it never appears in the image it produces. It is quiet by default and
    comes forward on hover or keyboard focus: every figure carries one, and six loud buttons
    down a page would compete with the plots they belong to. */
-figure.chart .figure-tools { margin-top: 6px; opacity: 0.55; transition: opacity 0.12s; }
-figure.chart:hover .figure-tools,
-figure.chart .figure-tools:focus-within { opacity: 1; }
+/* The PNG button shares the one .plot-tools row with Details; see the dashboard-cards
+   section below for that row's styling. */
 figure.chart .figure-download { font-size: 12px; padding: 3px 8px; }
 /* Drawn into the PNG only; present in the page for the duration of one capture. */
 figure.chart .figure-stamp { font-size: 11px; color: var(--muted); margin-top: 6px; }
@@ -186,3 +185,58 @@ td .codon-options {
   padding: 10px 12px; border: 1px solid var(--rule); background: var(--panel); font-size: 13px; }
 .section-index a { text-decoration: none; }
 .section-index a:hover { text-decoration: underline; }
+
+/* --- dashboard cards ----------------------------------------------------- */
+/* A thin border around each plot. The figures used to sit on the page background with only
+   whitespace between them, which on the position dashboard left no visual boundary between
+   two charts standing side by side -- they read as one sprawling graphic. A rule and a little
+   padding is enough to say "this is one plot"; anything heavier competes with the data. */
+.plot-card {
+  border: 1px solid var(--rule); border-radius: 4px; background: #fff;
+  padding: 10px 12px; margin: 12px 0;
+}
+.plot-card > figcaption, .plot-card .plot-label {
+  font-size: 12px; color: var(--muted); margin-top: 6px;
+}
+/* Inside the dashboard row the cards carry their own margin from the flex gap. */
+.panel-row > .plot-card { margin: 0; }
+
+/* The button row on a plot. Quiet until wanted: every card carries one, and a page of loud
+   buttons competes with the plots they belong to. */
+.plot-tools { display: flex; gap: 8px; align-items: center; margin-top: 8px;
+  opacity: 0.6; transition: opacity 0.12s; }
+.plot-card:hover .plot-tools, .plot-tools:focus-within,
+figure.chart:hover .plot-tools { opacity: 1; }
+.plot-tools button { font-size: 12px; padding: 3px 8px; }
+
+/* The explanation, as a dialog rather than a paragraph under the figure. */
+.details-dialog {
+  max-width: 640px; border: 1px solid var(--rule); border-radius: 5px;
+  padding: 18px 20px; font-size: 14px; line-height: 1.5; color: var(--fg);
+  background: #fff;
+}
+.details-dialog::backdrop { background: rgba(20, 24, 28, 0.35); }
+.details-dialog h3 { margin: 0 0 10px; font-size: 15px; }
+.details-dialog .details-body p { margin: 0 0 8px; }
+.details-close { margin-top: 12px; }
+
+/* --- the dashboard control bar ------------------------------------------- */
+/* One wide, shallow box holding every input for the dashboard: what the track shows, and
+   which position is selected. They were two separate rows with a paragraph of prose between
+   them and the figures; collected into one bar they read as the dashboard's control strip,
+   and the figures close up behind it. */
+.control-bar {
+  display: flex; flex-wrap: wrap; align-items: end; gap: 10px 18px;
+  border: 1px solid var(--rule); border-radius: 4px; background: var(--panel);
+  padding: 10px 12px; margin: 12px 0;
+}
+.control-bar > div { display: flex; flex-direction: column; gap: 3px; }
+.control-bar label { font-size: 11px; color: var(--muted); }
+.control-bar select, .control-bar input[type="number"] { font-size: 13px; }
+.control-bar input[type="range"] { width: 150px; vertical-align: middle; }
+/* The trailing items -- Go, share, details -- sit on the baseline with the inputs. */
+.control-bar .bar-actions { flex-direction: row; align-items: center; gap: 8px;
+  margin-left: auto; }
+/* A control that belongs to one plot sits inside that plot's card, above the figure. */
+.plot-card .card-controls { margin: 0 0 8px; gap: 8px; }
+.plot-card .card-controls label { font-size: 11px; color: var(--muted); }

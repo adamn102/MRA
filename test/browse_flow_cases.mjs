@@ -171,6 +171,36 @@ if (!JSDOM) {
         [...reached].every((aa) => flowFills.has(residueColour(aa).toLowerCase())),
         [...reached].filter((aa) => !flowFills.has(residueColour(aa).toLowerCase())).join(","));
 
+  // The bands between the two columns are the chart. Its label gutters used to be fixed at
+  // 320 px left and 290 right, so below about 630 px they overran each other and the bands
+  // were drawn with negative width -- two columns and nothing between them. Pin the span at
+  // the width the dashboard uses and at widths narrow enough to have broken it.
+  console.log("Bands are visible at every width the chart is drawn at");
+  const bandSpan = (w) => {
+    const b = dom.window.document.createElement("div");
+    const c = dom.window.document.createElement("div");
+    drawSupplyFlow(b, c, got.stat, got.matrix, { weight: "supply", width: w });
+    let lo = Infinity, hi = -Infinity;
+    for (const pth of b.querySelectorAll("path")) {
+      for (const m of (pth.getAttribute("d") || "").matchAll(/[ML]\s*([-\d.]+),/g)) {
+        const x = parseFloat(m[1]);
+        if (x < lo) lo = x;
+        if (x > hi) hi = x;
+      }
+    }
+    return hi > lo ? hi - lo : 0;
+  };
+  const full = bandSpan(1140);
+  check("at the dashboard's full width the bands span most of the figure",
+        full > 400, `${full.toFixed(0)} px`);
+  for (const w of [900, 700, 600, 480]) {
+    const sp = bandSpan(w);
+    check(`at ${w} px the bands are still drawn`, sp >= 150, `${sp.toFixed(0)} px`);
+  }
+  check("the gutters never invert, however narrow the figure",
+        bandSpan(360) > 0 && bandSpan(300) > 0,
+        `${bandSpan(360).toFixed(0)} / ${bandSpan(300).toFixed(0)} px`);
+
   // The dashboard panel itself: pie and flow chart in one row, and the panel still working
   // when no flow is available. The second case is the one that breaks quietly -- a position
   // the compendium does not cover, or an older release with no precomputed file.
@@ -189,15 +219,42 @@ if (!JSDOM) {
   const drewPanel = drawPositionPie(panel, panelCap, rows, "RT 103",
                                     { custom: false, flow: got });
   check("the panel draws with a flow source", drewPanel === true);
-  check("it holds two SVGs side by side in one row",
+  check("it holds both figures, the flow chart stacked under the pie",
         panel.querySelectorAll(".panel-row svg").length >= 2,
         String(panel.querySelectorAll(".panel-row svg").length));
+  // The page draws the panel and then syncs the PNG buttons; do both, or the download check
+  // below tests the harness rather than the app.
+  const { attachFigureDownloads } = await import(`${REPO}/js/figure_export.js`);
+  attachFigureDownloads({ root: panel });
+  const cards = [...panel.querySelectorAll(".panel-row > .plot-card")];
+  const vb = (c) => (c.querySelector("svg").getAttribute("viewBox") || "").split(" ");
+  check("both plots sit in their own bordered card", cards.length === 2,
+        cards.map((c) => c.getAttribute("data-export-name")).join(", "));
+  check("the two cards are the same size",
+        new Set(cards.map((c) => vb(c)[2] + "x" + vb(c)[3])).size === 1,
+        cards.map((c) => vb(c)[2] + "x" + vb(c)[3]).join(" vs "));
+  check("together they span the genome track's width",
+        cards.reduce((t, c) => t + Number(vb(c)[2]), 0) + 16 === 1140,
+        String(cards.reduce((t, c) => t + Number(vb(c)[2]), 0) + 16));
+  check("each card carries its own PNG download",
+        cards.every((c) => c.querySelector(".plot-tools .figure-download")));
+  check("each card carries its own title inside the plot",
+        cards.every((c) => /\S/.test((c.querySelector("svg text") || {}).textContent || "")),
+        cards.map((c) => (c.querySelector("svg text") || {}).textContent).join(" | "));
   check("no emergence readout table is left in the panel",
         !panel.querySelector("table.track-stats"));
-  check("the caption describes both figures",
-        /Left:/.test(panelCap.innerHTML) && /Right:/.test(panelCap.innerHTML));
-  check("the caption no longer promises a probability curve",
-        !/probabilit|1 \u2212 \(1/i.test(panelCap.innerHTML));
+  // The explanation moved into each card's Details dialog; the shared caption under the
+  // pair would otherwise repeat what the two plot titles already say.
+  check("the shared caption is not another paragraph of prose",
+        panelCap.textContent.trim() === "", panelCap.textContent.trim().slice(0, 40));
+  check("each card explains itself behind a Details button",
+        cards.every((c) => c.querySelector(".plot-tools .details-button")));
+  const dialogs = [...panel.querySelectorAll("dialog.details-dialog")];
+  check("the explanation is kept, not deleted", dialogs.length === 2 &&
+        dialogs.every((x) => x.textContent.length > 120),
+        dialogs.map((x) => x.textContent.length).join(", "));
+  check("no details dialog still promises a probability curve",
+        !dialogs.some((x) => /probabilit/i.test(x.textContent)));
 
   const solo = dom.window.document.createElement("div");
   const soloCap = dom.window.document.createElement("div");
@@ -206,8 +263,8 @@ if (!JSDOM) {
   check("without a flow chart it shows one figure, not an empty slot",
         solo.querySelectorAll(".panel-row svg").length === 1,
         String(solo.querySelectorAll(".panel-row svg").length));
-  check("and its caption does not advertise a right-hand figure",
-        !/Right:/.test(soloCap.innerHTML));
+  check("and on its own the pie keeps a visible one-line caption",
+        /\S/.test(soloCap.textContent));
 }
 
 if (deep) {

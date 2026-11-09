@@ -14,6 +14,7 @@ import { residueColour, drawSupplyFlow } from "./batch_view.js";
 import { smoothSeries, oneStepSlices }
   from "./explore_core.js";
 import { formatRate } from "./table.js";
+import { setDetails } from "./figure_details.js";
 
 export const CLASS_LABEL = {
   total: "total substitution supply",
@@ -167,6 +168,23 @@ export function trackStats(a) {
   ];
 }
 
+/**
+ * The flow card's Details text: what the two columns are, then whatever the chart itself
+ * reported about this position. The chart writes a caption describing its own contents --
+ * pooling, totals, how many sequences -- and that is worth keeping rather than rewriting
+ * here, where it would drift from what was actually drawn.
+ */
+function flowDetailHtml(label, chartCaption) {
+  return "<p>The same position across circulating virus, from a batch over the 182 LANL " +
+    "group M compendium genomes. <strong>Left column:</strong> the codons those sequences " +
+    "carry at " + label + ", with the share carrying each; \u25c0 marks the codon NL4-3 " +
+    "has. <strong>Right column:</strong> the residue each becomes. <strong>Band width</strong> " +
+    "is that route's share of the residue change this position generates.</p>" +
+    "<p>The pie beside it is one codon's draw; this is the population's. Both are coloured " +
+    "by destination residue, so a slice and a band for the same residue match.</p>" +
+    (chartCaption ? "<p>" + chartCaption + "</p>" : "");
+}
+
 /** The small quantity table under the track. */
 function renderTrackStats(el, rows) {
   el.innerHTML =
@@ -208,13 +226,22 @@ export function drawPositionPie(chartEl, captionEl, rows, label, opts = {}) {
     return false;
   }
 
-  // The pie and the flow chart together span exactly the track's width, so the figures on the
-  // page share one left and right edge. Where there is no flow chart the pie takes the whole
-  // width rather than leaving a gap.
+  // Side by side, together spanning exactly the track's width, so the dashboard and the
+  // genome track above it share one left and one right edge.
+  //
+  // This only works because the flow chart's label gutters are now sized to the labels
+  // (~104 px and ~116 px) instead of the 320/290 they used to reserve. At this split the
+  // bands get ~350 px, against a negative width -- literally no bands -- when half the page
+  // was tried against the old gutters. The pie takes slightly less than half: it is the
+  // simpler figure and its legend is text that must not wrap.
   const hasFlow = !!(opts.flow && opts.flow.stat && opts.flow.matrix);
-  const PIE_W = hasFlow ? Math.round((LAYOUT.width - LAYOUT.gap) * 0.46) : LAYOUT.width;
-  const FLOW_W = LAYOUT.width - LAYOUT.gap - PIE_W;
-  const FIG_H = 460;
+  // Two equal boxes spanning exactly the track's width. Equal matters here: these are two
+  // views of one position, and a wider box reads as the more important figure when neither
+  // is. Both are given the same height as well, so the row is a pair of matching panels
+  // rather than a tall chart next to a short one.
+  const PIE_W = hasFlow ? Math.floor((LAYOUT.width - LAYOUT.gap) / 2) : LAYOUT.width;
+  const FLOW_W = hasFlow ? LAYOUT.width - LAYOUT.gap - PIE_W : LAYOUT.width;
+  const FIG_H = 500;
 
   const keyOf = (r) => `${r.alt_aa}${r.synonymous ? "*" : ""}`;
   // Two rows could share a target amino acid only via different codons, which cannot happen
@@ -239,27 +266,45 @@ export function drawPositionPie(chartEl, captionEl, rows, label, opts = {}) {
   const wrap = document.createElement("div");
   wrap.append(lab, sel);
   ctrl.appendChild(wrap);
-  chartEl.appendChild(ctrl);
 
   // --- side-by-side figures -----------------------------------------------------------
   const row = document.createElement("div");
   row.className = "panel-row";
+  // Each plot gets its own bordered card, so two charts standing side by side read as two
+  // plots rather than one sprawling graphic. The card is the box; the slot inside it is what
+  // the drawing function is handed, so neither chart has to know it is in a card.
+  // Each card is a <figure class="chart">, which is the unit js/figure_export.js offers a PNG
+  // for. That is the whole reason they are figures and not plain boxes: the pie and the flow
+  // chart are separately useful, so each gets its own download rather than sharing one
+  // capture of the pair.
+  const pieCard = document.createElement("figure");
+  pieCard.className = "chart plot-card";
+  pieCard.setAttribute("data-export-name", "position_one_step_pie");
+  const flowCard = document.createElement("figure");
+  flowCard.className = "chart plot-card";
+  flowCard.setAttribute("data-export-name", "position_supply_flow");
   const pieSlot = document.createElement("div");
   const flowSlot = document.createElement("div");
+  // The change selector belongs to the pie, so it lives in the pie's card rather than
+  // floating above both figures as a page-level control.
+  ctrl.classList.add("card-controls");
+  pieCard.appendChild(ctrl);
+  pieCard.appendChild(pieSlot);
+  flowCard.appendChild(flowSlot);
   // Explicit bases: a flex item holding an SVG at width:100% has no intrinsic width and
   // would otherwise collapse, which is what made these figures render far smaller than asked.
-  pieSlot.style.flex = `1 1 ${PIE_W}px`;
-  pieSlot.style.maxWidth = `${PIE_W}px`;
+  pieCard.style.flex = `1 1 ${PIE_W}px`;
+  pieCard.style.maxWidth = `${PIE_W}px`;
   if (hasFlow) {
-    flowSlot.style.flex = `1 1 ${FLOW_W}px`;
-    flowSlot.style.maxWidth = `${FLOW_W}px`;
+    flowCard.style.flex = `1 1 ${FLOW_W}px`;
+    flowCard.style.maxWidth = `${FLOW_W}px`;
   }
-  row.append(pieSlot);
-  if (hasFlow) row.append(flowSlot);
+  row.append(pieCard);
+  if (hasFlow) row.append(flowCard);
   chartEl.appendChild(row);
+  // drawSupplyFlow writes its explanation here; it is never added to the page, only read
+  // back into the flow card's Details dialog.
   const flowCaption = document.createElement("div");
-  flowCaption.className = "caveat";
-  if (hasFlow) chartEl.appendChild(flowCaption);
 
   function pick(key) {
     if (!byKey.has(key)) return;
@@ -274,13 +319,27 @@ export function drawPositionPie(chartEl, captionEl, rows, label, opts = {}) {
       // Coloured by the destination residue, matching the flow chart beside it. A synonymous
       // change keeps the residue, so it takes that residue's colour too.
       colour: residueColour(r.alt_aa),
-    })), { title: `Single-nucleotide amino-acid changes at ${label}`,
+    })), { // Short title: the position is in the heading above and the caption below, so the
+           // chart only has to say which of the two figures it is. The compact legend drops
+           // the rate, which the selector above and the table below both already give, and
+           // the width it frees goes into the circle.
+           title: hasFlow ? `${label}: from the NL4-3 codon`
+                          : `Single-nucleotide changes at ${label}`,
            width: opts.width || PIE_W, height: opts.height || FIG_H,
+           legendWidth: hasFlow ? 132 : undefined, compactLegend: hasFlow,
            selected: selectedKey, onSelect: pick });
 
     if (hasFlow) {
+      // No title: the figure has a heading and a caption, and the chart's own header block
+      // would be the first thing to collide at this width. Height is left to the chart,
+      // which sizes itself from the number of blocks it has to stack.
       drawSupplyFlow(flowSlot, flowCaption, opts.flow.stat, opts.flow.matrix,
                      { weight: "supply", width: FLOW_W, height: FIG_H,
+                       title: `${label}: across circulating virus`, subtitle: false,
+                       // Pooled harder than the batch tab's 2%, so the block count fits the
+                       // shared box height with its labels still legible. The threshold is
+                       // named in the chart's own caption, which the Details dialog carries.
+                       minCodonFreq: 0.05,
                        refCodon: opts.refCodon || null });
     }
   }
@@ -288,22 +347,35 @@ export function drawPositionPie(chartEl, captionEl, rows, label, opts = {}) {
   sel.addEventListener("change", () => pick(sel.value));
   redraw();
 
-  captionEl.innerHTML =
-    "<strong>Left:</strong> each slice is an amino-acid change reachable from " +
+  // The explanation now lives behind each card's Details button rather than as prose under
+  // the row. The visible caption is one line naming the position, so the figure still says
+  // what it is at a glance and a downloaded PNG is not anonymous.
+  // Each card now carries its own title inside the plot, so the shared caption under the
+  // pair would only say it a third time.
+  captionEl.innerHTML = hasFlow
+    ? ""
+    : `<strong>${label}</strong> \u2014 where a single substitution's supply goes.`;
+
+  setDetails(pieCard,
+    "<p>Each slice is an amino-acid change reachable from " +
     (opts.custom ? "<strong>your</strong> codon" : "the reference codon") +
-    " in one nucleotide substitution, sized by its share of the one-step supply here. " +
-    "<code>*</code> marks a synonymous change. Click a slice, or use the selector. " +
+    " in one nucleotide substitution, sized by its share of the one-step supply at this " +
+    "position. <code>*</code> marks a synonymous change. Click a slice, or use the " +
+    "selector above the chart.</p><p>" +
     (opts.custom
-      ? "Rates use the codon in your sequence, so they differ from the NL4-3 atlas where it does. "
-      : "Rates are read from the atlas. ") +
-    (hasFlow
-      ? "<strong>Right:</strong> the same position across circulating virus \u2014 the " +
-        "codons the LANL group M compendium carries here, and where the residue change each " +
-        "one supplies actually goes. The pie is one codon's draw; the flow chart is the " +
-        "population's. Both are coloured by destination residue, so a slice and a band for " +
-        "the same residue match. "
-      : "") +
-    "<strong>These are rates of generation, not of establishment</strong> \u2014 a variant " +
-    "generated here can still be lost to drift, purged by selection, or never sampled.";
+      ? "Rates use the codon in your sequence, so they differ from the NL4-3 atlas wherever "
+        + "that codon differs. "
+      : "Rates are read from the published NL4-3 atlas. ") +
+    "Slices are coloured by the destination residue" +
+    (hasFlow ? ", the same key the chart beside it uses" : "") +
+    ".</p><p><strong>This is generation, not establishment</strong> \u2014 a variant " +
+    "generated here can still be lost to drift, purged by selection, or never sampled.</p>",
+    { title: `One-step changes from the codon at ${label}` });
+
+  if (hasFlow) {
+    setDetails(flowCard, flowDetailHtml(label, flowCaption.innerHTML),
+               { title: `${label} across circulating virus` });
+  }
+
   return true;
 }

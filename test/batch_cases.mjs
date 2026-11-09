@@ -533,12 +533,17 @@ check("a missing codon encodes to NO_CODON and decodes to null",
     // Synonymous routes used to be dropped; they are now a destination block of their own,
     // because they are a median 21% of a site's supply and were silently missing from it.
     check("the no-change block is drawn and named",
-          bySeq.labels.some((t) => /no change \(synonymous\)/.test(t)),
-          bySeq.labels.filter((t) => /change|other/.test(t)).join(" | "));
+          // Labelled "synonymous" rather than "no change (synonymous)": one unambiguous
+          // word, and the gutter it sets the width of is the chart's scarcest space.
+          bySeq.labels.some((t) => /^synonymous\s+\d+%$/.test(t)),
+          bySeq.labels.filter((t) => /synonymous|other/.test(t)).join(" | "));
     check("the left blocks no longer carry a supply percentage",
           !bySeq.labels.some((t) => /of supply/.test(t)));
     check("the left blocks still carry a sequence percentage",
-          bySeq.labels.filter((t) => /of sequences/.test(t)).length === bySeq.names.length);
+          // The label is now the bare percentage: "66%", not "66% of sequences". The words
+          // were the same on every block of every chart, and the column heading says it.
+          bySeq.labels.filter((t) => /^\d+%$/.test(t)).length === bySeq.names.length,
+          bySeq.labels.filter((t) => /^\d+%$/.test(t)).join(" "));
     // A codon must be drawn in the colour of the residue it encodes, so degenerate codons
     // match each other and match that residue in the composition bar above.
     const { residueColour, drawPositionComposition } = await import("../js/batch_view.js");

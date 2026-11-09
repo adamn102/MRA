@@ -56,7 +56,11 @@ console.log("The shipped pages declare a name for every figure");
 // redirect stub with no figures of its own.
 for (const page of ["batch.html", "index.html"]) {
   const html = fs.readFileSync(path.join(REPO, page), "utf8");
-  const figs = html.match(/<figure class="chart"[^>]*>/g) || [];
+  // Match any figure whose class list contains "chart", not the exact attribute: the landing
+  // page's track is class="chart plot-card" now that the figures are bordered cards. A
+  // figure WITHOUT the chart class is a plain container -- index.html wraps the two
+  // dashboard cards in one -- and offers no download, so it is not scanned here.
+  const figs = (html.match(/<figure[^>]*class="[^"]*\bchart\b[^"]*"[^>]*>/g) || []);
   const named = figs.filter((f) => /data-export-name="[^"]+"/.test(f));
   check(`${page}: all ${figs.length} figures carry data-export-name`,
         figs.length > 0 && named.length === figs.length,
@@ -117,7 +121,7 @@ if (!JSDOM) {
 
   console.log("The button stays out of its own image");
   check("the button row is marked data-export-skip",
-        drawnOne.querySelector(".figure-tools").hasAttribute("data-export-skip"));
+        drawnOne.querySelector(".plot-tools").hasAttribute("data-export-skip"));
   check("the slider inside a track figure is marked data-export-skip",
         drawnOne.querySelector(".track-slider").hasAttribute("data-export-skip"));
   check("attaching to a figure that already has a button is a no-op",
@@ -156,7 +160,7 @@ if (!JSDOM) {
     seen = {
       node,
       stampDuringCapture: node.querySelector(".figure-stamp")?.textContent || "",
-      skipsToolRow: opts.ignoreElements(node.querySelector(".figure-tools")),
+      skipsToolRow: opts.ignoreElements(node.querySelector(".plot-tools")),
       skipsSlider: opts.ignoreElements(node.querySelector(".track-slider")),
       keepsPlot: opts.ignoreElements(node.querySelector("svg")),
       keepsCaption: opts.ignoreElements(node.querySelector("figcaption")),

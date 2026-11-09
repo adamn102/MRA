@@ -477,9 +477,13 @@ export function pieChart(container, slices, options = {}) {
     g.appendChild(el("rect", { x: lx, y: ly - 8, width: 10, height: 10,
                                fill: colour(i, s), "fill-opacity": 0.85 }));
     const pct = ((s.value / total) * 100).toFixed(1);
+    // The rate itself is dropped where the caller asks for a compact legend: it is already
+    // on the selector above the pie and in the table below it, and carrying it here costs
+    // about 80 px of legend width that the circle can have instead.
     g.appendChild(el("text", { x: lx + 15, y: ly, "font-size": fsLegend, fill: "#1b1f23",
                                "font-weight": isSel(s) ? 600 : 400 },
-      `${s.label}  ${pct}%  (${s.value.toExponential(2)})`));
+      options.compactLegend ? `${s.label}  ${pct}%`
+                            : `${s.label}  ${pct}%  (${s.value.toExponential(2)})`));
     svg.appendChild(wire(g, s));
     ly += legendStep;
   });
