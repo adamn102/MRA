@@ -27,7 +27,7 @@
 //   - a specific escape change vs glycan SEQUON LOSS (summed over three codons). Glycan bNAb
 //     rows carry both.
 
-import { note, caveat, exportProvenance, shareButton, TABLE_SECTIONS } from "./page.js";
+import { caveat, exportProvenance, shareButton, TABLE_SECTIONS } from "./page.js";
 import { renderTable, formatRate } from "./table.js";
 import { codonSensitivity } from "./codon_sensitivity.js";
 
@@ -92,18 +92,6 @@ function controlSelect(row, labelText, options, initial) {
 export function initCuratedTables({ page, engine, drm, bnab, host }) {
   const rendered = [];
 
-  const bnabNote =
-    "<strong>Curated from primary literature.</strong> Every change listed was reported to " +
-    "affect neutralisation \u2014 escape selected in vivo, a rebound virus, or a reported " +
-    "resistance assignment. Structural contacts and glycans without a measured effect are " +
-    "excluded. The antibody, the evidence strength (primary, secondary or clinical) and the " +
-    "citation for each change are in <code>data/" + page.version + "/bnab_catalog.csv</code> " +
-    "and <code>docs/BNAB_PROVENANCE.md</code>. Escape is published in HXB2 numbering against " +
-    "varied backgrounds; changes whose published wild-type residue NL4-3 does not carry have " +
-    "no atlas rate and are counted under each table rather than listed. One change per row: " +
-    "a combined genotype rate would assume sequential accumulation, which recombination can " +
-    "bypass.";
-
   for (const section of TABLE_SECTIONS) {
     if (section.kind === "drm") {
       const cls = drm.taxonomy.classes.find((c) => c.class === section.key);
@@ -113,8 +101,7 @@ export function initCuratedTables({ page, engine, drm, bnab, host }) {
     } else if (section.kind === "bnab") {
       const records = bnab.records.filter((r) => r.epitope_class === section.key);
       if (!records.length) continue;
-      renderBnabSection({ page, engine, host, section, records,
-                          intro: rendered.some((id) => id.startsWith("bnab-")) ? null : bnabNote });
+      renderBnabSection({ page, engine, host, section, records });
       rendered.push(section.id);
     }
   }
@@ -192,7 +179,7 @@ function renderDrmSection({ page, engine, drm, host, section, cls }) {
 }
 
 // --- one bNAb epitope class -------------------------------------------------------------
-function renderBnabSection({ page, engine, host, section, records, intro }) {
+function renderBnabSection({ page, engine, host, section, records }) {
   // Collapsed to one row per escape change. The catalog carries one row per antibody, so a
   // position targeted by two antibodies appeared twice; with the antibody column gone those
   // would read as a duplicated row. The rate is a property of the codon, not of the antibody,
@@ -230,7 +217,6 @@ function renderBnabSection({ page, engine, host, section, records, intro }) {
   }
 
   const el = sectionShell(host, section, null);
-  if (intro) el.appendChild(note(intro));
   const tableSlot = document.createElement("div");
   el.appendChild(tableSlot);
 

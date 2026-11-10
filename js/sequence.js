@@ -6,26 +6,27 @@
 // let a reader mistake a modelled rate for a measured one, so:
 //   - the privacy note and the standing caveat sit at the end of the page, after the
 //     results, which is where a reader meets them with the numbers already in view;
-//   - every result row carries flags naming which components it rests on;
-//   - the codon-identity component is named first, because it is the one the submitted
-//     sequence genuinely determines;
+//   - every nucleotide-rate row carries flags naming which components it rests on;
 //   - a sequence that aligns entirely outside the modelled region gets a refusal that
 //     names the covered region, not an empty table.
 //
 // Up to MAX_DETAIL_SEQUENCES submissions share one genome track. Checkboxes choose which
 // lines are drawn; one selector chooses which sequence the pie and the flow chart use.
+// Under those charts the only tables are the compiled amino-acid and nucleotide rates.
+// Every submitted sequence is in the same two tables, distinguished by a sample column,
+// and each table downloads in full.
 
 import { bootstrapPage, privacyPanel, note, caveat, showError, exportProvenance,
          CUSTOM_CAVEAT, NEF_NOTE } from "./page.js";
 import { loadSmallAssets } from "./data.js";
 import { Analysis, progressRow, MAX_DETAIL_SEQUENCES } from "./analysis.js";
 import { parseFasta, alignToReference } from "./align.js";
-import { renderTable, formatRate, toCsv, downloadText } from "./table.js";
+import { renderTable, formatRate } from "./table.js";
 import { MraEngine, GENETIC_CODE } from "./mra_engine.js";
 import { perSiteSupply, groupByPosition, buildFrameIndex, geneSegments, targetFor,
-         codonDifferences, accessibilityRows, smoothSeries } from "./explore_core.js";
+         smoothSeries } from "./explore_core.js";
 import { drawSupplyTrack, drawPositionPie, CLASS_LABEL } from "./track_view.js";
-import { trackSliderGeometry, dotPlot } from "./chart.js";
+import { trackSliderGeometry } from "./chart.js";
 import { loadLanlFlow, lanlFlowAt } from "./lanl_flow.js";
 import { attachFigureDownloads } from "./figure_export.js";
 import { setDetails } from "./figure_details.js";
@@ -290,7 +291,6 @@ function renderDashboard(slot, items, allRows, truncated) {
   const prefer = 1954;
   let markerNt = nearestCodon(items[0], items[0].frameAt.has(prefer) ? prefer : (items[0].variants[0] || prefer));
   let flowToken = 0;
-  let lowerFor = -1;
 
   const fig = document.createElement("figure");
   fig.className = "chart plot-card";
@@ -362,9 +362,8 @@ function renderDashboard(slot, items, allRows, truncated) {
   const chartEl = document.createElement("div");
   const captionEl = document.createElement("figcaption");
   dash.append(chartEl, captionEl);
-  const statsSlot = document.createElement("div");
   const lower = document.createElement("div");
-  slot.append(fig, ctrl, head, dash, statsSlot, lower);
+  slot.append(fig, ctrl, head, dash, lower);
 
   const elWin = ctrl.querySelector(".sq-win"), elWinOut = ctrl.querySelector(".sq-win-out");
   const elClass = ctrl.querySelector(".sq-class"), elSys = ctrl.querySelector(".sq-sys");
@@ -416,7 +415,6 @@ function renderDashboard(slot, items, allRows, truncated) {
       title: `Smoothed ${CLASS_LABEL[cls]} along the submitted sequences, with NL4-3 overlaid`,
       source: "computed from the codons and 3\u2032 context in the sequences you submitted, not from NL4-3",
       refPerSite: referenceAtlas().perSite,
-      statsEl: statsSlot,
       subjectName: shortName(item.row.name),
       refBase: item.baseAt.get(markerNt),
       onSelect: (pos) => selectNt(pos),
@@ -431,10 +429,10 @@ function renderDashboard(slot, items, allRows, truncated) {
     syncFigures();
   }
 
-  function showPie(item, rows, label, noteHtml, yourCodon, protein, geneAa) {
+  function showPie(item, rows, label, noteHtml, yourCodon, protein, geneAa, refAa) {
     const token = ++flowToken;
     const opts = {
-      custom: true, noteHtml, refCodon: yourCodon,
+      custom: true, noteHtml, refCodon: yourCodon, refAa,
       markerPhrase: "the codon in " + escapeHtml(item.row.name),
     };
     drawPositionPie(chartEl, captionEl, rows, label, opts);
@@ -478,6 +476,7 @@ function renderDashboard(slot, items, allRows, truncated) {
     const yourCodon = aaRows.length ? aaRows[0].codon : "?";
     const refCodon = rec.codon_seq[geneAa - rec.first_aa];
     const aa = aaRows.length ? aaRows[0].ref_aa : "?";
+    const refAa = GENETIC_CODE[refCodon] || "";
     const own = t ? engine.ownPositionFor(t, geneAa) : null;
     const noteHtml =
       `<strong>${escapeHtml(label)}</strong> &mdash; <strong>${escapeHtml(item.row.name)}</strong>, ` +
@@ -488,7 +487,7 @@ function renderDashboard(slot, items, allRows, truncated) {
       (t && t.offset ? ` (${escapeHtml(t.key)} ${own})` : "") +
       `; NL4-3 reference nucleotides ${codonNt[0].toLocaleString()}\u2013${codonNt[2].toLocaleString()}.`;
     drawTrack();
-    showPie(item, aaRows, label, noteHtml, yourCodon, protein, geneAa);
+    showPie(item, aaRows, label, noteHtml, yourCodon, protein, geneAa, refAa);
   }
 
   function selectNt(nt) {
@@ -556,13 +555,21 @@ function renderDashboard(slot, items, allRows, truncated) {
   }
 
   function renderLower() {
-    if (lowerFor === active) return;
-    lowerFor = active;
     lower.innerHTML = "";
     if (truncated) lower.appendChild(truncationNote());
-    appendSummary(lower, allRows);
-    renderSequenceTables(lower, items[active]);
-    syncFigures();
+    for (const r of allRows.filter((x) => x.status !== "analysed")) {
+      const div = document.createElement("div");
+      div.className = "error-box";
+      div.innerHTML = r.status === "not placed"
+        ? `<strong>${escapeHtml(r.name)} was not placed on the reference.</strong> ` +
+          escapeHtml(r.summary.reason)
+        : `<strong>${escapeHtml(r.name)} lies entirely outside the modelled region.</strong> ` +
+          `The atlas covers NL4-3 reference positions ${region.first_position.toLocaleString()}` +
+          `&ndash;${region.last_position.toLocaleString()}; this sequence aligned beyond it, so ` +
+          `no position-resolved rates can be given. ${NEF_NOTE}`;
+      lower.appendChild(div);
+    }
+    renderCompiledTables(lower, items);
   }
 
   elWin.addEventListener("input", () => { elWinOut.textContent = elWin.value; });
@@ -581,7 +588,6 @@ function renderDashboard(slot, items, allRows, truncated) {
     markSelected();
     fillTargets();
     const item = items[active];
-    lowerFor = -1;
     const nt = nearestCodon(item, markerNt);
     if (nt === null) {
       showError(head, `${item.row.name} has no modelled codon to chart.`);
@@ -590,7 +596,6 @@ function renderDashboard(slot, items, allRows, truncated) {
     } else {
       selectNt(nt);
     }
-    renderLower();
   });
   elSys.addEventListener("change", () => {
     const item = items[active];
@@ -610,12 +615,8 @@ function renderDashboard(slot, items, allRows, truncated) {
 }
 
 
-// --- comparison to NL4-3 ----------------------------------------------------------
-// The accessibility view needs the NL4-3 rate at each position. Rather than fetch the heavy
-// published amino-acid layer (which would break this page's "small assets only" design), build
-// it once from the reference's OWN custom atlas: the round-trip guarantee makes that identical
-// to the published layer, and it is computed in-browser from assets already loaded. Cached so a
-// batch of sequences pays the cost once.
+// The track overlays NL4-3 from the reference's own custom atlas, computed once from assets
+// already loaded. Cached so a batch of sequences pays the cost once.
 /** A legend-length name: FASTA headers are routinely 40 characters and sit at the line end. */
 function shortName(name) {
   const n = String(name || "your sequence").trim();
@@ -628,116 +629,8 @@ function referenceAtlas() {
   const seq = assets.reference.sequence;
   const refAtlas = engine.customAtlas({
     name: "NL4-3", sequence: seq, alignment: alignToReference(seq, seq) });
-  const byPosition = new Map();
-  for (const r of refAtlas.aa) {
-    const key = r.protein + "|" + r.position;
-    let list = byPosition.get(key);
-    if (!list) byPosition.set(key, (list = []));
-    list.push(r);
-  }
-  // The nucleotide layer costs nothing extra here -- the atlas is already built -- and it is
-  // what the genome track overlays as the NL4-3 comparison line.
-  _refCache = { byPosition, perSite: perSiteSupply(groupByPosition(refAtlas.nt), "rate") };
+  _refCache = { perSite: perSiteSupply(groupByPosition(refAtlas.nt), "rate") };
   return _refCache;
-}
-function refByPosition() { return referenceAtlas().byPosition; }
-
-/** "Where your codons differ from NL4-3" -- reachability reshaped by codon identity. */
-function renderCodonDifferences(slot, detail, row, geom) {
-  const rows = codonDifferences(detail.aa, assets.reference.proteins, GENETIC_CODE);
-  const heading = document.createElement("h4");
-  heading.textContent = "Where your codons differ from NL4-3";
-  slot.appendChild(heading);
-  if (!rows.length) {
-    slot.appendChild(caveat("Every analysed codon matches NL4-3, so there is nothing to " +
-      "compare. (The worked NL4-3 example lands here.)"));
-    return;
-  }
-  const syn = rows.filter((r) => r.kind === "synonymous codon change").length;
-  const reshaped = rows.filter((r) => r.kind === "synonymous codon change" && (r.n_gained || r.n_lost)).length;
-  slot.appendChild(note(
-    `<strong>${rows.length.toLocaleString()} analysed codons differ from NL4-3</strong>, ` +
-    `${syn.toLocaleString()} of them encoding the <em>same amino acid</em> by a different codon. ` +
-    `<strong>${reshaped.toLocaleString()} of those synonymous differences change which amino acids are ` +
-    `reachable in one substitution</strong> \u2014 the protein is unchanged, the accessible next steps ` +
-    `are not. Gained and lost come from the genetic code alone, not from any rate.`));
-  const tableSlot = document.createElement("div");
-  slot.appendChild(tableSlot);
-  renderTable(tableSlot, {
-    columns: [
-      { key: "hxb2_label", label: "HXB2" },
-      { key: "query_nt_start", label: "Your nt", type: "num" },
-      { key: "ref_codon", label: "NL4-3 codon" },
-      { key: "your_codon", label: "Your codon" },
-      { key: "ref_aa", label: "NL4-3 aa" },
-      { key: "your_aa", label: "Your aa" },
-      { key: "kind", label: "Kind" },
-      { key: "gained", label: "Newly reachable in 1 nt",
-        title: "Amino acids reachable from your codon in one substitution but not from the NL4-3 codon" },
-      { key: "lost", label: "No longer reachable in 1 nt" },
-    ],
-    rows,
-    sort: { key: "n_gained", dir: "desc" },
-    filterPlaceholder: "filter by protein, codon, amino acid\u2026",
-    downloadName: `mra_${page.version}_${safeName(row.name)}_codon_differences.csv`,
-    provenance: customProvenance(row, row.summary, geom),
-  });
-}
-
-/** "What has become more or less accessible" -- log2 FC of each AA change vs NL4-3. */
-function renderAccessibility(slot, detail, row, geom) {
-  const rows = accessibilityRows(detail.aa, refByPosition(), assets.reference.proteins, GENETIC_CODE);
-  const heading = document.createElement("h4");
-  heading.textContent = "What has become more or less accessible";
-  slot.appendChild(heading);
-  const withFc = rows.filter((r) => r.log2fc !== null && Number.isFinite(r.log2fc));
-  if (!withFc.length) {
-    slot.appendChild(caveat("No amino-acid change at a covered position differs in accessibility " +
-      "from NL4-3 \u2014 expected when the sequence is identical to the reference."));
-    return;
-  }
-  const chartSlot = document.createElement("div");
-  const fig = document.createElement("figure"); fig.className = "chart";
-  fig.appendChild(chartSlot);
-  const cap = document.createElement("figcaption");
-  fig.appendChild(cap);
-  slot.appendChild(fig);
-  const top = withFc.slice().sort((a, b) => Math.abs(b.log2fc) - Math.abs(a.log2fc)).slice(0, 25);
-  dotPlot(chartSlot,
-    top.map((r) => ({ label: `${r.hxb2_label} ${r.aa_change}`, value: r.log2fc,
-                      note: `${r.ref_codon}\u2192${r.your_codon}` })),
-    { title: "The 25 amino-acid changes whose accessibility shifts most", width: 740 });
-  const shifted = withFc.filter((r) => Math.abs(r.log2fc) > 1).length;
-  const stepChanged = rows.filter((r) => r.change && r.change.includes("substitutions")).length;
-  cap.innerHTML =
-    `${withFc.length.toLocaleString()} changes are in both atlases. ${shifted.toLocaleString()} ` +
-    `shift more than two-fold, and ${stepChanged.toLocaleString()} need a different <em>number</em> of ` +
-    `substitutions than in NL4-3 \u2014 a categorical change, not a quantitative one. ` +
-    `Codon at the right of each row.`;
-  const tableSlot = document.createElement("div");
-  slot.appendChild(tableSlot);
-  renderTable(tableSlot, {
-    columns: [
-      { key: "hxb2_change", label: "Mutation (HXB2)" },
-      { key: "ref_codon", label: "NL4-3 codon" },
-      { key: "your_codon", label: "Your codon" },
-      { key: "mu_nl43", label: "mu_aa NL4-3", type: "rate" },
-      { key: "mu_custom", label: "mu_aa yours", type: "rate" },
-      { key: "log2fc", label: "log2 FC", type: "num",
-        render: (r) => r.log2fc === null ? "\u2014" : r.log2fc.toFixed(2) },
-      { key: "min_nt_nl43", label: "min nt NL4-3", type: "num" },
-      { key: "min_nt_custom", label: "min nt yours", type: "num" },
-      { key: "change", label: "Note" },
-    ],
-    rows,
-    sort: { key: "log2fc", dir: "desc" },
-    filterPlaceholder: "filter\u2026",
-    downloadName: `mra_${page.version}_${safeName(row.name)}_accessibility_vs_nl43.csv`,
-    provenance: customProvenance(row, row.summary, geom),
-  });
-  tableSlot.appendChild(caveat(
-    "A fold change reflects your codon and local context, not a different mutation rate in your " +
-    "virus: the per-site model is the same one, fitted on NL4-3."));
 }
 
 function escapeHtml(s) {
@@ -760,56 +653,31 @@ const COMPONENT_FLAGS = (r) => {
   return flags.join(" ");
 };
 
-/** Tables for the sequence selected in "Pie and flow". They sit below the plots. */
-function renderSequenceTables(slot, item) {
-  const { detail, row, geom } = item;
-  const s = row.summary;
-  const heading = document.createElement("h3");
-  heading.textContent = `Tables for ${row.name}`;
-  slot.appendChild(heading);
+/** One amino-acid table and one nucleotide table, rows from every submitted sequence. */
+function renderCompiledTables(slot, items) {
+  const aaRows = [];
+  const ntRows = [];
+  for (const item of items) {
+    const sample = item.row.name;
+    for (const r of item.detail.aa) {
+      aaRows.push({ ...r, sample,
+        interval: `${formatRate(r.mu_aa_lo95)} \u2013 ${formatRate(r.mu_aa_hi95)}` });
+    }
+    for (const r of item.detail.nt) {
+      ntRows.push({ ...r, sample,
+        interval: `${formatRate(r.lo95)} \u2013 ${formatRate(r.hi95)}` });
+    }
+  }
+  const provenance = compiledProvenance(items);
 
-  // A sequence far from NL4-3 still aligns and still returns numbers, so the only thing
-  // standing between a reader and a misread is saying so. The threshold is empirical: across
-  // the LANL group M compendium, subtypes and CRFs sit at 85-93% identity to NL4-3, while
-  // groups N/O/P and the SIVcpz/SIVgor outgroups fall at 74-78%. Below 80% the position
-  // effects measured on NL4-3 are being extrapolated further than this model supports.
-  if (s.identity !== null && s.identity < 0.80) {
-    slot.appendChild(caveat(
-      `<strong>This sequence is only ${(s.identity * 100).toFixed(1)}% identical to NL4-3.</strong> ` +
-      `Group M subtypes and CRFs sit at 85&ndash;93%; non-M groups and SIV outgroups fall at ` +
-      `74&ndash;78%. The rates below are still computed, but position effects fitted on NL4-3 ` +
-      `are being carried a long way from where they were measured &mdash; treat them as ` +
-      `indicative, not quantitative. If you pasted an RNA, protein or non-HIV-1 sequence, that ` +
-      `is the more likely explanation.`));
-  }
-  const spans = (geom && geom.unalignedSpans) || [];
-  if (spans.length) {
-    slot.appendChild(caveat(
-      `${spans.length} span(s) of ${escapeHtml(row.name)} could not be aligned: ` +
-      spans.slice(0, 6).map((x) => `${x.queryStart}\u2013${x.queryEnd}`).join(", ") +
-      (spans.length > 6 ? ", \u2026" : "") + "."));
-  }
-  if (s.proteins && s.proteins.Nef && s.proteins.Nef.codonsAnalysed > 0) {
-    slot.appendChild(caveat(NEF_NOTE));
-  }
-  if (s.contextUnavailable || s.gaContextUnavailable) {
-    slot.appendChild(caveat(
-      `${s.contextUnavailable} site(s) had no readable 3&prime; base and fell back to the ` +
-      `type-only rate; ${s.gaContextUnavailable} G&rarr;A site(s) were omitted because their ` +
-      `3&prime; 2-mer could not be read \u2014 a G&rarr;A rate is not defined by this model without it. ` +
-      `This happens at the very end of a submitted sequence.`));
-  }
-
-  renderCodonDifferences(slot, detail, row, geom);
-  renderAccessibility(slot, detail, row, geom);
-
-  const aaHeading = document.createElement("h4");
+  const aaHeading = document.createElement("h3");
   aaHeading.textContent = "Amino-acid mutability";
   slot.appendChild(aaHeading);
   const aaSlot = document.createElement("div");
   slot.appendChild(aaSlot);
   renderTable(aaSlot, {
     columns: [
+      { key: "sample", label: "Sample", title: "The submitted sequence this row was computed from" },
       { key: "hxb2_change", label: "Mutation (HXB2)", title: "Clinical / publication numbering" },
       { key: "codon", label: "Your codon", title: "Read from your sequence. This is what differs between viruses." },
       { key: "query_nt_start", label: "Your nt", type: "num", title: "1-based position in the sequence you submitted" },
@@ -821,21 +689,21 @@ function renderSequenceTables(slot, item) {
       { key: "aa_change", label: "NL4-3 aa change", title: "Same change in NL4-3 gene numbering" },
       { key: "position", label: "NL4-3 aa", type: "num", title: "Internal coordinate, for traceability" },
     ],
-    rows: detail.aa.map((r) => ({ ...r,
-      interval: `${formatRate(r.mu_aa_lo95)} \u2013 ${formatRate(r.mu_aa_hi95)}` })),
+    rows: aaRows,
     sort: { key: "mu_aa", dir: "desc" },
-    filterPlaceholder: "filter by protein, change, codon\u2026",
-    downloadName: `mra_${page.version}_${safeName(row.name)}_aa.csv`,
-    provenance: customProvenance(row, s, geom),
+    filterPlaceholder: "filter by sample, protein, change, codon\u2026",
+    downloadName: `mra_${page.version}_aa.csv`,
+    provenance,
   });
 
-  const ntHeading = document.createElement("h4");
+  const ntHeading = document.createElement("h3");
   ntHeading.textContent = "Nucleotide rates";
   slot.appendChild(ntHeading);
   const ntSlot = document.createElement("div");
   slot.appendChild(ntSlot);
   renderTable(ntSlot, {
     columns: [
+      { key: "sample", label: "Sample", title: "The submitted sequence this row was computed from" },
       { key: "query_position", label: "Your nt", type: "num" },
       { key: "ref_position", label: "NL4-3 nt", type: "num" },
       { key: "ref_nucleotide", label: "Base" },
@@ -847,54 +715,36 @@ function renderSequenceTables(slot, item) {
         title: "published = the atlas interval for this exact site and substitution; type-context = a mean over sites, an approximation" },
       { key: "components", label: "Rests on", render: COMPONENT_FLAGS },
     ],
-    rows: detail.nt.map((r) => ({ ...r,
-      interval: `${formatRate(r.lo95)} \u2013 ${formatRate(r.hi95)}` })),
+    rows: ntRows,
     sort: { key: "rate", dir: "desc" },
-    filterPlaceholder: "filter by substitution, context\u2026",
-    downloadName: `mra_${page.version}_${safeName(row.name)}_nt.csv`,
-    provenance: customProvenance(row, s, geom),
+    filterPlaceholder: "filter by sample, substitution, context\u2026",
+    downloadName: `mra_${page.version}_nt.csv`,
+    provenance,
   });
-  ntSlot.appendChild(caveat(
-    "Insertions and deletions are deliberately absent. Their predictor has no nucleotide " +
-    "context, so a \u201ccustom\u201d indel rate would just be the NL4-3 indel rate at that " +
-    "coordinate and would tell you nothing about your virus. They are in the published " +
-    "browse and download layer, where they are a real result."));
-
-  const btn = document.createElement("button");
-  btn.textContent = "Download this custom atlas (both tables + paths)";
-  btn.addEventListener("click", () => {
-    const prov = customProvenance(row, s, geom);
-    downloadText(`mra_${page.version}_${safeName(row.name)}_paths.csv`,
-      toCsv(detail.paths, [
-        { key: "protein" }, { key: "position" }, { key: "codon" }, { key: "mutant_codon" },
-        { key: "ref_aa" }, { key: "alt_aa" }, { key: "n_nt_changes" },
-        { key: "mutation_type_path" }, { key: "mu_path" }, { key: "mu_path_lo95" },
-        { key: "mu_path_hi95" },
-      ], prov));
-  });
-  slot.appendChild(btn);
 }
 
-
-function safeName(name) {
-  return String(name).replace(/[^A-Za-z0-9._-]+/g, "_").slice(0, 60);
-}
-
-/** Provenance for a custom export: which model, which version, and what it rests on. */
-function customProvenance(row, s, geom) {
-  return exportProvenance(page.release, [
-    `Custom atlas for submitted sequence: ${row.name}`,
+/** Provenance for a merged export: which model, which version, and what each sample rests on. */
+function compiledProvenance(items) {
+  const lines = [
+    `Custom atlas for ${items.length} submitted sequence(s). Rows from every sequence are merged; ` +
+      `the sample column names which one a row came from.`,
     `Retrieved from the MRA portal; computed entirely in the browser.`,
-    `Alignment to NL4-3 ${geom.refStart}-${geom.refEnd}, identity ${(s.identity * 100).toFixed(3)}%, ` +
-      `${geom.orientation}.`,
-    `Positions dropped for lying outside the modelled region ${region.first_position}-${region.last_position}: ` +
-      `${s.droppedOutsideRegion}.`,
-    `Spline fallback (genome mean) used at ${s.fallbackPositions} position(s).`,
-    "THIS IS NOT A MEASUREMENT OF THIS VIRUS. It is the MRA model, fitted on NL4-3,",
-    "applied to this sequence. Codon identity and local 3' context come from the submitted",
+  ];
+  for (const item of items) {
+    const s = item.row.summary;
+    const geom = item.geom;
+    const identity = s.identity == null ? "n/a" : `${(s.identity * 100).toFixed(3)}%`;
+    lines.push(
+      `Sample ${item.row.name}: NL4-3 ${geom.refStart}-${geom.refEnd}, identity ${identity}, ` +
+      `${geom.orientation}. Dropped outside ${region.first_position}-${region.last_position}: ` +
+      `${s.droppedOutsideRegion}. Spline fallback at ${s.fallbackPositions} position(s).`);
+  }
+  lines.push(
+    "THIS IS NOT A MEASUREMENT OF THESE VIRUSES. It is the MRA model, fitted on NL4-3,",
+    "applied to each submitted sequence. Codon identity and local 3' context come from that",
     "sequence; position effects were measured on NL4-3 and transfer only where it aligns.",
-    "Indels are excluded: their predictor has no nucleotide context.",
-  ]);
+    "Indels are excluded: their predictor has no nucleotide context.");
+  return exportProvenance(page.release, lines);
 }
 
 // Restore anything carried over from a previous run in this tab.

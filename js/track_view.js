@@ -235,6 +235,14 @@ function renderTrackStats(el, rows) {
  * @param {object} [opts.flow]  {stat, matrix} from lanl_flow.js, or null for the pie alone
  * Returns true if a pie was drawn, false if no single-step change exists from this codon.
  */
+/** "RT 65" and reference residue K become the clinical site name "RT K65". */
+function labelWithRefAa(label, refAa) {
+  const aa = String(refAa || "").trim();
+  const m = /^(.*\s)(\d+)$/.exec(String(label).trim());
+  if (!aa || !m) return String(label);
+  return m[1] + aa + m[2];
+}
+
 export function drawPositionPie(chartEl, captionEl, rows, label, opts = {}) {
   const oneStep = oneStepSlices(rows);
   chartEl.innerHTML = "";
@@ -291,9 +299,9 @@ export function drawPositionPie(chartEl, captionEl, rows, label, opts = {}) {
   wrap.appendChild(lab);
   ctrl.appendChild(wrap);
 
-  const pieTitleText = opts.custom
-    ? `One-step changes from your codon at ${label}`
-    : `One-step changes from the NL4-3 codon at ${label}`;
+  // "RT 65" plus the reference residue is the clinical name of the site: "RT K65".
+  const site = labelWithRefAa(label, opts.refAa || (oneStep[0] && oneStep[0].ref_aa));
+  const pieTitleText = `One-step changes from the circulating variants at ${site}`;
   const flowTitleText = `One-step changes from circulating codons at ${label}`;
 
   // --- side-by-side figures -----------------------------------------------------------
@@ -406,7 +414,7 @@ export function drawPositionPie(chartEl, captionEl, rows, label, opts = {}) {
     (hasFlow ? ", the same key the chart beside it uses" : "") +
     ".</p><p><strong>This is generation, not establishment</strong> \u2014 a variant " +
     "generated here can still be lost to drift, purged by selection, or never sampled.</p>",
-    { title: `One-step changes from the codon at ${label}` });
+    { title: pieTitleText });
 
   if (hasFlow) {
     setDetails(flowCard, flowDetailHtml(label, flowCaption.innerHTML, opts.markerPhrase),
