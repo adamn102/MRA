@@ -51,7 +51,7 @@ export const MAX_BAND = 1024;          // give up rather than fall back to full 
 // rows, so 100 of them would be ~286 MB held in the worker.
 export const MAX_DETAIL_SEQUENCES = 10;
 
-// MAX_BATCH_SEQUENCES governs the batch-analysis path, which folds each atlas into the
+// MAX_BATCH_SEQUENCES governs the build-time LANL flow batch, which folds each atlas into the
 // per-site matrix and DISCARDS it, so memory is O(sites x samples) and does not grow with
 // the tables. Measured at 250: the matrix is 19.6 MB, a batch of 250 pol amplicons takes
 // 9.1 s and 250 full-length genomes 35.9 s, with the per-site statistics adding ~30 ms.

@@ -2,8 +2,8 @@
 //
 // explore_core.js -- the DOM-free logic behind the genome track on the browse page.
 //
-// Named for the "Explore the genome" tab it was written for; that tab has since been merged
-// into browse.html, and this module now backs the track there. Kept separate from the page
+// Named for the "Explore the genome" tab it was written for. That tab is gone; Browse the
+// atlas (index.html) is the landing page, and this module backs its genome track. Kept separate from the page
 // module so it can be exercised in node without a browser: every function here is pure --
 // same inputs, same outputs, no module state. Exercised by test/explore_cases.mjs.
 
@@ -143,10 +143,9 @@ export function groupByPosition(rows, key = "ref_position") {
 export function expectedCopies(mu, n) { return mu * n; }
 
 // ---------------------------------------------------------------------------------
-// COMPARISON TO NL4-3. These back the "Your sequence" detail view where a submitted
-// sequence is set against the reference. Pure and DOM-free so test/compare_core_cases.mjs
-// can exercise them; the genetic code is passed in rather than imported, to keep this module
-// standalone. Previously these lived in the separate "Compare & genome track" tab.
+// One-step reachability from the genetic code alone. The codon-difference and accessibility
+// tables that used this no longer appear on Your Sequence. The genetic code is passed in
+// rather than imported, so this module stays standalone.
 
 const _BASES = ["A", "C", "G", "T"];
 
@@ -162,71 +161,3 @@ export function oneStepAminoAcids(codon, code) {
   out.delete(code[codon]);
   return out;
 }
-
-/**
- * One row per analysed codon that DIFFERS from the NL4-3 codon at the same position, with the
- * amino acids that become reachable or unreachable in a single nucleotide step. Reachability is
- * from the genetic code alone -- it does not depend on any rate estimate -- so a synonymous
- * codon change can still reshape the set of accessible next steps.
- *
- * @param {Array}  detailAa  the custom atlas's amino-acid rows (one sequence)
- * @param {object} proteins  reference.proteins (carries codon_seq and first_aa per protein)
- * @param {object} code      the genetic code map, CODON -> amino acid
- */
-export function codonDifferences(detailAa, proteins, code) {
-  const seen = new Map();
-  for (const r of detailAa) {
-    const key = r.protein + "|" + r.position;
-    if (seen.has(key)) continue;
-    const protRec = proteins[r.protein];
-    if (!protRec) continue;
-    const refCodon = protRec.codon_seq[r.position - protRec.first_aa];
-    if (!refCodon || refCodon === r.codon) continue;     // identical codon: nothing to say
-    const refAa = code[refCodon], yourAa = code[r.codon];
-    const refSet = oneStepAminoAcids(refCodon, code), yourSet = oneStepAminoAcids(r.codon, code);
-    const gained = [...yourSet].filter((a) => !refSet.has(a)).sort();
-    const lost = [...refSet].filter((a) => !yourSet.has(a)).sort();
-    seen.set(key, {
-      hxb2_label: r.hxb2_label, protein: r.protein, position: r.position,
-      ref_codon: refCodon, your_codon: r.codon, ref_aa: refAa, your_aa: yourAa,
-      kind: refAa === yourAa ? "synonymous codon change" : "amino-acid difference",
-      gained: gained.join(" ") || "\u2014", lost: lost.join(" ") || "\u2014",
-      n_gained: gained.length, n_lost: lost.length, query_nt_start: r.query_nt_start,
-    });
-  }
-  return [...seen.values()];
-}
-
-/**
- * How the accessibility of each amino-acid change shifts relative to the published NL4-3 atlas.
- * log2 FC = log2(mu_aa from your codon / mu_aa from the NL4-3 codon) at the same position. A
- * change in min_nt_changes is categorical, not quantitative. refByPosition maps "protein|pos"
- * to the NL4-3 amino-acid rows; it is built from the reference's own custom atlas, which the
- * round-trip guarantee makes equal to the published layer -- so no heavy layer need load.
- */
-export function accessibilityRows(detailAa, refByPosition, proteins, code) {
-  const rows = [];
-  for (const r of detailAa) {
-    const published = (refByPosition.get(r.protein + "|" + r.position) || [])
-      .find((p) => p.alt_aa === r.alt_aa);
-    const protRec = proteins[r.protein];
-    const refCodon = protRec ? protRec.codon_seq[r.position - protRec.first_aa] : null;
-    const codonDiffers = refCodon !== r.codon;
-    if (!published) {
-      rows.push({ hxb2_label: r.hxb2_label, hxb2_change: r.hxb2_change, aa_change: r.aa_change,
-        alt_aa: r.alt_aa, your_codon: r.codon, ref_codon: refCodon, codon_differs: codonDiffers,
-        mu_custom: r.mu_aa, mu_nl43: null, log2fc: null,
-        min_nt_custom: r.min_nt_changes, min_nt_nl43: null,
-        change: "not in the NL4-3 table at this position" });
-      continue;
-    }
-    rows.push({ hxb2_label: r.hxb2_label, hxb2_change: r.hxb2_change, aa_change: r.aa_change,
-      alt_aa: r.alt_aa, your_codon: r.codon, ref_codon: refCodon, codon_differs: codonDiffers,
-      mu_custom: r.mu_aa, mu_nl43: published.mu_aa, log2fc: Math.log2(r.mu_aa / published.mu_aa),
-      min_nt_custom: r.min_nt_changes, min_nt_nl43: published.min_nt_changes,
-      change: r.min_nt_changes < published.min_nt_changes ? "fewer substitutions needed"
-            : r.min_nt_changes > published.min_nt_changes ? "more substitutions needed" : "" });
-  }
-  return rows;
-}
-

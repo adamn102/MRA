@@ -237,10 +237,11 @@ When present: `gene`, `protein`, `protein_position`, `codon`, `lanl_fraction`,
 codon-sensitivity view. Absent in v0.1; the weighted columns show an em dash. See
 `scripts/build_lanl_codon_frequencies.py`.
 
-### Per-site supply statistics (batch analysis)
+### Per-site supply statistics
 
 Computed per codon position from the batch-frequency-weighted supply to each destination
-residue. Written by `siteSupplyStats()` in `js/batch_core.js`.
+residue, by `siteSupplyStats()` in `js/batch_core.js`, when the LANL flow file is built.
+These columns are not shown on a page.
 
 | column | meaning |
 | --- | --- |

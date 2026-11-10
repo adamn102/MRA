@@ -37,8 +37,10 @@
 // v10: the dashboard flow chart sizes its left column by LANL codon frequency and its
 // right column by relative supply (frequency times that codon's pie).
 // v11: Batch analysis is gone. batch.html is a redirect stub; js/batch.js is not in the shell.
+// v12: js/figure_details.js joins the shell. Browse, Your Sequence, and figure export import
+// it for the Details dialogs; it had been left out of this list.
 // Without a bump a returning reader keeps the previous shell from cache.
-const CACHE = "mra-portal-v11";
+const CACHE = "mra-portal-v12";
 
 // Curated annotation overlays: under a version directory, but revised over time rather than
 // frozen. Served network-first with the HTTP cache bypassed, so an edit is never masked by an
@@ -56,7 +58,7 @@ const SHELL = [
   "./js/mra_engine.js", "./js/align.js", "./js/align.worker.js", "./js/analysis.js",
   "./js/mutations.js", "./js/browse.js", "./js/tables.js", "./js/sequence.js",
   "./js/curated_tables.js", "./js/tables_custom.js", "./js/reference.js",
-  "./js/figure_export.js",
+  "./js/figure_export.js", "./js/figure_details.js",
   "./js/explore_redirect.js", "./js/compare_redirect.js", "./js/browse_redirect.js",
   "./js/drm_redirect.js", "./js/reference_redirect.js", "./js/batch_redirect.js",
   "./js/batch_core.js", "./js/batch_view.js",

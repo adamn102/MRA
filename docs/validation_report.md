@@ -159,8 +159,10 @@ Median per sequence, 5 replicates at 5% divergence:
 | 1,500 bp (typical clinical pol amplicon) | 3.3 ms | 18.5 ms | 22 ms |
 | 8,618 bp (near-full-length genome) | 26.6 ms | 106.2 ms | 139 ms |
 
-`MAX_BATCH_SEQUENCES = 100` follows from this: ~14 s for 100 full-length genomes, ~2 s
-for 100 pol amplicons, in a worker with progress reporting.
+`MAX_BATCH_SEQUENCES` in `js/align.js` is 250. The interactive batch page was removed; the
+cap remains for `scripts/build_lanl_flow.mjs`, which folds each genome into a matrix and
+discards the atlas. The timing above is one sequence. A batch of 100 full-length genomes
+is about 14 s; the comment on the constant records 250 full-length genomes at 35.9 s.
 
 Two notes against the brief's expectations. First, a spurious band-edge detector was
 making full-length alignment take 347 ms by forcing repeated re-runs at ever wider

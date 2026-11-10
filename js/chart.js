@@ -1,15 +1,13 @@
 // SPDX-License-Identifier: MIT
 //
-// chart.js -- the three charts this portal needs, in plain SVG. No dependencies.
+// chart.js -- the charts this portal draws, in plain SVG. No dependencies.
 //
-//   barChart     relative mutational supply across the alternatives at one position
 //   genomeTrack  rate along the genome, optionally with a second series overlaid
-//   dotPlot      log2 fold change per amino-acid change, for the comparison view
+//   pieChart     one-step amino-acid supply at one codon
 //
 // SVG rather than canvas so the output is inspectable, scales on a high-DPI screen,
 // and can be saved by right-click. Rates span more than three orders of magnitude, so
-// the value axis is log10 wherever a rate is plotted -- and bars are never drawn on a
-// log axis, because a bar's length would then encode a ratio to an arbitrary floor.
+// the genome track's value axis is log10.
 
 const NS = "http://www.w3.org/2000/svg";
 
@@ -70,77 +68,6 @@ export function trackSliderGeometry(width = LAYOUT.width) {
   return { marginLeft: `${(100 * LAYOUT.padLeft / width).toFixed(4)}%`,
            width: `${(100 * plotW / width).toFixed(4)}%`,
            maxWidth: `${width}px` };
-}
-
-export function barChart(container, rows, options = {}) {
-  container.innerHTML = "";
-  if (!rows.length) {
-    container.appendChild(Object.assign(document.createElement("p"),
-      { className: "caveat", textContent: options.emptyMessage || "Nothing to plot." }));
-    return;
-  }
-  const rowH = 17, padTop = 26, padBottom = 34, padLeft = 54, padRight = 128;
-  const width = options.width || 720;
-  const height = padTop + rows.length * rowH + padBottom;
-  const plotW = width - padLeft - padRight;
-  const max = Math.max(...rows.map((r) => r.value || 0));
-  // LOG OPTION. Rates at one position can span two orders of magnitude, where a linear bar
-  // for the smallest is a sliver against the largest and the row is unreadable. On a log
-  // scale the bar length is log10(value) measured up from a floor two decades below the
-  // largest value, so every non-zero row has visible length and the ratios stay legible.
-  const logScale = !!options.log && max > 0;
-  const logFloor = logScale ? Math.log10(max) - (options.logDecades || 2.5) : 0;
-  const frac10 = (v) => {
-    if (!(v > 0)) return 0;
-    const f = (Math.log10(v) - logFloor) / (Math.log10(max) - logFloor);
-    return Math.max(0, Math.min(1, f));
-  };
-  const svg = svgRoot(width, height, options.title);
-
-  svg.appendChild(el("text", { x: 0, y: 13, "font-size": 12 }, options.title || ""));
-
-  rows.forEach((r, i) => {
-    const y = padTop + i * rowH;
-    svg.appendChild(el("text", { x: padLeft - 6, y: y + 11, "text-anchor": "end",
-                                 "font-weight": r.highlight ? 600 : 400 }, r.label));
-    const frac = logScale ? frac10(r.value) : (max > 0 ? (r.value || 0) / max : 0);
-    const w = Math.max(frac * plotW, r.value > 0 ? 1.5 : 0);
-    svg.appendChild(el("rect", { x: padLeft, y: y + 3, width: w, height: rowH - 7,
-                                 fill: r.highlight ? "#c2561a" : "#0b5c8a",
-                                 "fill-opacity": r.highlight ? 0.85 : 0.6 }));
-    // Interval as a whisker on the same linear scale.
-    if (r.lo != null && r.hi != null && max > 0) {
-      const x1 = padLeft + (logScale ? frac10(r.lo) : r.lo / max) * plotW;
-      const x2 = padLeft + (logScale ? frac10(r.hi) : r.hi / max) * plotW;
-      const yc = y + rowH / 2 - 0.5;
-      svg.appendChild(el("line", { x1, x2, y1: yc, y2: yc, stroke: "#333", "stroke-width": 0.9 }));
-      for (const x of [x1, x2]) {
-        svg.appendChild(el("line", { x1: x, x2: x, y1: yc - 3, y2: yc + 3,
-                                     stroke: "#333", "stroke-width": 0.9 }));
-      }
-    }
-    const txt = (r.value === 0 || r.value == null) ? "\u2014" : r.value.toExponential(2);
-    svg.appendChild(el("text", { x: width - padRight + 6, y: y + 11, "font-size": 10,
-                                 fill: "#333" }, txt + (r.note ? "  " + r.note : "")));
-  });
-
-  const axisY = padTop + rows.length * rowH + 4;
-  svg.appendChild(el("line", { x1: padLeft, x2: padLeft + plotW, y1: axisY, y2: axisY,
-                               stroke: "#999", "stroke-width": 0.8 }));
-  for (const frac of [0, 0.25, 0.5, 0.75, 1]) {
-    const x = padLeft + frac * plotW;
-    svg.appendChild(el("line", { x1: x, x2: x, y1: axisY, y2: axisY + 4, stroke: "#999" }));
-    const tickVal = logScale
-      ? Math.pow(10, logFloor + frac * (Math.log10(max) - logFloor))
-      : frac * max;
-    svg.appendChild(el("text", { x, y: axisY + 15, "text-anchor": "middle", "font-size": 10,
-                                 fill: "#5c6670" },
-                       (!logScale && frac === 0) ? "0" : tickVal.toExponential(1)));
-  }
-  svg.appendChild(el("text", { x: padLeft + plotW / 2, y: axisY + 29, "text-anchor": "middle",
-                               "font-size": 10, fill: "#5c6670" },
-                     options.xLabel || "mutational supply per site per replication"));
-  container.appendChild(svg);
 }
 
 // ---------------------------------------------------------------------------------
@@ -326,55 +253,6 @@ export function genomeTrack(container, series, options = {}) {
     });
     svg.appendChild(hit);
   }
-  container.appendChild(svg);
-}
-
-// ---------------------------------------------------------------------------------
-/**
- * Signed fold-change dot plot, centred at 0 because 0 is the semantic zero for a log2
- * ratio -- a change that is neither more nor less accessible.
- * rows: [{label, value, note?}]
- */
-export function dotPlot(container, rows, options = {}) {
-  container.innerHTML = "";
-  if (!rows.length) {
-    container.appendChild(Object.assign(document.createElement("p"),
-      { className: "caveat", textContent: options.emptyMessage || "Nothing to plot." }));
-    return;
-  }
-  const rowH = 16, padTop = 26, padBottom = 36, padLeft = 108, padRight = 96;
-  const width = options.width || 720;
-  const height = padTop + rows.length * rowH + padBottom;
-  const plotW = width - padLeft - padRight;
-  const span = Math.max(0.5, ...rows.map((r) => Math.abs(r.value)));
-  const sx = (v) => padLeft + ((v + span) / (2 * span)) * plotW;
-  const svg = svgRoot(width, height, options.title);
-  svg.appendChild(el("text", { x: 0, y: 13, "font-size": 12 }, options.title || ""));
-  svg.appendChild(el("line", { x1: sx(0), x2: sx(0), y1: padTop - 4,
-                               y2: padTop + rows.length * rowH, stroke: "#999",
-                               "stroke-dasharray": "3 2" }));
-  rows.forEach((r, i) => {
-    const y = padTop + i * rowH + rowH / 2;
-    svg.appendChild(el("text", { x: padLeft - 8, y: y + 3.5, "text-anchor": "end" }, r.label));
-    svg.appendChild(el("line", { x1: sx(0), x2: sx(r.value), y1: y, y2: y,
-                                 stroke: "#c8ced4", "stroke-width": 0.8 }));
-    svg.appendChild(el("circle", { cx: sx(r.value), cy: y, r: 3.4,
-                                   fill: r.value >= 0 ? "#0b5c8a" : "#c2561a" }));
-    if (r.note) {
-      svg.appendChild(el("text", { x: padLeft + plotW + 6, y: y + 3.5, "font-size": 10,
-                                   fill: "#5c6670" }, r.note));
-    }
-  });
-  const axisY = padTop + rows.length * rowH + 4;
-  svg.appendChild(el("line", { x1: padLeft, x2: padLeft + plotW, y1: axisY, y2: axisY, stroke: "#999" }));
-  for (const v of [-span, -span / 2, 0, span / 2, span]) {
-    svg.appendChild(el("line", { x1: sx(v), x2: sx(v), y1: axisY, y2: axisY + 4, stroke: "#999" }));
-    svg.appendChild(el("text", { x: sx(v), y: axisY + 15, "text-anchor": "middle",
-                                 "font-size": 10, fill: "#5c6670" }, v.toFixed(1)));
-  }
-  svg.appendChild(el("text", { x: padLeft + plotW / 2, y: axisY + 30, "text-anchor": "middle",
-                               "font-size": 10, fill: "#5c6670" },
-                     options.xLabel || "log2 fold change vs NL4-3  (left = less accessible)"));
   container.appendChild(svg);
 }
 

@@ -4,9 +4,8 @@
 //   node test/browse_flow_cases.mjs --version v0.1
 //
 // The risk this file exists for is silent staleness. The chart on the landing page is drawn
-// from a file built once by scripts/build_lanl_flow.mjs; the chart on the batch tab is drawn
-// from a batch run in the browser. They are supposed to be the same numbers, and nothing
-// about shipping a JSON file enforces that -- a model change that is not followed by a
+// from a file built once by scripts/build_lanl_flow.mjs. Nothing about shipping a JSON file
+// enforces that the file still matches the model -- a model change that is not followed by a
 // rebuild would leave the landing page quietly showing last release's rates.
 //
 // So the expensive check is the real one: re-run the batch pipeline over the same FASTA and

@@ -9,7 +9,8 @@ A static, client-side portal for the HIV-1 Mutation Rate Atlas (MRA). It does tw
    model to that sequence's own codons and local sequence contexts.
 
 **Submitted sequences never leave the user's machine.** There is no server, no database, no
-analytics, no telemetry, no error reporter and no third-party code. Alignment and every rate
+analytics, no telemetry and no error reporter. The only third-party code is html2canvas,
+which saves a chart as a PNG and makes no network requests. Alignment and every rate
 calculation run in the browser. That is the reason for the static architecture, not a
 side-effect of it.
 
@@ -58,8 +59,8 @@ dev script is a convenience, not a dependency.
 ### What to click first
 
 1. `index.html` — **Browse the atlas**, now the landing page. It opens on **RT K65** by
-   default. Change the protein selector to **RT** and the position to **184**; the bar
-   chart should put V at the top with a single-substitution flag. Each figure carries its
+   default: a genome track, a pie of one-step changes from the NL4-3 codon, and a flow
+   chart of circulating codons. Change the position to **184**. Each figure carries its
    own **Download this figure (PNG)** button.
 2. `tables.html` — **MRA Table**. Every compiled table on one page: the five drug classes
    (PI, NRTI, NNRTI, INI, CAI), the three bNAb epitope classes (CD4bs, V3 Glycan, V2 Apex),
@@ -73,7 +74,8 @@ dev script is a convenience, not a dependency.
    This is the round-trip test running in your browser: 2,984 codons, 62,518 amino-acid
    rows, 0 positions needing the spline fallback, 405 dropped for lying past 8,213.
    Then try `test/fixtures/JRFL_pol.fasta` via **Load FASTA file…** for a genuinely
-   divergent sequence. The codon-difference view and the genome track are on this page too.
+   divergent sequence. The genome track, the pie, the flow chart, and the merged
+   amino-acid and nucleotide tables are on this page.
 4. `reference.html` — **Reference and Download**: what the rates mean, the coverage and
    coordinate caveats, the privacy statement, how to read the curated tables, and every
    asset with its SHA-256, verified before the download.
@@ -145,7 +147,7 @@ scripts/                    asset build + model extraction
 test/                       the regression suite
 docs/                       validation report, caveats, data dictionary, versioning
 figures/                    QC and demonstration figures
-vendor/                     deliberately empty; see vendor/README.md
+vendor/html2canvas/        PNG export; see vendor/README.md
 ```
 
 ## Licence

@@ -9,9 +9,9 @@
 // at this position actually get generated?", and that question needs a real population of
 // codons -- it does not exist for a single reference sequence. Producing it in the browser
 // means aligning and scoring 182 compendium genomes, which takes ~28 s on this machine. That
-// is reasonable to ask of someone who has come to the batch tab to run a batch; it is not
-// reasonable on the landing page, where the chart should be there when a position is picked.
-// So the batch is run once, here, and only its end results ship.
+// is not something the landing page should do while a visitor waits. The batch page that
+// used to run it in the browser is gone, so the batch is run once, here, and only its end
+// results ship.
 //
 // WHAT SHIPS. Per amino-acid position: how many of the 182 sequences cover it, which codons
 // they carry and how often, and for each of those codons the rate to each destination
@@ -20,9 +20,9 @@
 // app already has. Rates are rounded to 3 significant figures, far finer than the chart can
 // draw, which is what makes the file compress.
 //
-// This is the same pipeline the batch tab runs, imported from the same modules, so the chart
-// on the landing page and the chart on the batch tab are computed identically by
-// construction. test/browse_flow_cases.mjs checks the shipped file against a fresh run.
+// This is the same pipeline Analysis.batch() runs, imported from the same modules, so the
+// chart on Browse and Your Sequence is the file this script writes. test/browse_flow_cases.mjs
+// checks that file against a fresh run.
 
 import fs from "node:fs";
 import path from "node:path";

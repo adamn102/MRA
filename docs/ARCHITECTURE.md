@@ -2,8 +2,9 @@
 # Architecture
 
 Written for the maintainer opening this a year from now. Plain HTML, CSS and ES modules;
-no framework, no build step, no third-party code. Deployment is "copy the folder", so
-there is nothing between what is in the repository and what runs.
+no framework and no build step. The one vendored library is html2canvas, used only to save
+a figure as a PNG; it is served from this origin and makes no network requests. Deployment
+is "copy the folder", so there is nothing between what is in the repository and what runs.
 
 ## The one-paragraph version
 
@@ -23,19 +24,22 @@ result. Nothing leaves the origin.
 | `js/data.js` | Fetching and indexing the shipped assets, each at most once per page. `loadSmallAssets()` is the sequence tool's entire requirement (~360 KB gzipped); the multi-megabyte browse tables load only when a browse view asks. Also a quote-aware CSV parser. |
 | `js/mra_engine.js` | **The engine.** No DOM, no I/O, no dependencies. Evaluates the model for one site, enumerates all 63 alternative codons per codon, sums path rates into `mu_aa`, and resolves coordinates (HXB2 labels, Gag/Pol subunits, both directions). Pinned by `test/roundtrip_nl43.mjs`. |
 | `js/align.js` | 12-mer seed voting plus a banded affine-gap alignment, query-global and free at both reference ends. Tries both orientations. Widens the band and re-runs if the optimal path touches a band edge that is not also a reference edge. Owns `MAX_BATCH_SEQUENCES`. |
-| `js/align.worker.js` | Runs alignment *and* model evaluation off the main thread. Keeps results in worker memory and posts summaries, serving one sequence's full tables on request — a batch of 100 genomes would otherwise push millions of rows across the thread boundary at once. |
+| `js/align.worker.js` | Runs alignment *and* model evaluation off the main thread. Your Sequence keeps up to `MAX_DETAIL_SEQUENCES` (10) full atlases and asks for one sequence's tables at a time. The build-time LANL batch (`{type: "batch"}`) folds each atlas into a matrix and discards it, capped at `MAX_BATCH_SEQUENCES` (250). |
 | `js/analysis.js` | Drives the worker for both sequence views, with a main-thread fallback for browsers without module workers, and a progress bar. |
 | `js/mutations.js` | Parsing and resolving `RT K65R`-style strings. DOM-free so `test/mutation_cases.mjs` can test it. |
 | `js/table.js` | Sortable, filterable tables with CSV export and a provenance header. Caps the DOM at 2,000 rows; downloads are complete. |
-| `js/chart.js` | The three charts, in plain SVG: `barChart`, `genomeTrack`, `dotPlot`. |
-| `js/{index,browse,sequence,compare,download}.js` | One file per page, containing only what is specific to that view. |
+| `js/chart.js` | Plain SVG: `genomeTrack` and `pieChart`. |
+| `js/browse.js`, `js/sequence.js`, `js/tables.js`, `js/reference.js` | One module per live page. `js/track_view.js` draws the genome track, pie, and flow chart shared by Browse and Your Sequence. |
+| `js/batch_view.js`, `js/batch_core.js` | Residue colours and the supply-flow chart, and the fold-and-discard batch `scripts/build_lanl_flow.mjs` uses to precompute it. There is no batch page. |
+| `browse.html`, `drm.html`, `download.html`, `compare.html`, `explore.html`, `batch.html` | Redirect stubs for old addresses. |
 | `sw.js` | Offline after first load. Cache-first for `data/<version>/` (immutable by design), network-first for `releases.json` and everything else. |
 
 ## Decisions worth knowing about
 
-**No vendored chart or table library.** The brief allowed one. Not using one means the
-no-telemetry guarantee is checkable by reading four small files instead of auditing a
-minified bundle, and the maintainer can read every line. See `vendor/README.md`.
+**No vendored chart or table library.** Charts and tables are plain SVG and HTML in
+`js/chart.js` and `js/table.js`. The exception is html2canvas, vendored under
+`vendor/html2canvas/` solely to save a figure as a PNG. It is served from this origin.
+See `vendor/README.md`.
 
 **Codon frames are read, not derived.** `data/<version>/nl43_reference.json` carries each
 protein's codon coordinates taken from the published path table. HIV-1 genes overlap and

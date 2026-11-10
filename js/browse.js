@@ -30,7 +30,7 @@ import { perSiteSupply, smoothSeries, buildFrameIndex, geneSegments, oneStepSlic
 
 
 /**
- * Download the current dashboard as a PNG: query info + pie/bar chart.
+ * Download the current dashboard as a PNG: the genome track, the pie, and the flow chart.
  */
 async function downloadDashboardPNG() {
   const button = document.getElementById("download-png");

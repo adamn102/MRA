@@ -544,9 +544,8 @@ check("a missing codon encodes to NO_CODON and decodes to null",
           // were the same on every block of every chart, and the column heading says it.
           bySeq.labels.filter((t) => /^\d+%$/.test(t)).length === bySeq.names.length,
           bySeq.labels.filter((t) => /^\d+%$/.test(t)).join(" "));
-    // A codon must be drawn in the colour of the residue it encodes, so degenerate codons
-    // match each other and match that residue in the composition bar above.
-    const { residueColour, drawPositionComposition } = await import("../js/batch_view.js");
+    // A codon must be drawn in the colour of the residue it encodes, so degenerate codons match.
+    const { residueColour } = await import("../js/batch_view.js");
     check("AAA and AAG are the same colour, being degenerate for lysine",
           residueColour("K") === residueColour("K") &&
           residueColour("K") !== residueColour("N"));
@@ -559,13 +558,6 @@ check("a missing codon encodes to NO_CODON and decodes to null",
     check("every codon block is drawn in its residue's colour",
           wanted.every((c, i) => c === null || c === fills[i]),
           wanted.map((c, i) => `${bySeq.names[i].trim()}:${c}/${fills[i]}`).join(" "));
-    const cbox = dom.window.document.createElement("div");
-    const ccap = dom.window.document.createElement("div");
-    drawPositionComposition(cbox, ccap, st, { only: "aa" });
-    const cfill = [...cbox.querySelectorAll("rect")].map((r) => r.getAttribute("fill"));
-    check("the composition bar uses the same residue colours as the flow",
-          cfill[0] === residueColour(st.aa_counts[0][0]),
-          `${cfill[0]} vs ${residueColour(st.aa_counts[0][0])}`);
   }
 }
 

@@ -26,10 +26,9 @@ protein offsets from the atlas alignment table (protease = pol +51, RT +150, int
 the per-replication rate summed over every nucleotide path from the reference codon to any
 codon encoding the resistant amino acid. It is mutational *supply*, not clinical frequency.
 
-**Clinical frequency.** For context we also report the clinical sequence frequency in each
-treatment stratum, `(mutants + 0.5) / sequences`, identical to the convention in the
-manuscript figures, in both the selected treatment stratum and treatment-naive. Supply and
-frequency are shown side by side so selection — the gap between them — is visible.
+**Clinical frequency.** The catalog file still carries the clinical sequence frequency in each
+treatment stratum, `(mutants + 0.5) / sequences`, the same convention as the manuscript
+figures. MRA Table does not show that column. The page reports mutational supply.
 
 **Two edge cases are handled explicitly rather than hidden.**
 

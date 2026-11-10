@@ -152,8 +152,7 @@ export function codonSensitivity(engine, { gene, genePosition, refAa, altAa }) {
   //   Synonymous codons can differ in how many nucleotide changes they need to reach the
   //   target amino acid: some reach it in 2 steps, others only in 3. A 2-step rate and a
   //   3-step rate differ by orders of magnitude, but that is a CATEGORICAL difference in
-  //   accessibility, not codon optimization -- the same distinction the comparison view
-  //   draws. So the headline fold range is computed only among codons at the MINIMAL step
+  //   accessibility, not codon optimization. So the headline fold range is computed only among codons at the MINIMAL step
   //   count (the genuine codon-optimization effect at equal accessibility), and the
   //   step-count spread is reported separately.
   const steps = bySiteCodon.map((r) => r.min_nt_changes).filter((v) => v != null);

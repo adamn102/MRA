@@ -2,14 +2,11 @@
 //
 // figure_export.js -- one PNG download button per figure.
 //
-// Until now each page had a single "Download as PNG" button that captured one fixed region:
-// on the batch tab it took the two site charts together, on the browse tab the whole position
-// dashboard. The genome-wide track -- the figure most likely to be wanted on its own -- could
-// not be saved at all. Anyone who wanted just one panel had to screenshot it by hand.
+// Each <figure class="chart"> is saved on its own. The genome track, the pie, and the flow
+// chart are separate figures, so a reader can keep one panel without screenshotting it.
 //
-// This module instead treats <figure class="chart"> as the unit of export. Every such figure
-// on the page gets its own button, so the set of downloadable plots is exactly the set of
-// plots, and a figure added later is covered without touching this file.
+// Every such figure gets its own button, so a figure added later is covered without
+// touching this file.
 //
 // WHAT GOES INTO THE IMAGE. A figure's caption carries the settings it was drawn under
 // (smoothing window, supply class, which position), so the caption is captured with the plot

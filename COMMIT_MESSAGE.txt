@@ -1,46 +1,15 @@
-Landing page: lead with the track, drop the preamble, widen the supply flow
+Precache js/figure_details.js so the Details dialogs work offline
 
-Four changes to Browse the atlas, all of them about getting the figures in
-front of the reader sooner and making the flow chart legible.
+Every page imports js/figure_details.js -- it is what turns a figure's
+explanation into a dialog behind a Details button, and what owns the single
+.plot-tools row the PNG download shares. It was never added to the service
+worker's SHELL list, so it was the one module in the import graph that an
+offline first visit had to fetch from a network that was not there. The
+dialogs failed to load, and because the import is at module top level the
+failure took the rest of the page's script with it.
 
-Removed the coverage note above the dashboard. It opened the landing page with
-a paragraph of caveats -- modelled region, partial nef coverage, supply versus
-observed frequency -- between the reader and the atlas. All of it is on the
-Reference and Download tab, which is where the portal's fine print lives. The
-nef case still explains itself where it matters: a query for a nef position
-above 72 returns the full explanation in place of a result, which is the moment
-a reader actually needs it.
+Adding it to SHELL, and bumping CACHE v11 -> v12 so a returning reader
+refetches the shell rather than keeping a list that does not name it.
 
-Removed the "Pick a position" paragraph. It described the controls that sit
-beside it and the figures directly below it.
-
-The track now comes before its own controls. It is both the headline figure and
-the primary way to pick a position, so a reader reaching the Position dashboard
-heading meets the plot rather than a row of selects; smoothing window and supply
-class refine what is already on screen.
-
-Removed the quantity table under the track on this page. It restated numbers the
-caption and the dashboard below already carry. drawSupplyTrack keeps its statsEl
-option and "Your sequence" still renders one, where the values are the reader's
-own and appear nowhere else on that page.
-
-The supply-flow chart is now full width, stacked under the pie, and its geometry
-scales. The chart reserves label gutters of 320 px on the left and 290 on the
-right before drawing a single band; those were fixed, so at the half-width slot
-the dashboard gave it the two gutters overran each other and the bands came out
-with negative width. The chart drew its two columns and nothing between them --
-the flows were simply not there. Two fixes, because either alone leaves a trap:
-the gutters now scale with the figure and yield before the bands do, holding a
-180 px minimum band span at any width; and the chart takes the full figure width
-on the dashboard, which is the width it has on the batch tab, so the same chart
-reads the same way on both. Bands span 498 px there, against 0 before.
-
-test/browse_flow_cases.mjs pins the band span at 1140, 900, 700, 600, 480, 360
-and 300 px, since a silently invisible band is exactly the failure that shipped.
-The panel checks now assert the stacked layout and the caption's Above/Below
-wording.
-
-Service worker cache v7 -> v8: index.html changed, and without a bump a
-returning reader keeps the previous page from cache.
-
-All 12 suites and the integrity check pass.
+No behaviour change online. All 12 suites and the integrity check pass;
+22 assets, 7.04 MB gzipped.
