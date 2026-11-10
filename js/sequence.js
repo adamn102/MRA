@@ -26,7 +26,6 @@ import { MraEngine, GENETIC_CODE } from "./mra_engine.js";
 import { perSiteSupply, groupByPosition, buildFrameIndex, geneSegments, targetFor,
          smoothSeries } from "./explore_core.js";
 import { drawSupplyTrack, drawPositionPie, CLASS_LABEL } from "./track_view.js";
-import { trackSliderGeometry } from "./chart.js";
 import { loadLanlFlow, lanlFlowAt } from "./lanl_flow.js";
 import { attachFigureDownloads } from "./figure_export.js";
 import { setDetails } from "./figure_details.js";
@@ -287,8 +286,11 @@ function nearestCodon(item, nt) {
 
 /**
  * One genome track for the whole submission, then the browse cards. Checkboxes choose
- * which sequences are drawn; the "Pie and flow" selector chooses which sequence those
- * two charts analyse. The plot is the first thing under Results.
+ * which sequences are drawn. The sample selector sits inside the pie chart and chooses
+ * which sequence the pie and the flow chart analyse. The smoothing and coordinate
+ * controls sit between the Results heading and the plot, and the position slider sits
+ * in the track between the gene
+ * boxes and the rate curve, matching Browse.
  */
 function renderDashboard(slot, items, allRows, truncated) {
   slot.innerHTML = "";
@@ -304,6 +306,8 @@ function renderDashboard(slot, items, allRows, truncated) {
   const fig = document.createElement("figure");
   fig.className = "chart plot-card";
   fig.setAttribute("data-export-name", "genome_track");
+  const stack = document.createElement("div");
+  stack.className = "genome-stack";
   const trackSlot = document.createElement("div");
   const sliderWrap = document.createElement("div");
   sliderWrap.className = "track-slider";
@@ -314,8 +318,8 @@ function renderDashboard(slot, items, allRows, truncated) {
   elSlider.min = String(region.first_position);
   elSlider.max = String(region.last_position);
   elSlider.setAttribute("aria-label", "Genome position (NL4-3 nucleotide)");
-  Object.assign(elSlider.style, trackSliderGeometry());
   sliderWrap.appendChild(elSlider);
+  stack.append(trackSlot, sliderWrap);
   const figCap = document.createElement("figcaption");
   const toggles = document.createElement("div");
   toggles.className = "overlay-row";
@@ -341,7 +345,7 @@ function renderDashboard(slot, items, allRows, truncated) {
     lab.append(cb, swatch, name);
     toggles.appendChild(lab);
   });
-  fig.append(trackSlot, sliderWrap, figCap, toggles);
+  fig.append(stack, figCap, toggles);
 
   const ctrl = document.createElement("div");
   ctrl.className = "control-bar";
@@ -361,7 +365,6 @@ function renderDashboard(slot, items, allRows, truncated) {
     `<div><label>Protein or subunit</label><select class="sq-target"></select></div>` +
     `<div><label>Position</label><input type="number" class="sq-pos" min="1" size="8"></div>` +
     `<div><label>Reading frame here</label><select class="sq-frame"></select></div>` +
-    `<div><label>Pie and flow</label><select class="sq-which"></select></div>` +
     `<div class="bar-actions"><button class="sq-go">Go</button></div>`;
 
   const head = document.createElement("div");
@@ -372,12 +375,25 @@ function renderDashboard(slot, items, allRows, truncated) {
   const captionEl = document.createElement("figcaption");
   dash.append(chartEl, captionEl);
   const lower = document.createElement("div");
-  slot.append(fig, ctrl, head, dash, lower);
+  slot.append(ctrl, fig, head, dash, lower);
 
   const elWin = ctrl.querySelector(".sq-win"), elWinOut = ctrl.querySelector(".sq-win-out");
   const elClass = ctrl.querySelector(".sq-class"), elSys = ctrl.querySelector(".sq-sys");
   const elTarget = ctrl.querySelector(".sq-target"), elPos = ctrl.querySelector(".sq-pos");
-  const elFrame = ctrl.querySelector(".sq-frame"), elWhich = ctrl.querySelector(".sq-which");
+  const elFrame = ctrl.querySelector(".sq-frame");
+  // Lives inside the pie, not the control bar. drawPositionPie reattaches this node after
+  // each redraw, so the listener below survives a new position or a new sample.
+  const sampleWrap = document.createElement("div");
+  sampleWrap.className = "pie-sample";
+  sampleWrap.setAttribute("data-export-skip", "");
+  const elWhich = document.createElement("select");
+  elWhich.className = "sq-which";
+  elWhich.id = "pie-sample";
+  elWhich.setAttribute("aria-label", "Pie Chart Sample");
+  const sampleLab = document.createElement("label");
+  sampleLab.htmlFor = "pie-sample";
+  sampleLab.textContent = "Pie Chart Sample";
+  sampleWrap.append(sampleLab, elWhich);
   items.forEach((item, i) => {
     const o = document.createElement("option");
     o.value = String(i);
@@ -398,6 +414,16 @@ function renderDashboard(slot, items, allRows, truncated) {
       o.textContent = t.label;
       elTarget.appendChild(o);
     }
+  }
+
+  function placeTrackSlider() {
+    const svg = trackSlot.querySelector("svg");
+    if (!svg || !svg.dataset.sliderTop) return;
+    const H = Number(svg.dataset.sliderSvgHeight);
+    const W = Number(svg.dataset.sliderSvgWidth);
+    sliderWrap.style.top = (100 * Number(svg.dataset.sliderTop) / H).toFixed(3) + "%";
+    sliderWrap.style.left = (100 * Number(svg.dataset.sliderLeft) / W).toFixed(3) + "%";
+    sliderWrap.style.width = (100 * Number(svg.dataset.sliderWidth) / W).toFixed(3) + "%";
   }
 
   function drawTrack() {
@@ -427,7 +453,10 @@ function renderDashboard(slot, items, allRows, truncated) {
       subjectName: shortName(item.row.name),
       refBase: item.baseAt.get(markerNt),
       onSelect: (pos) => selectNt(pos),
+      // Room between the gene boxes and the rate curve for the position slider.
+      sliderGap: 28,
     });
+    placeTrackSlider();
     const where = selected ? ` (${engine.hxb2Label(selected.protein, selected.geneAa)})` : "";
     figCap.innerHTML =
       `Genome-wide ${CLASS_LABEL[cls]}, ${win} nt mean. Marker at ` +
@@ -444,6 +473,7 @@ function renderDashboard(slot, items, allRows, truncated) {
       custom: true, noteHtml, refCodon: yourCodon, refAa,
       sourceName: item.row.name,
       markerPhrase: "the codon in " + escapeHtml(item.row.name),
+      sampleControl: sampleWrap,
     };
     drawPositionPie(chartEl, captionEl, rows, label, opts);
     syncFigures();

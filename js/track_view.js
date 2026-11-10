@@ -375,6 +375,9 @@ export function drawPositionPie(chartEl, captionEl, rows, label, opts = {}) {
            width: opts.width || PIE_W, height: opts.height || FIG_H,
            legendWidth: hasFlow ? 132 : undefined, compactLegend: hasFlow,
            selected: selectedKey, onSelect: pick });
+    // Your Sequence's sample selector. pieChart clears the slot, so this node is put back
+    // after every redraw. It sits in the empty band above the circle.
+    if (opts.sampleControl) pieSlot.appendChild(opts.sampleControl);
 
     if (hasFlow) {
       // Title lives in the card heading. Height is fixed to the pie's so the two boxes match;

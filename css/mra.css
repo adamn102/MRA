@@ -152,8 +152,9 @@ pre.citation { background: var(--panel); border: 1px solid var(--rule); padding:
   accent-color: #b5485d;               /* same hue as the marker line on the track */
   cursor: pointer;
 }
-/* On Browse the slider is overlaid in the gap the track leaves between the gene boxes
-   and the rate curve. top, left and width are set from the SVG's viewBox after each draw. */
+/* The slider is overlaid in the gap the track leaves between the gene boxes and the
+   rate curve, on Browse and on Your Sequence. top, left and width are set from the
+   SVG's viewBox after each draw. */
 .genome-stack { position: relative; }
 .genome-stack .track-slider {
   position: absolute;
@@ -223,7 +224,16 @@ td .codon-options {
 .plot-title { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.35; color: var(--ink);
   text-align: center; }
 .plot-note { margin: 8px 0 0; font-size: 13px; line-height: 1.45; }
-.panel-row > .plot-card .plot-body { min-width: 0; }
+.panel-row > .plot-card .plot-body { position: relative; min-width: 0; }
+/* The sample selector sits in the pie, in the empty band above the circle. */
+.pie-sample {
+  position: absolute; z-index: 2; top: 2px; left: 4px;
+  display: flex; align-items: center; gap: 6px;
+  max-width: calc(100% - 8px); padding: 2px 4px;
+  background: rgba(255, 255, 255, 0.94);
+}
+.pie-sample label { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.pie-sample select { font-size: 13px; max-width: 220px; }
 .plot-card .card-controls > div { flex-direction: row; align-items: center; gap: 6px; }
 
 /* The button row on a plot. Secondary styling keeps it quieter than the figure; it stays
@@ -255,7 +265,6 @@ td .codon-options {
 .control-bar > div { display: flex; flex-direction: column; gap: 3px; }
 .control-bar label { font-size: 11px; color: var(--muted); }
 .control-bar select, .control-bar input[type="number"] { font-size: 13px; }
-.control-bar select.sq-which { max-width: 220px; }
 .control-bar input[type="range"] { width: 150px; vertical-align: middle; }
 /* The trailing items -- Go, share, details -- sit on the baseline with the inputs. */
 .control-bar .bar-actions { flex-direction: row; align-items: center; gap: 8px;
