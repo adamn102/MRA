@@ -74,6 +74,7 @@ export function drawSupplyTrack(container, o) {
     yLabel: "supply per site per replication",
     marker: o.marker, markerLabel: o.markerLabel,
     variants: o.variants, onSelect: o.onSelect,
+    sliderGap: o.sliderGap || 0,
   });
 
   const vals = pts.map((p) => p[1]).sort((a, b) => a - b);

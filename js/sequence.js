@@ -6,22 +6,22 @@
 // let a reader mistake a modelled rate for a measured one, so:
 //   - the privacy note and the standing caveat sit at the end of the page, after the
 //     results, which is where a reader meets them with the numbers already in view;
-//   - every nucleotide-rate row carries flags naming which components it rests on;
+//   - the two tables under the charts match Browse: amino-acid changes, then codon paths,
+//     with a sample column naming which submitted sequence each row came from;
 //   - a sequence that aligns entirely outside the modelled region gets a refusal that
 //     names the covered region, not an empty table.
 //
 // Up to MAX_DETAIL_SEQUENCES submissions share one genome track. Checkboxes choose which
 // lines are drawn; one selector chooses which sequence the pie and the flow chart use.
-// Under those charts the only tables are the compiled amino-acid and nucleotide rates.
-// Every submitted sequence is in the same two tables, distinguished by a sample column,
-// and each table downloads in full.
+// Under those charts the tables match Browse. Every submitted sequence is in both,
+// distinguished by a sample column, and each table downloads in full.
 
 import { bootstrapPage, privacyPanel, note, caveat, showError, exportProvenance,
          CUSTOM_CAVEAT, NEF_NOTE } from "./page.js";
 import { loadSmallAssets } from "./data.js";
 import { Analysis, progressRow, MAX_DETAIL_SEQUENCES } from "./analysis.js";
 import { parseFasta, alignToReference } from "./align.js";
-import { renderTable, formatRate } from "./table.js";
+import { renderTable } from "./table.js";
 import { MraEngine, GENETIC_CODE } from "./mra_engine.js";
 import { perSiteSupply, groupByPosition, buildFrameIndex, geneSegments, targetFor,
          smoothSeries } from "./explore_core.js";
@@ -647,35 +647,40 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 }
 
-const COMPONENT_FLAGS = (r) => {
-  const flags = [];
-  flags.push('<span class="flag codon" title="Determined entirely by your sequence\'s codon">codon</span>');
-  if (r.context_source === "sequence") {
-    flags.push('<span class="flag context" title="3\u2032 context read from your sequence">context</span>');
-  } else if (r.context_source === "pooled") {
-    flags.push('<span class="flag" title="The model fitted this context cell type-only (fewer than 20 WT counts), so no context delta applies">context pooled</span>');
-  } else if (r.context_source === "unavailable") {
-    flags.push('<span class="flag fallback" title="The 3\u2032 base ran off the end of your sequence or was ambiguous; the type-only rate was used">context missing</span>');
-  }
-  flags.push(r.position_source === "aligned"
-    ? '<span class="flag position" title="Fitted NL4-3 position spline applied at the aligned position">position</span>'
-    : '<span class="flag fallback" title="Could not be aligned; the genome mean of the spline was substituted">position fallback</span>');
-  return flags.join(" ");
-};
-
-/** One amino-acid table and one nucleotide table, rows from every submitted sequence. */
+/** One amino-acid table and one codon-path table, rows from every submitted sequence.
+ *  The columns match Browse; Sample is the extra first column. */
 function renderCompiledTables(slot, items) {
   const aaRows = [];
-  const ntRows = [];
+  const pathRows = [];
   for (const item of items) {
     const sample = item.row.name;
     for (const r of item.detail.aa) {
-      aaRows.push({ ...r, sample,
-        interval: `${formatRate(r.mu_aa_lo95)} \u2013 ${formatRate(r.mu_aa_hi95)}` });
+      aaRows.push({
+        sample,
+        hxb2_position: r.hxb2_label,
+        ref_aa: r.ref_aa,
+        alt_aa: r.alt_aa,
+        aa_change_hxb2: r.hxb2_change,
+        mu_aa: r.mu_aa,
+        mu_aa_lo95: r.mu_aa_lo95,
+        mu_aa_hi95: r.mu_aa_hi95,
+        min_nt_changes: r.min_nt_changes,
+        n_paths: r.n_paths,
+        synonymous: r.synonymous ? "yes" : "no",
+      });
     }
-    for (const r of item.detail.nt) {
-      ntRows.push({ ...r, sample,
-        interval: `${formatRate(r.lo95)} \u2013 ${formatRate(r.hi95)}` });
+    for (const r of item.detail.paths) {
+      pathRows.push({
+        sample,
+        hxb2_position: engine.hxb2Label(r.protein, r.position),
+        codon: r.codon,
+        mutant_codon: r.mutant_codon,
+        n_nt_changes: r.n_nt_changes,
+        mutation_type_path: r.mutation_type_path,
+        mu_path: r.mu_path,
+        mu_path_lo95: r.mu_path_lo95,
+        mu_path_hi95: r.mu_path_hi95,
+      });
     }
   }
   const provenance = compiledProvenance(items);
@@ -688,49 +693,55 @@ function renderCompiledTables(slot, items) {
   renderTable(aaSlot, {
     columns: [
       { key: "sample", label: "Sample", title: "The submitted sequence this row was computed from" },
-      { key: "hxb2_change", label: "Mutation (HXB2)", title: "Clinical / publication numbering" },
-      { key: "codon", label: "Your codon", title: "Read from your sequence. This is what differs between viruses." },
-      { key: "query_nt_start", label: "Your nt", type: "num", title: "1-based position in the sequence you submitted" },
-      { key: "query_codon_number", label: "Your codon #", type: "num" },
-      { key: "mu_aa", label: "mu_aa", type: "rate" },
-      { key: "interval", label: "95% interval" },
-      { key: "min_nt_changes", label: "min nt", type: "num" },
-      { key: "n_paths", label: "paths", type: "num" },
-      { key: "aa_change", label: "NL4-3 aa change", title: "Same change in NL4-3 gene numbering" },
-      { key: "position", label: "NL4-3 aa", type: "num", title: "Internal coordinate, for traceability" },
+      { key: "hxb2_position", label: "HXB2 Position", title: "HXB2 amino-acid numbering" },
+      { key: "ref_aa", label: "Reference (From)" },
+      { key: "alt_aa", label: "Mutation (To)" },
+      { key: "aa_change_hxb2", label: "Amino Acid Change",
+        title: "Protein, reference residue, HXB2 position, and destination residue" },
+      { key: "mu_aa", label: "Amino Acid Mutability (mu_aa)", type: "rate",
+        title: "Summed rate over all paths to this amino acid" },
+      { key: "mu_aa_lo95", label: "95% Lower", type: "rate" },
+      { key: "mu_aa_hi95", label: "95% Upper", type: "rate" },
+      { key: "min_nt_changes", label: "Minimum Nucleotide", type: "num" },
+      { key: "n_paths", label: "Paths", type: "num" },
+      { key: "synonymous", label: "Synonymous" },
     ],
     rows: aaRows,
     sort: { key: "mu_aa", dir: "desc" },
-    filterPlaceholder: "filter by sample, protein, change, codon\u2026",
+    filterPlaceholder: "filter by sample, position, change\u2026",
+    csvHeader: "label",
     downloadName: `mra_${page.version}_aa.csv`,
     provenance,
   });
 
-  const ntHeading = document.createElement("h3");
-  ntHeading.textContent = "Nucleotide rates";
-  slot.appendChild(ntHeading);
-  const ntSlot = document.createElement("div");
-  slot.appendChild(ntSlot);
-  renderTable(ntSlot, {
+  const pathHeading = document.createElement("h3");
+  pathHeading.textContent = "Codon paths";
+  slot.appendChild(pathHeading);
+  const pathSlot = document.createElement("div");
+  slot.appendChild(pathSlot);
+  renderTable(pathSlot, {
     columns: [
       { key: "sample", label: "Sample", title: "The submitted sequence this row was computed from" },
-      { key: "query_position", label: "Your nt", type: "num" },
-      { key: "ref_position", label: "NL4-3 nt", type: "num" },
-      { key: "ref_nucleotide", label: "Base" },
-      { key: "mut_type", label: "Substitution" },
-      { key: "context_3p", label: "3\u2032 context", title: "Read from your sequence, not from NL4-3" },
-      { key: "rate", label: "rate", type: "rate" },
-      { key: "interval", label: "95% interval" },
-      { key: "interval_source", label: "Interval from",
-        title: "published = the atlas interval for this exact site and substitution; type-context = a mean over sites, an approximation" },
-      { key: "components", label: "Rests on", render: COMPONENT_FLAGS },
+      { key: "hxb2_position", label: "HXB2 Position", title: "HXB2 amino-acid numbering" },
+      { key: "codon", label: "Reference Codon" },
+      { key: "mutant_codon", label: "Mutant Codon" },
+      { key: "n_nt_changes", label: "Nucleotide Changes", type: "num" },
+      { key: "mutation_type_path", label: "Substitutions" },
+      { key: "mu_path", label: "Mutation Rate", type: "rate" },
+      { key: "mu_path_lo95", label: "95% Lower", type: "rate" },
+      { key: "mu_path_hi95", label: "95% Upper", type: "rate" },
     ],
-    rows: ntRows,
-    sort: { key: "rate", dir: "desc" },
-    filterPlaceholder: "filter by sample, substitution, context\u2026",
-    downloadName: `mra_${page.version}_nt.csv`,
+    rows: pathRows,
+    sort: { key: "mu_path", dir: "desc" },
+    filterPlaceholder: "filter by sample, codon, substitution\u2026",
+    csvHeader: "label",
+    downloadName: `mra_${page.version}_paths.csv`,
     provenance,
   });
+  pathSlot.appendChild(caveat(
+    "A path rate is the product of the per-site rates at the changed positions; its interval " +
+    "is the same product over the marginal bounds. Amino-acid mutability above is the sum over " +
+    "every path to that amino acid, including 2- and 3-substitution routes."));
 }
 
 /** Provenance for a merged export: which model, which version, and what each sample rests on. */

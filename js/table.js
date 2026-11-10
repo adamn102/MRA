@@ -25,6 +25,8 @@ export function formatInterval(lo, hi) {
  *   sort:    {key, dir} initial sort
  *   filterPlaceholder, emptyMessage
  *   downloadName, provenance   -- when both given, a Download CSV button appears
+ *   csvHeader: "label" writes the visible column headings into the CSV; otherwise the
+ *   field names are written
  */
 export function renderTable(container, spec) {
   const state = {
@@ -163,7 +165,7 @@ export function renderTable(container, spec) {
 }
 
 /** Build a CSV string with a provenance header comment and hand it to the browser. */
-export function toCsv(rows, columns, provenance) {
+export function toCsv(rows, columns, provenance, opts = {}) {
   const esc = (v) => {
     if (v === null || v === undefined) return "";
     const s = String(v);
@@ -171,13 +173,16 @@ export function toCsv(rows, columns, provenance) {
   };
   const lines = [];
   if (provenance) lines.push(provenance.trimEnd());
-  lines.push(columns.map((c) => c.key).join(","));
+  // A table can ask for its visible headings in the file. The default stays the field
+  // name, which is what the other downloads have always written.
+  const header = opts.header === "label" ? columns.map((c) => c.label) : columns.map((c) => c.key);
+  lines.push(header.map(esc).join(","));
   for (const r of rows) lines.push(columns.map((c) => esc(r[c.key])).join(","));
   return lines.join("\n") + "\n";
 }
 
 export function downloadCsv(rows, spec) {
-  const text = toCsv(rows, spec.columns, spec.provenance);
+  const text = toCsv(rows, spec.columns, spec.provenance, { header: spec.csvHeader });
   downloadText(spec.downloadName, text);
 }
 

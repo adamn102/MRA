@@ -12,18 +12,17 @@
 // shard. The only arithmetic is the track's running mean and turning a rate into a slice angle.
 //
 // COORDINATES. The track's x-axis is the NL4-3 nucleotide, because that is what the atlas is
-// indexed on and it is continuous across the genome. Everything reported back is in HXB2
-// amino-acid numbering, which is what a clinical or publication reader expects, with the NL4-3
-// figures kept alongside for traceability.
+// indexed on and it is continuous across the genome. The amino-acid table reports the site in
+// HXB2 numbering: the position, the reference residue, the destination, and the change
+// written as RT K65R.
 
 import { bootstrapPage, note, caveat, showError, exportProvenance, shareButton } from "./page.js";
 import { loadSmallAssets, loadAminoAcidLayer, loadNucleotideLayer, loadPathShard } from "./data.js";
-import { renderTable, formatRate } from "./table.js";
+import { renderTable } from "./table.js";
 import { drawSupplyTrack, drawPositionPie } from "./track_view.js";
 import { loadLanlFlow, lanlFlowAt } from "./lanl_flow.js";
 import { setDetails } from "./figure_details.js";
 import { attachFigureDownloads } from "./figure_export.js";
-import { trackSliderGeometry } from "./chart.js";
 import { MraEngine } from "./mra_engine.js";
 import { perSiteSupply, smoothSeries, buildFrameIndex, geneSegments, oneStepSlices,
          targetFor as targetForIn } from "./explore_core.js";
@@ -171,8 +170,18 @@ const elWinOut = document.getElementById("track-window-out");
 const elClass = document.getElementById("track-class");
 const elSlider = document.getElementById("track-slider");
 elSlider.min = String(FIRST); elSlider.max = String(LAST);
-Object.assign(elSlider.style, trackSliderGeometry());   // align the thumb with the plot area
 for (const el of [elWin, elClass, elSlider]) el.disabled = true;
+
+function placeTrackSlider() {
+  const svg = document.querySelector("#genome-track svg");
+  const slider = document.querySelector(".genome-stack .track-slider");
+  if (!svg || !slider || !svg.dataset.sliderTop) return;
+  const H = Number(svg.dataset.sliderSvgHeight);
+  const W = Number(svg.dataset.sliderSvgWidth);
+  slider.style.top = (100 * Number(svg.dataset.sliderTop) / H).toFixed(3) + "%";
+  slider.style.left = (100 * Number(svg.dataset.sliderLeft) / W).toFixed(3) + "%";
+  slider.style.width = (100 * Number(svg.dataset.sliderWidth) / W).toFixed(3) + "%";
+}
 
 function drawTrack() {
   if (!perSite) return;
@@ -194,7 +203,10 @@ function drawTrack() {
       // repeated anywhere else on that page.
       refBase: assets.reference.sequence[markerNt - 1],
       onSelect: (pos) => selectNucleotide(pos),
+      // Room between the gene boxes and the rate curve for the position slider.
+      sliderGap: 28,
     });
+  placeTrackSlider();
   const classLabel = { total: "total substitution supply", nonga: "non-G\u2192A supply",
                        ga: "G\u2192A supply" }[elClass.value] || "supply";
   document.getElementById("track-caption").innerHTML =
@@ -375,22 +387,27 @@ async function showPosition(target, genePosition) {
 
   renderTable(tableSlot, {
     columns: [
-      { key: "hxb2_change", label: "Mutation (HXB2)", title: "Clinical / publication numbering" },
-      { key: "alt_aa", label: "To" },
-      { key: "mu_aa", label: "mu_aa", type: "rate", title: "Summed rate over all paths to this amino acid" },
-      { key: "interval", label: "95% interval" },
-      { key: "min_nt_changes", label: "min nt", type: "num" },
-      { key: "n_paths", label: "paths", type: "num" },
-      { key: "synonymous", label: "syn" },
-      { key: "aa_change", label: "NL4-3 aa change", title: "Same change in NL4-3 gene numbering" },
-      { key: "ref_position", label: "NL4-3 nt", type: "num", title: "Internal coordinate, for traceability" },
+      { key: "hxb2_position", label: "HXB2 Position", title: "HXB2 amino-acid numbering" },
+      { key: "ref_aa", label: "Reference (From)" },
+      { key: "alt_aa", label: "Mutation (To)" },
+      { key: "aa_change_hxb2", label: "Amino Acid Change",
+        title: "Protein, reference residue, HXB2 position, and destination residue" },
+      { key: "mu_aa", label: "Amino Acid Mutability (mu_aa)", type: "rate",
+        title: "Summed rate over all paths to this amino acid" },
+      { key: "mu_aa_lo95", label: "95% Lower", type: "rate" },
+      { key: "mu_aa_hi95", label: "95% Upper", type: "rate" },
+      { key: "min_nt_changes", label: "Minimum Nucleotide", type: "num" },
+      { key: "n_paths", label: "Paths", type: "num" },
+      { key: "synonymous", label: "Synonymous" },
     ],
     rows: sorted.map((r) => ({
-      ...r, hxb2,
-      interval: `${formatRate(r.mu_aa_lo95)} \u2013 ${formatRate(r.mu_aa_hi95)}`,
-      ref_position: refNt[0],
+      ...r,
+      hxb2_position: hxb2,
+      aa_change_hxb2: engine.hxb2Mutation(target.protein, genePosition, r.ref_aa, r.alt_aa),
+      synonymous: r.synonymous ? "yes" : "no",
     })),
     sort: { key: "mu_aa", dir: "desc" },
+    csvHeader: "label",
     downloadName: `mra_${page.version}_${key}_${ownPosition}.csv`,
     provenance: exportProvenance(page.release, [
       `Position dashboard: ${hxb2} (${target.protein} ${genePosition}), reference codon ${codon}.`,
@@ -407,16 +424,18 @@ async function showPosition(target, genePosition) {
       .sort((a, b) => b.mu_path - a.mu_path);
     renderTable(pathSlot, {
       columns: [
-        { key: "mutant_codon", label: "Mutant codon" },
-        { key: "alt_aa", label: "To" },
-        { key: "n_nt_changes", label: "nt changes", type: "num" },
+        { key: "hxb2_position", label: "HXB2 Position", title: "HXB2 amino-acid numbering" },
+        { key: "codon", label: "Reference Codon" },
+        { key: "mutant_codon", label: "Mutant Codon" },
+        { key: "n_nt_changes", label: "Nucleotide Changes", type: "num" },
         { key: "mutation_type_path", label: "Substitutions" },
-        { key: "mu_path", label: "mu_path", type: "rate" },
-        { key: "interval", label: "95% interval" },
+        { key: "mu_path", label: "Mutation Rate", type: "rate" },
+        { key: "mu_path_lo95", label: "95% Lower", type: "rate" },
+        { key: "mu_path_hi95", label: "95% Upper", type: "rate" },
       ],
-      rows: paths.map((p) => ({ ...p,
-        interval: `${formatRate(p.mu_path_lo95)} \u2013 ${formatRate(p.mu_path_hi95)}` })),
+      rows: paths.map((p) => ({ ...p, hxb2_position: hxb2 })),
       sort: { key: "mu_path", dir: "desc" },
+      csvHeader: "label",
       downloadName: `mra_${page.version}_${key}_${ownPosition}_paths.csv`,
       provenance: exportProvenance(page.release, [
         `Codon paths at ${hxb2} from codon ${codon}. All 63 alternative codons are listed.`,

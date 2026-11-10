@@ -77,7 +77,11 @@ export function trackSliderGeometry(width = LAYOUT.width) {
  */
 export function genomeTrack(container, series, options = {}) {
   container.innerHTML = "";
-  const width = options.width || LAYOUT.width, height = options.height || 260;
+  const width = options.width || LAYOUT.width;
+  // Extra room between the gene band and the rate plot, so a position slider can sit there
+  // without covering either. The plot area keeps the height it was given.
+  const sliderGap = Math.max(0, options.sliderGap || 0);
+  const height = (options.height || 260) + sliderGap;
   const padLeft = LAYOUT.padLeft, padRight = LAYOUT.padRight, padBottom = 40;
   const x0 = options.xMin || 1, x1 = options.xMax || 8213;
 
@@ -86,16 +90,26 @@ export function genomeTrack(container, series, options = {}) {
   // frames -- gag/pol, and tat/rev/vpu/env -- are packed onto as many rows as they need,
   // because drawing them on one row would either hide genes or imply they do not overlap.
   const band = (options.geneBand || []).slice().sort((a, b) => a.start - b.start);
+  // Rev is spliced. Its first exon is short enough to fit in the gap between vpr and env,
+  // which would leave the two exons on different rows. Both belong on the bottom track.
+  const pinBottom = new Set(["Rev"]);
   const bandRows = [];
   for (const g of band) {
+    if (pinBottom.has(g.label)) continue;
     let r = 0;
     while (bandRows[r] && bandRows[r].some((o) => !(g.start > o.end || g.end < o.start))) r++;
     (bandRows[r] = bandRows[r] || []).push(g);
     g._row = r;
   }
+  const pinned = band.filter((g) => pinBottom.has(g.label));
+  if (pinned.length) {
+    const r = bandRows.length;
+    (bandRows[r] = bandRows[r] || []).push(...pinned);
+    for (const g of pinned) g._row = r;
+  }
   const BOX_H = 12, ROW_GAP = 2;
   const bandH = bandRows.length ? bandRows.length * (BOX_H + ROW_GAP) + 6 : 0;
-  const padTop = 24 + bandH;
+  const padTop = 24 + bandH + sliderGap;
   const plotW = width - padLeft - padRight, plotH = height - padTop - padBottom;
 
   // The ribbon's extent counts toward the y-domain: an envelope drawn outside the computed
@@ -143,8 +157,12 @@ export function genomeTrack(container, series, options = {}) {
       svg.appendChild(el("text", { x: gx + gw / 2, y: gy + BOX_H - 3, "text-anchor": "middle",
                                    "font-size": 8.5, fill: hot ? "#ffffff" : "#3c4a5c" },
                          g.label || ""));
-    } else {
+    } else if (g._row === 0) {
       svg.appendChild(el("text", { x: gx + gw / 2, y: gy - 2, "text-anchor": "middle",
+                                   "font-size": 8, fill: "#3c4a5c" }, g.label || ""));
+    } else {
+      // A label above this box would sit in the track above it. Keep it in its own row.
+      svg.appendChild(el("text", { x: gx + gw + 3, y: gy + BOX_H - 3, "text-anchor": "start",
                                    "font-size": 8, fill: "#3c4a5c" }, g.label || ""));
     }
   }
@@ -252,6 +270,18 @@ export function genomeTrack(container, series, options = {}) {
       options.onSelect(Math.min(Math.max(pos, x0), x1));
     });
     svg.appendChild(hit);
+  }
+  if (sliderGap) {
+    const bandBottom = bandRows.length
+      ? 20 + (bandRows.length - 1) * (BOX_H + ROW_GAP) + BOX_H
+      : 16;
+    // The open strip between the gene boxes and the rate plot. A page that asked for the
+    // gap positions its slider from these viewBox units.
+    svg.dataset.sliderTop = String(bandBottom + 10);
+    svg.dataset.sliderLeft = String(padLeft);
+    svg.dataset.sliderWidth = String(plotW);
+    svg.dataset.sliderSvgWidth = String(width);
+    svg.dataset.sliderSvgHeight = String(height);
   }
   container.appendChild(svg);
 }

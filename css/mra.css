@@ -100,10 +100,10 @@ button:disabled { opacity: 0.5; cursor: default; }
 
 /* --- tables ------------------------------------------------------------- */
 table.data { border-collapse: collapse; width: 100%; font-size: 13px; }
-table.data th, table.data td { border-bottom: 1px solid var(--rule); padding: 4px 8px; text-align: left;
+table.data th, table.data td { border-bottom: 1px solid var(--rule); padding: 4px 8px; text-align: center;
   white-space: nowrap; }
 table.data th { background: var(--panel); position: sticky; top: 0; cursor: pointer; }
-table.data td.num { text-align: right; font-family: var(--mono); }
+table.data td.num { font-family: var(--mono); }
 table.data tbody tr:hover { background: #eef4f8; }
 .table-scroll { max-height: 520px; overflow: auto; border: 1px solid var(--rule); }
 
@@ -152,6 +152,15 @@ pre.citation { background: var(--panel); border: 1px solid var(--rule); padding:
   accent-color: #b5485d;               /* same hue as the marker line on the track */
   cursor: pointer;
 }
+/* On Browse the slider is overlaid in the gap the track leaves between the gene boxes
+   and the rate curve. top, left and width are set from the SVG's viewBox after each draw. */
+.genome-stack { position: relative; }
+.genome-stack .track-slider {
+  position: absolute;
+  margin: 0;
+  height: 16px;
+}
+.genome-stack .track-slider input[type="range"] { width: 100%; margin: 0; height: 16px; }
 
 /* --- the quantity table under a genome track ----------------------------- */
 /* Shares table.data's look but is a readout, not a sortable data table: it should size to its

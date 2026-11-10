@@ -17,20 +17,8 @@
 <div id="dashboard-export">
 <h2>Position dashboard</h2>
 
-<!-- The track comes first, before the controls: it is both the headline figure and the
-     primary way to pick a position, so a reader arriving at this heading should meet the
-     plot rather than a row of selects. The control bar below refines what is on screen. -->
-<figure class="chart plot-card" data-export-name="genome_track"><div id="genome-track"></div>
-  <div class="track-slider" data-export-skip>
-    <input type="range" id="track-slider" min="1" max="8213" step="1" value="1954"
-           aria-label="Genome position (NL4-3 nucleotide)">
-  </div>
-  <figcaption id="track-caption"></figcaption></figure>
-
-<!-- One control strip for the whole dashboard: what the track shows on the left, which
-     position is selected on the right. These were two rows separated by a paragraph on
-     protein numbering; that paragraph is now behind the bar's own Details button, which is
-     where a reader looks once and then never again. -->
+<!-- The controls sit between the heading and the genome track. The position slider is not
+     in this bar: it sits inside the track, between the gene boxes and the rate curve. -->
 <div class="control-bar" data-export-skip>
   <div>
     <label for="track-window">Smoothing window (nt)</label>
@@ -71,6 +59,16 @@
     <button id="download-png" class="secondary">Download dashboard (PNG)</button>
   </div>
 </div>
+
+<figure class="chart plot-card" data-export-name="genome_track">
+  <div class="genome-stack">
+    <div id="genome-track"></div>
+    <div class="track-slider" data-export-skip>
+      <input type="range" id="track-slider" min="1" max="8213" step="1" value="1954"
+             aria-label="Genome position (NL4-3 nucleotide)">
+    </div>
+  </div>
+  <figcaption id="track-caption"></figcaption></figure>
 
 <div id="dashboard-status" class="caveat">Loading the atlas tables&hellip;</div>
 <div id="dashboard-head"></div>
