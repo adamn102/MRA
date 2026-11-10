@@ -240,6 +240,9 @@ if (!JSDOM) {
   check("each card carries its own plot title",
         cards.every((c) => /\S/.test((c.querySelector(".plot-title") || {}).textContent || "")),
         cards.map((c) => (c.querySelector(".plot-title") || {}).textContent).join(" | "));
+  check("the browse pie is titled from NL4-3 at the reference residue",
+        (cards[0].querySelector(".plot-title") || {}).textContent ===
+        "One-step changes from NL4-3 at RT K103");
   check("each card offers Download this figure (PNG)",
         cards.every((c) => (c.querySelector(".figure-download") || {}).textContent ===
                            "Download this figure (PNG)"));

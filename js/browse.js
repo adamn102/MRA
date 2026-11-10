@@ -360,7 +360,7 @@ async function showPosition(target, genePosition) {
   // precomputed batch has arrived. The asset is ~370 KB and fetched on the first position a
   // visitor opens, so waiting on it before drawing anything would make the panel feel broken
   // on a slow connection; the pie needs nothing but the rows already in hand.
-  drawPositionPie(chart, caption, rows, hxb2, { custom: false, noteHtml });
+  drawPositionPie(chart, caption, rows, hxb2, { custom: false, noteHtml, sourceName: "NL4-3" });
   syncFigureButtons();
   const token = ++flowToken;
   loadLanlFlow(page.version).then((index) => {
@@ -369,7 +369,7 @@ async function showPosition(target, genePosition) {
     const flow = lanlFlowAt(index, target.protein, genePosition);
     if (!flow) return;                      // compendium does not cover this position
     drawPositionPie(chart, caption, rows, hxb2,
-                    { custom: false, flow, refCodon: codon, noteHtml });
+                    { custom: false, flow, refCodon: codon, noteHtml, sourceName: "NL4-3" });
     syncFigureButtons();
   }).catch(() => { /* no flow chart; the pie stands on its own */ });
 

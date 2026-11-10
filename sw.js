@@ -39,8 +39,10 @@
 // v11: Batch analysis is gone. batch.html is a redirect stub; js/batch.js is not in the shell.
 // v12: js/figure_details.js joins the shell. Browse, Your Sequence, and figure export import
 // it for the Details dialogs; it had been left out of this list.
+// v13: HIV-references.fasta is the worked example on Your Sequence, so an offline visit
+// can still fill the box from it.
 // Without a bump a returning reader keeps the previous shell from cache.
-const CACHE = "mra-portal-v12";
+const CACHE = "mra-portal-v13";
 
 // Curated annotation overlays: under a version directory, but revised over time rather than
 // frozen. Served network-first with the HTTP cache bypassed, so an edit is never masked by an
@@ -63,7 +65,7 @@ const SHELL = [
   "./js/drm_redirect.js", "./js/reference_redirect.js", "./js/batch_redirect.js",
   "./js/batch_core.js", "./js/batch_view.js",
   "./js/codon_sensitivity.js", "./js/lanl_flow.js",
-  "./data/releases.json",
+  "./data/releases.json", "./HIV-references.fasta",
 ];
 
 self.addEventListener("install", (event) => {

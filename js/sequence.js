@@ -82,8 +82,17 @@ fasta.addEventListener("drop", async (e) => {
   const file = e.dataTransfer.files[0];
   if (file) fasta.value = await file.text();
 });
-document.getElementById("load-nl43").addEventListener("click", () => {
-  fasta.value = ">NL4-3_reference\n" + assets.reference.sequence.replace(/(.{60})/g, "$1\n");
+document.getElementById("load-example").addEventListener("click", async () => {
+  // Shipped example: five reference genomes in HIV-references.fasta. Fetched from this
+  // origin and written into the box; nothing is uploaded.
+  try {
+    const resp = await fetch("HIV-references.fasta");
+    if (!resp.ok) throw new Error("HIV-references.fasta could not be loaded");
+    fasta.value = await resp.text();
+  } catch (err) {
+    showError(document.getElementById("detail-slot"),
+      "Could not load the example sequences. " + err.message);
+  }
 });
 document.getElementById("clear").addEventListener("click", () => {
   fasta.value = "";
@@ -433,6 +442,7 @@ function renderDashboard(slot, items, allRows, truncated) {
     const token = ++flowToken;
     const opts = {
       custom: true, noteHtml, refCodon: yourCodon, refAa,
+      sourceName: item.row.name,
       markerPhrase: "the codon in " + escapeHtml(item.row.name),
     };
     drawPositionPie(chartEl, captionEl, rows, label, opts);

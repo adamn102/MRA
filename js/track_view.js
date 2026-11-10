@@ -300,8 +300,11 @@ export function drawPositionPie(chartEl, captionEl, rows, label, opts = {}) {
   ctrl.appendChild(wrap);
 
   // "RT 65" plus the reference residue is the clinical name of the site: "RT K65".
+  // The name in front of "at" is whose codon the pie is drawn from: NL4-3 on Browse,
+  // the sequence selected on Your Sequence.
   const site = labelWithRefAa(label, opts.refAa || (oneStep[0] && oneStep[0].ref_aa));
-  const pieTitleText = `One-step changes from the circulating variants at ${site}`;
+  const who = String(opts.sourceName || (opts.custom ? "your sequence" : "NL4-3")).trim();
+  const pieTitleText = `One-step changes from ${who} at ${site}`;
   const flowTitleText = `One-step changes from circulating codons at ${label}`;
 
   // --- side-by-side figures -----------------------------------------------------------

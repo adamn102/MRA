@@ -21,6 +21,10 @@
  * Details button go in it: two modules each making their own row left two stacked strips of
  * buttons under every figure, which is most of what made the page look unfinished.
  */
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
 export function toolRow(host) {
   let row = host.querySelector(":scope > .plot-tools");
   if (!row) {
@@ -92,7 +96,9 @@ export function setDetails(host, html, opts = {}) {
   }
 
   btn.textContent = opts.label || "Details";
-  const heading = opts.title ? `<h3>${opts.title}</h3>` : "";
+  // The heading is inserted as HTML. Titles now include a submitted sequence name, so
+  // a header that contains < or & must not be read as markup.
+  const heading = opts.title ? `<h3>${escapeHtml(opts.title)}</h3>` : "";
   dialog.querySelector(".details-body").innerHTML = heading + html;
   dialog.setAttribute("aria-label", opts.title || "Figure details");
   return btn;

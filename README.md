@@ -70,12 +70,11 @@ dev script is a convenience, not a dependency.
    bNAb sections list 24 curated escape mutations across 6 antibodies, each citing a study
    that measured an effect on neutralisation; rows where NL4-3 lacks the published wild type
    keep the citation but show no rate.
-3. `sequence.html` — press **Load NL4-3 (worked example)** then **Compute custom atlas**.
-   This is the round-trip test running in your browser: 2,984 codons, 62,518 amino-acid
-   rows, 0 positions needing the spline fallback, 405 dropped for lying past 8,213.
-   Then try `test/fixtures/JRFL_pol.fasta` via **Load FASTA file…** for a genuinely
-   divergent sequence. The genome track, the pie, the flow chart, and the merged
-   amino-acid and nucleotide tables are on this page.
+3. `sequence.html` — press **Load HIV references (worked example)** then **Compute custom atlas**.
+   The button fills the box from `HIV-references.fasta`: BG505, BF520, REJO.c, HIV_89.6
+   and JRCSF. The genome track, the pie, the flow chart, and the merged amino-acid and
+   nucleotide tables are on this page. Then try `test/fixtures/JRFL_pol.fasta` via
+   **Load FASTA file…** for a clinical *pol* fragment.
 4. `reference.html` — **Reference and Download**: what the rates mean, the coverage and
    coordinate caveats, the privacy statement, how to read the curated tables, and every
    asset with its SHA-256, verified before the download.
