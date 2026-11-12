@@ -46,6 +46,32 @@ const supLabel = (e) => "10" + String(e).replace(/-/g, "\u2212").split("").map(
             "5": "\u2075", "6": "\u2076", "7": "\u2077", "8": "\u2078", "9": "\u2079",
             "\u2212": "\u207b" }[c] || c)).join("");
 
+// Survives a redraw, so the second click of a double-click is still recognisable after the
+// first click has replaced the plot. A lone click waits briefly, and is cancelled if the
+// second click arrives, so zooming back out does not also move the marker.
+let plotPointer = { t: 0, x: 0, y: 0, timer: 0 };
+function plotClickOrReset(ev, pos, onSelect, onZoomReset) {
+  const now = performance.now();
+  const second = plotPointer.t && (now - plotPointer.t) < 400 &&
+    Math.hypot(ev.clientX - plotPointer.x, ev.clientY - plotPointer.y) < 12;
+  clearTimeout(plotPointer.timer);
+  plotPointer.timer = 0;
+  if (second && typeof onZoomReset === "function") {
+    plotPointer.t = 0;
+    onZoomReset();
+    return;
+  }
+  plotPointer.t = now;
+  plotPointer.x = ev.clientX;
+  plotPointer.y = ev.clientY;
+  if (typeof onSelect !== "function") return;
+  if (typeof onZoomReset !== "function") { onSelect(pos); return; }
+  plotPointer.timer = setTimeout(() => {
+    plotPointer.timer = 0;
+    onSelect(pos);
+  }, 280);
+}
+
 // ---------------------------------------------------------------------------------
 /**
  * Horizontal bars of mutational supply across alternatives at one position.
@@ -162,26 +188,43 @@ export function genomeTrack(container, series, options = {}) {
     const gy = 20 + g._row * (BOX_H + ROW_GAP);
     const hot = Number.isFinite(options.marker) &&
                 options.marker >= g.start && options.marker <= g.end;
-    svg.appendChild(el("rect", { x: gx, y: gy, width: gw, height: BOX_H, rx: 2,
-                                 fill: hot ? "#2f4b7c" : "#ccd8e6",
-                                 stroke: hot ? "#22395e" : "#9fb0c6", "stroke-width": 0.7 }));
+    const box = el("rect", { x: gx, y: gy, width: gw, height: BOX_H, rx: 2,
+                             fill: hot ? "#2f4b7c" : "#ccd8e6",
+                             stroke: hot ? "#22395e" : "#9fb0c6", "stroke-width": 0.7 });
     // Faint guide down the plot marks where this gene starts, so the band and the curve line up.
     // A gene clipped by the zoom window starts off-screen; its true boundary is not at the edge.
+    // The guide stays outside the click target, so a click on the plot still selects a position.
     if (g.start >= x0) {
       svg.appendChild(el("line", { x1: gx, x2: gx, y1: padTop, y2: padTop + plotH,
                                    stroke: "#c9d4e2", "stroke-width": 0.6, "stroke-dasharray": "2 4" }));
     }
+    let labelNode = null;
     if (gw >= 20) {
-      svg.appendChild(el("text", { x: gx + gw / 2, y: gy + BOX_H - 3, "text-anchor": "middle",
-                                   "font-size": 8.5, fill: hot ? "#ffffff" : "#3c4a5c" },
-                         g.label || ""));
+      labelNode = el("text", { x: gx + gw / 2, y: gy + BOX_H - 3, "text-anchor": "middle",
+                               "font-size": 8.5, fill: hot ? "#ffffff" : "#3c4a5c" },
+                     g.label || "");
     } else if (g._row === 0) {
-      svg.appendChild(el("text", { x: gx + gw / 2, y: gy - 2, "text-anchor": "middle",
-                                   "font-size": 8, fill: "#3c4a5c" }, g.label || ""));
+      labelNode = el("text", { x: gx + gw / 2, y: gy - 2, "text-anchor": "middle",
+                               "font-size": 8, fill: "#3c4a5c" }, g.label || "");
     } else {
       // A label above this box would sit in the track above it. Keep it in its own row.
-      svg.appendChild(el("text", { x: gx + gw + 3, y: gy + BOX_H - 3, "text-anchor": "start",
-                                   "font-size": 8, fill: "#3c4a5c" }, g.label || ""));
+      labelNode = el("text", { x: gx + gw + 3, y: gy + BOX_H - 3, "text-anchor": "start",
+                               "font-size": 8, fill: "#3c4a5c" }, g.label || "");
+    }
+    // The range is the gene's own nucleotides, not the clipped sliver currently on screen.
+    if (typeof options.onZoom === "function") {
+      const grp = el("g", { role: "button" });
+      grp.style.cursor = "pointer";
+      grp.setAttribute("aria-label", `Zoom to ${g.label || "gene"}`);
+      grp.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        ev.preventDefault();
+        options.onZoom(g.start, g.end);
+      });
+      grp.append(box, labelNode);
+      svg.appendChild(grp);
+    } else {
+      svg.append(box, labelNode);
     }
   }
 
@@ -281,10 +324,97 @@ export function genomeTrack(container, series, options = {}) {
                        options.markerLabel || String(options.marker)));
   }
 
+  // Hover readout of the smoothed rate on every line at one nucleotide. The guide and the
+  // dots are omitted from a PNG; the box itself sits outside the SVG.
+  const hoverSeries = [];
+  for (const s of series) {
+    const rates = new Map();
+    for (const p of s.points) if (p[1] > 0) rates.set(p[0], p[1]);
+    if (rates.size) hoverSeries.push({
+      label: s.name || s.label || "",
+      colour: s.colour || "#0b5c8a",
+      rates,
+    });
+  }
+  const guide = el("line", {
+    y1: padTop, y2: padTop + plotH, stroke: "#5c6670", "stroke-width": 1,
+    "stroke-dasharray": "2 2", visibility: "hidden", "pointer-events": "none",
+  });
+  guide.setAttribute("data-export-skip", "");
+  const dots = hoverSeries.map((s) => {
+    const c = el("circle", {
+      r: 3.2, fill: s.colour, stroke: "#ffffff", "stroke-width": 1,
+      visibility: "hidden", "pointer-events": "none",
+    });
+    c.setAttribute("data-export-skip", "");
+    return c;
+  });
+  svg.appendChild(guide);
+  for (const c of dots) svg.appendChild(c);
+  if (getComputedStyle(container).position === "static") container.style.position = "relative";
+  const tip = document.createElement("div");
+  tip.className = "track-tip";
+  tip.setAttribute("data-export-skip", "");
+  tip.hidden = true;
+  container.appendChild(tip);
+  const hideHover = () => {
+    guide.setAttribute("visibility", "hidden");
+    for (const c of dots) c.setAttribute("visibility", "hidden");
+    tip.hidden = true;
+  };
+  const showHover = (pos, ev) => {
+    const x = sx(pos);
+    guide.setAttribute("x1", x);
+    guide.setAttribute("x2", x);
+    guide.setAttribute("visibility", "visible");
+    tip.replaceChildren();
+    const head = document.createElement("div");
+    head.className = "track-tip-pos";
+    head.textContent = "NL4-3 " + pos.toLocaleString();
+    const unit = document.createElement("div");
+    unit.className = "track-tip-unit";
+    unit.textContent = "supply per replication";
+    tip.append(head, unit);
+    const table = document.createElement("table");
+    hoverSeries.forEach((s, i) => {
+      const rate = s.rates.get(pos);
+      const tr = document.createElement("tr");
+      const name = document.createElement("td");
+      const sw = document.createElement("i");
+      sw.className = "track-tip-swatch";
+      sw.style.background = s.colour;
+      name.append(sw, document.createTextNode(s.label));
+      name.title = s.label;
+      const val = document.createElement("td");
+      val.className = "num";
+      val.textContent = rate > 0 ? rate.toExponential(2) : "\u2014";
+      tr.append(name, val);
+      table.appendChild(tr);
+      const dot = dots[i];
+      if (rate > 0) {
+        dot.setAttribute("cx", x);
+        dot.setAttribute("cy", sy(rate));
+        dot.setAttribute("visibility", "visible");
+      } else dot.setAttribute("visibility", "hidden");
+    });
+    tip.appendChild(table);
+    tip.hidden = false;
+    const host = container.getBoundingClientRect();
+    let left = ev.clientX - host.left + 14;
+    let top = ev.clientY - host.top + 14;
+    tip.style.left = left + "px";
+    tip.style.top = top + "px";
+    if (left + tip.offsetWidth > host.width - 8) left = ev.clientX - host.left - tip.offsetWidth - 14;
+    if (top + tip.offsetHeight > host.height - 8) top = ev.clientY - host.top - tip.offsetHeight - 10;
+    tip.style.left = Math.max(4, left) + "px";
+    tip.style.top = Math.max(4, top) + "px";
+  };
+
   // Optional click-to-select over the plot area. The overlay is transparent and sits on
   // top, so a click anywhere in the plot maps to a reference position. When onZoom is
   // set, a drag across the curve zooms the x-axis to that span and a click still selects.
-  if (typeof options.onSelect === "function" || typeof options.onZoom === "function") {
+  // Moving the pointer reads the smoothed rate of every line at that nucleotide.
+  if (hoverSeries.length || typeof options.onSelect === "function" || typeof options.onZoom === "function") {
     const hit = el("rect", { x: padLeft, y: padTop, width: plotW, height: plotH,
                              fill: "transparent", cursor: "crosshair" });
     const posAt = (ev) => {
@@ -295,17 +425,22 @@ export function genomeTrack(container, series, options = {}) {
       const pos = Math.round(x0 + ((px - padLeft) / plotW) * (x1 - x0));
       return Math.min(Math.max(pos, x0), x1);
     };
-    if (typeof options.onZoom !== "function") {
-      hit.addEventListener("click", (ev) => options.onSelect(posAt(ev)));
-      svg.appendChild(hit);
-    } else {
+    let brushing = false;
+    hit.addEventListener("pointermove", (ev) => {
+      if (brushing) { hideHover(); return; }
+      if (hoverSeries.length) showHover(posAt(ev), ev);
+    });
+    hit.addEventListener("pointerleave", hideHover);
+    if (typeof options.onZoom === "function") {
       const brush = el("rect", {
         fill: "#2f4b7c", "fill-opacity": 0.16, stroke: "#2f4b7c", "stroke-width": 1,
         visibility: "hidden", "pointer-events": "none",
       });
-      let startX = null, startPos = null, brushing = false;
+      let startX = null, startPos = null;
       hit.addEventListener("pointerdown", (ev) => {
         if (ev.button !== 0) return;
+        clearTimeout(plotPointer.timer);
+        plotPointer.timer = 0;
         startX = ev.clientX;
         startPos = posAt(ev);
         brushing = false;
@@ -315,6 +450,7 @@ export function genomeTrack(container, series, options = {}) {
       hit.addEventListener("pointermove", (ev) => {
         if (startX === null || Math.abs(ev.clientX - startX) < 5) return;
         brushing = true;
+        hideHover();
         const pos = posAt(ev);
         const xA = sx(Math.min(startPos, pos));
         const xB = sx(Math.max(startPos, pos));
@@ -334,9 +470,12 @@ export function genomeTrack(container, series, options = {}) {
         brushing = false;
         brush.setAttribute("visibility", "hidden");
         if (dragged && Math.abs(pos - origin) >= 2) {
+          clearTimeout(plotPointer.timer);
+          plotPointer.timer = 0;
+          plotPointer.t = 0;
           options.onZoom(Math.min(origin, pos), Math.max(origin, pos));
-        } else if (typeof options.onSelect === "function") {
-          options.onSelect(pos);
+        } else {
+          plotClickOrReset(ev, pos, options.onSelect, options.onZoomReset);
         }
       };
       hit.addEventListener("pointerup", finish);
@@ -347,6 +486,11 @@ export function genomeTrack(container, series, options = {}) {
         brush.setAttribute("visibility", "hidden");
       });
       svg.appendChild(brush);
+      svg.appendChild(hit);
+    } else if (typeof options.onSelect === "function") {
+      hit.addEventListener("click", (ev) => options.onSelect(posAt(ev)));
+      svg.appendChild(hit);
+    } else {
       svg.appendChild(hit);
     }
   }

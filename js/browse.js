@@ -234,6 +234,7 @@ function drawTrack() {
       refBase: assets.reference.sequence[markerNt - 1],
       onSelect: (pos) => selectNucleotide(pos),
       onZoom: (a, b) => setZoom(a, b),
+      onZoomReset: resetZoom,
       // Room between the gene boxes and the rate curve for the position slider.
       sliderGap: 28,
     });
@@ -248,7 +249,7 @@ function drawTrack() {
     `${markerNt.toLocaleString()}` +
     (selected ? ` (${engine.hxb2Label(selected.target.protein, selected.geneAa)})` : "") + "." +
     (zoomed ? ` Showing positions ${zoom0.toLocaleString()}\u2013${zoom1.toLocaleString()}.` : "") +
-    ` Drag across the curve to zoom into a region, or set Zoom from and to.`;
+    ` Drag across the curve to zoom, click a gene to zoom to it, or double-click the plot for the full range.`;
   setDetails(trackFigure, trackText, { title: "The genome supply track" });
   syncFigureButtons();
 }

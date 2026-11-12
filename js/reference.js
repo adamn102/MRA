@@ -37,7 +37,6 @@ const release = page.release;
 
 document.getElementById("version-info").appendChild(note(
   `Atlas <strong>${release.version}</strong>, released ${release.release_date || "\u2014"}. ` +
-  `Model <code>${release.model}</code>. ` +
   (release.doi ? `DOI ${release.doi}.` : "DOI not yet assigned.") +
   ` Covers NL4-3 reference positions ${release.modelled_region.first_position.toLocaleString()}` +
   `&ndash;${release.modelled_region.last_position.toLocaleString()}.`));

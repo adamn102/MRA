@@ -460,6 +460,7 @@ function renderDashboard(slot, items, allRows, truncated) {
       if (!shown.has(i)) return;
       series.push({
         label: shortName(it.row.name),
+        name: it.row.name,
         colour: it.colour,
         points: smoothSeries(it.sites, it.perSite, cls, win),
         width: i === active ? 1.7 : 1.15,
@@ -478,6 +479,7 @@ function renderDashboard(slot, items, allRows, truncated) {
       refBase: item.baseAt.get(markerNt),
       onSelect: (pos) => selectNt(pos),
       onZoom: (a, b) => setZoom(a, b),
+      onZoomReset: resetZoom,
       // Room between the gene boxes and the rate curve for the position slider.
       sliderGap: 28,
     });
@@ -494,7 +496,7 @@ function renderDashboard(slot, items, allRows, truncated) {
       (zoomed
         ? ` Showing positions ${zoom0.toLocaleString()}\u2013${zoom1.toLocaleString()}.`
         : ``) +
-      ` Drag across the curve to zoom into a region, or set Zoom from and to.`;
+      ` Drag across the curve to zoom, click a gene to zoom to it, or double-click the plot for the full range.`;
     setDetails(fig, trackText, { title: "The genome supply track" });
   }
 

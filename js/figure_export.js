@@ -42,7 +42,7 @@ export function exportFileName(name, dateISO) {
  * Provisional citation printed on every figure until the paper is out.
  * Replace this, and `paper` on the release, when the citation is final.
  */
-export const PROVISIONAL_CITATION = "Nitido et al. 2027";
+export const PROVISIONAL_CITATION = "Nitido et al. 2026";
 
 /** The provenance footer drawn into the image: atlas, citation, DOI, version, date. */
 export function figureStamp(release, dateISO) {

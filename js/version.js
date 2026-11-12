@@ -192,7 +192,6 @@ export function citationText(release, retrievedISO) {
     "HIV-1 Mutation Rate Atlas (MRA), atlas version " + release.version + ".",
     release.paper ? release.paper : "[Paper citation to be completed on publication]",
     doi,
-    "Model: " + (release.model || "see data/" + release.version + "/mra_web_model.json"),
     "Atlas data licensed CC-BY-4.0; portal code licensed MIT.",
     "Retrieved " + (retrievedISO || new Date().toISOString().slice(0, 10)) + " from the MRA portal.",
   ];

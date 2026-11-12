@@ -40,7 +40,8 @@ const CLASS_COLOUR = { total: "#2f4b7c", nonga: "#3f8f7a", ga: "#c2561a" };
  *   statsEl    optional element to receive the quantity table
  *   variants   optional array of positions differing from NL4-3
  *   onSelect   callback(position)
- *   onZoom     optional callback(start, end) when the reader drags a span on the curve
+ *   onZoom     optional callback(start, end) when the reader drags a span or clicks a gene
+ *   onZoomReset optional callback() for a double-click, restoring the full axis
  *   source     short phrase naming where the rates came from
  *   series     optional already-smoothed lines, one per submitted sequence. When set, these
  *              replace the single primary series; NL4-3 is still added from refPerSite, and
@@ -74,7 +75,7 @@ export function drawSupplyTrack(container, o) {
     width: o.width || LAYOUT.width, height: o.height || 320,
     yLabel: "supply per site per replication",
     marker: o.marker, markerLabel: o.markerLabel,
-    variants: o.variants, onSelect: o.onSelect, onZoom: o.onZoom,
+    variants: o.variants, onSelect: o.onSelect, onZoom: o.onZoom, onZoomReset: o.onZoomReset,
     sliderGap: o.sliderGap || 0,
   });
 
