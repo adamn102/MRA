@@ -201,6 +201,10 @@ function flowDetailHtml(label, chartCaption, markerPhrase) {
     "<p>The pie beside it is one codon's draw. The flow splits every circulating codon by " +
     "its own pie, then weights the result by how often the LANL genomes carry it. Both are " +
     "coloured by destination residue, so a slice and a band for the same residue match.</p>" +
+    "<p>The table under the chart is the right-hand column. Each row is a destination " +
+    "amino acid, and the percent is that amino acid's share of the circulating one-step " +
+    "supply, which is the height of its block. Synonymous change and the pooled smaller " +
+    "destinations keep their own rows.</p>" +
     (chartCaption ? "<p>" + chartCaption + "</p>" : "");
 }
 
@@ -279,34 +283,94 @@ export function drawPositionPie(chartEl, captionEl, rows, label, opts = {}) {
   let selectedKey = keyOf(oneStep[0]);            // the largest slice, already sorted
 
   // --- controls ---------------------------------------------------------------------
-  // The selector belongs to the pie and sits under the plot. It is left out of the PNG:
-  // a dropdown is a control, and html2canvas draws native selects at the wrong size.
+  // Browse replaces this dropdown with a legend table under the pie. Your Sequence keeps
+  // the selector. The dropdown is left out of the PNG: html2canvas draws native selects
+  // at the wrong size. The table is the legend, so it stays in the figure.
+  const totalMu = oneStep.reduce((t, r) => t + r.mu_aa, 0);
+  let sel = null;
+  let legendTable = null;
   const ctrl = document.createElement("div");
-  ctrl.className = "controls card-controls";
-  ctrl.setAttribute("data-export-skip", "");
-  const lab = document.createElement("label");
-  lab.append("Amino-acid change ");
-  const sel = document.createElement("select");
-  sel.setAttribute("aria-label", "Amino-acid change");
-  for (const r of oneStep) {
-    const o = document.createElement("option");
-    o.value = keyOf(r);
-    o.textContent = `${r.ref_aa}\u2192${r.alt_aa}${r.synonymous ? " (synonymous)" : ""}` +
-                    `  \u2014  ${r.mu_aa.toExponential(2)}`;
-    sel.appendChild(o);
+  if (opts.legendTable) {
+    legendTable = document.createElement("table");
+    legendTable.className = "data pie-legend is-selectable";
+    const thead = document.createElement("thead");
+    const headRow = document.createElement("tr");
+    const headers = [
+      { html: "", label: "Color" },
+      { html: "Amino acid", label: "Amino acid" },
+      { html: "Percent of <em>de novo</em> diversification",
+        label: "Percent of de novo diversification" },
+      { html: "Mutability (amino acid <em>de novo</em> generation rate)",
+        label: "Mutability (amino acid de novo generation rate)" },
+    ];
+    for (const h of headers) {
+      const th = document.createElement("th");
+      th.scope = "col";
+      if (h.html) th.innerHTML = h.html;
+      else th.setAttribute("aria-label", h.label);
+      headRow.appendChild(th);
+    }
+    thead.appendChild(headRow);
+    const tbody = document.createElement("tbody");
+    for (const r of oneStep) {
+      const key = keyOf(r);
+      const tr = document.createElement("tr");
+      tr.dataset.key = key;
+      tr.tabIndex = 0;
+      tr.setAttribute("role", "button");
+      tr.setAttribute("aria-label", `Select ${key}`);
+      if (key === selectedKey) tr.classList.add("is-selected");
+      const colourCell = document.createElement("td");
+      const swatch = document.createElement("span");
+      swatch.className = "pie-swatch";
+      swatch.style.background = residueColour(r.alt_aa);
+      colourCell.appendChild(swatch);
+      const aaCell = document.createElement("td");
+      aaCell.textContent = key;
+      if (r.synonymous) aaCell.title = "Synonymous change";
+      const pctCell = document.createElement("td");
+      pctCell.textContent = totalMu > 0
+        ? `${((r.mu_aa / totalMu) * 100).toFixed(1)}%`
+        : "\u2014";
+      const rateCell = document.createElement("td");
+      rateCell.className = "num";
+      rateCell.textContent = formatRate(r.mu_aa);
+      tr.append(colourCell, aaCell, pctCell, rateCell);
+      tr.addEventListener("click", () => pick(key));
+      tr.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(key); }
+      });
+      tbody.appendChild(tr);
+    }
+    legendTable.append(thead, tbody);
+  } else {
+    ctrl.className = "controls card-controls";
+    ctrl.setAttribute("data-export-skip", "");
+    const lab = document.createElement("label");
+    lab.append("Amino-acid change ");
+    sel = document.createElement("select");
+    sel.setAttribute("aria-label", "Amino-acid change");
+    for (const r of oneStep) {
+      const o = document.createElement("option");
+      o.value = keyOf(r);
+      o.textContent = `${r.ref_aa}\u2192${r.alt_aa}${r.synonymous ? " (synonymous)" : ""}` +
+                      `  \u2014  ${r.mu_aa.toExponential(2)}`;
+      sel.appendChild(o);
+    }
+    lab.appendChild(sel);
+    const wrap = document.createElement("div");
+    wrap.appendChild(lab);
+    ctrl.appendChild(wrap);
+    sel.addEventListener("change", () => pick(sel.value));
   }
-  lab.appendChild(sel);
-  const wrap = document.createElement("div");
-  wrap.appendChild(lab);
-  ctrl.appendChild(wrap);
 
   // "RT 65" plus the reference residue is the clinical name of the site: "RT K65".
   // The name in front of "at" is whose codon the pie is drawn from: NL4-3 on Browse,
   // the sequence selected on Your Sequence.
   const site = labelWithRefAa(label, opts.refAa || (oneStep[0] && oneStep[0].ref_aa));
   const who = String(opts.sourceName || (opts.custom ? "your sequence" : "NL4-3")).trim();
-  const pieTitleText = `One-step changes from ${who} at ${site}`;
-  const flowTitleText = `One-step changes from circulating codons at ${label}`;
+  const pieTitleText = `Distribution of one-step amino acid changes from ${who} at ${site}`;
+  const flowTitleText = `Distribution of one-step amino acid changes from circulating virus codons at ${label}`;
 
   // --- side-by-side figures -----------------------------------------------------------
   const row = document.createElement("div");
@@ -338,15 +402,19 @@ export function drawPositionPie(chartEl, captionEl, rows, label, opts = {}) {
   pieSlot.className = "plot-body";
   const flowSlot = document.createElement("div");
   flowSlot.className = "plot-body";
-  pieCard.append(pieHead, pieSlot);
-  if (opts.noteHtml) {
-    const note = document.createElement("p");
-    note.className = "plot-note";
-    note.innerHTML = opts.noteHtml;
-    pieCard.appendChild(note);
-  }
-  pieCard.appendChild(ctrl);
-  flowCard.append(flowHead, flowSlot);
+  // Both cards share one row skeleton — title, plot, note, table, buttons — so the
+  // destination table starts on the same line as the pie table. The flow note is empty;
+  // it only holds the row the pie's codon line occupies.
+  const pieNote = document.createElement("p");
+  pieNote.className = "plot-note";
+  if (opts.noteHtml) pieNote.innerHTML = opts.noteHtml;
+  const flowNote = document.createElement("p");
+  flowNote.className = "plot-note";
+  flowNote.setAttribute("aria-hidden", "true");
+  const flowUnder = document.createElement("div");
+  flowUnder.className = "plot-under";
+  pieCard.append(pieHead, pieSlot, pieNote, legendTable || ctrl);
+  flowCard.append(flowHead, flowSlot, flowNote, flowUnder);
   row.append(pieCard);
   if (hasFlow) row.append(flowCard);
   chartEl.appendChild(row);
@@ -357,8 +425,53 @@ export function drawPositionPie(chartEl, captionEl, rows, label, opts = {}) {
   function pick(key) {
     if (!byKey.has(key)) return;
     selectedKey = key;
-    sel.value = key;
+    if (sel) sel.value = key;
+    if (legendTable) {
+      for (const tr of legendTable.querySelectorAll("tbody tr")) {
+        tr.classList.toggle("is-selected", tr.dataset.key === key);
+      }
+    }
     redraw();
+  }
+
+  function renderFlowLegend(rows) {
+    flowUnder.innerHTML = "";
+    if (!rows || !rows.length) return;
+    const table = document.createElement("table");
+    table.className = "data pie-legend";
+    const thead = document.createElement("thead");
+    const headRow = document.createElement("tr");
+    const headers = [
+      { html: "", label: "Color" },
+      { html: "Amino acid", label: "Amino acid" },
+      { html: "Percent of one-step supply from circulating virus",
+        label: "Percent of one-step supply from circulating virus" },
+    ];
+    for (const h of headers) {
+      const th = document.createElement("th");
+      th.scope = "col";
+      if (h.html) th.innerHTML = h.html;
+      else th.setAttribute("aria-label", h.label);
+      headRow.appendChild(th);
+    }
+    thead.appendChild(headRow);
+    const tbody = document.createElement("tbody");
+    for (const r of rows) {
+      const tr = document.createElement("tr");
+      const colourCell = document.createElement("td");
+      const swatch = document.createElement("span");
+      swatch.className = "pie-swatch";
+      swatch.style.background = r.colour;
+      colourCell.appendChild(swatch);
+      const aaCell = document.createElement("td");
+      aaCell.textContent = r.label;
+      const pctCell = document.createElement("td");
+      pctCell.textContent = `${r.percent.toFixed(1)}%`;
+      tr.append(colourCell, aaCell, pctCell);
+      tbody.appendChild(tr);
+    }
+    table.append(thead, tbody);
+    flowUnder.appendChild(table);
   }
 
   function redraw() {
@@ -368,11 +481,12 @@ export function drawPositionPie(chartEl, captionEl, rows, label, opts = {}) {
       // change keeps the residue, so it takes that residue's colour too.
       colour: residueColour(r.alt_aa),
     })), { // The title is the card heading, so it lines up with the flow chart's title and
-           // is not drawn a second time inside the circle. The compact legend drops the
-           // rate, which the selector and the table below both already give, and the width
-           // it frees goes into the circle.
+           // is not drawn a second time inside the circle. Browse draws no side legend:
+           // that key is the table under the pie. Your Sequence keeps a compact side
+           // legend, and the width it frees goes into the circle.
            title: pieTitleText, drawTitle: false,
            width: opts.width || PIE_W, height: opts.height || FIG_H,
+           legend: opts.legendTable ? false : undefined,
            legendWidth: hasFlow ? 132 : undefined, compactLegend: hasFlow,
            selected: selectedKey, onSelect: pick });
     // Your Sequence's sample selector. pieChart clears the slot, so this node is put back
@@ -390,6 +504,8 @@ export function drawPositionPie(chartEl, captionEl, rows, label, opts = {}) {
                        weight: "sequences", describeColumns: true,
                        width: FLOW_W, height: FIG_H,
                        title: flowTitleText, drawTitle: false, subtitle: false,
+                       onLegend: renderFlowLegend,
+                       refAa: opts.refAa || (oneStep[0] && oneStep[0].ref_aa) || "",
                        // Pooled harder than 2%, so the block count fits the shared box height with its
                        // shared box height with its labels still legible. The threshold is
                        // named in the chart's own caption, which the Details dialog carries.
@@ -398,7 +514,6 @@ export function drawPositionPie(chartEl, captionEl, rows, label, opts = {}) {
     }
   }
 
-  sel.addEventListener("change", () => pick(sel.value));
   redraw();
 
   // The explanation lives behind each card's Details button. The plot title is the card
@@ -410,9 +525,18 @@ export function drawPositionPie(chartEl, captionEl, rows, label, opts = {}) {
   setDetails(pieCard,
     "<p>Each slice is an amino-acid change reachable from " +
     (opts.custom ? "<strong>your</strong> codon" : "the reference codon") +
-    " in one nucleotide substitution, sized by its share of the one-step supply at this " +
-    "position. <code>*</code> marks a synonymous change. Click a slice, or use the " +
-    "selector under the chart.</p><p>" +
+    " in one nucleotide substitution. <code>*</code> marks a synonymous change. Click a slice, or " +
+    (opts.legendTable ? "a row of the table under the chart." : "use the selector under the chart.") +
+    "</p>" +
+    (opts.legendTable
+      ? "<p><strong>Mutability</strong> is the amino-acid <em>de novo</em> generation rate: " +
+        "the summed rate, per replication, of every nucleotide path from this codon to that " +
+        "amino acid, including paths of two or three substitutions. " +
+        "<strong>Percent of <em>de novo</em> diversification</strong> is that amino acid's " +
+        "mutability as a share of the mutabilities of the amino acids reachable in one " +
+        "nucleotide substitution. The slices are drawn in those proportions.</p>"
+      : "<p>Each slice is sized by its share of the one-step supply at this position.</p>") +
+    "<p>" +
     (opts.custom
       ? "Rates use the codon in your sequence, so they differ from the NL4-3 atlas wherever "
         + "that codon differs. "

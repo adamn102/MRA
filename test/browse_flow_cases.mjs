@@ -237,12 +237,20 @@ if (!JSDOM) {
         String(cards.reduce((t, c) => t + Number(vb(c)[2]), 0) + 16));
   check("each card carries its own PNG download",
         cards.every((c) => c.querySelector(".plot-tools .figure-download")));
+  check("the flow chart carries the destination table under the plot",
+        !!cards[1].querySelector("table.pie-legend"));
+  const flowHeads = [...cards[1].querySelectorAll("table.pie-legend th")]
+    .map((th) => th.textContent.trim());
+  check("the destination table names the amino acid and its circulating share",
+        flowHeads[0] === "" && flowHeads[1] === "Amino acid" &&
+        /one-step supply from circulating virus/.test(flowHeads[2] || ""),
+        flowHeads.join(" | "));
   check("each card carries its own plot title",
         cards.every((c) => /\S/.test((c.querySelector(".plot-title") || {}).textContent || "")),
         cards.map((c) => (c.querySelector(".plot-title") || {}).textContent).join(" | "));
   check("the browse pie is titled from NL4-3 at the reference residue",
         (cards[0].querySelector(".plot-title") || {}).textContent ===
-        "One-step changes from NL4-3 at RT K103");
+        "Distribution of one-step amino acid changes from NL4-3 at RT K103");
   check("each card offers Download this figure (PNG)",
         cards.every((c) => (c.querySelector(".figure-download") || {}).textContent ===
                            "Download this figure (PNG)"));

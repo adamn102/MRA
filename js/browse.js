@@ -363,16 +363,16 @@ async function showPosition(target, genePosition) {
   const noteHtml =
     `<strong>${hxb2}</strong> &mdash; reference amino acid <strong>${refAa}</strong>, ` +
     `codon <code>${codon}</code>. ` +
-    `${target.protein} position ${genePosition}` +
-    (target.offset ? ` (${key} ${ownPosition})` : "") +
-    `; NL4-3 reference nucleotides ${refNt[0].toLocaleString()}\u2013${refNt[2].toLocaleString()}.`;
+    `NL4-3 ${target.protein} position ${genePosition}; ` +
+    `nucleotides ${refNt[0].toLocaleString()}\u2013${refNt[2].toLocaleString()}.`;
 
   const sorted = rows.slice().sort((a, b) => b.mu_aa - a.mu_aa);
   // Draw immediately with the pie alone, then redraw with the flow chart once the
   // precomputed batch has arrived. The asset is ~370 KB and fetched on the first position a
   // visitor opens, so waiting on it before drawing anything would make the panel feel broken
   // on a slow connection; the pie needs nothing but the rows already in hand.
-  drawPositionPie(chart, caption, rows, hxb2, { custom: false, noteHtml, sourceName: "NL4-3" });
+  drawPositionPie(chart, caption, rows, hxb2,
+                  { custom: false, noteHtml, sourceName: "NL4-3", legendTable: true });
   syncFigureButtons();
   const token = ++flowToken;
   loadLanlFlow(page.version).then((index) => {
@@ -381,7 +381,8 @@ async function showPosition(target, genePosition) {
     const flow = lanlFlowAt(index, target.protein, genePosition);
     if (!flow) return;                      // compendium does not cover this position
     drawPositionPie(chart, caption, rows, hxb2,
-                    { custom: false, flow, refCodon: codon, noteHtml, sourceName: "NL4-3" });
+                    { custom: false, flow, refCodon: codon, noteHtml, sourceName: "NL4-3",
+                      legendTable: true });
     syncFigureButtons();
   }).catch(() => { /* no flow chart; the pie stands on its own */ });
 

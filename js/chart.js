@@ -305,11 +305,14 @@ export function pieChart(container, slices, options = {}) {
   const total = data.reduce((t, s) => t + s.value, 0);
   const width = options.width || 680, height = options.height || 300;
   // The circle is sized from the box rather than fixed, so asking for a bigger figure makes
-  // the pie bigger instead of just adding white space to the right of it.
-  const legendW = options.legendWidth || 215;
+  // the pie bigger instead of just adding white space to the right of it. `legend: false`
+  // drops the side key and centres the circle; Browse puts that key in a table under the pie.
+  const showLegend = options.legend !== false;
+  const legendW = showLegend ? (options.legendWidth || 215) : 0;
   const r = options.radius ||
-            Math.max(80, Math.min((height - 58) / 2, (width - legendW - 56) / 2));
-  const cx = 26 + r;
+            Math.max(80, Math.min((height - 58) / 2,
+                                   (width - legendW - (showLegend ? 56 : 48)) / 2));
+  const cx = showLegend ? 26 + r : width / 2;
   const cy = Math.max(r + 26, height / 2);
   const fsSlice = r >= 130 ? 13 : 11;
   const fsLegend = r >= 130 ? 12.5 : 11;
@@ -377,28 +380,29 @@ export function pieChart(container, slices, options = {}) {
     }
   });
 
-  // legend
-  const lx = cx + r + 32;
-  let ly = cy - data.length * legendStep / 2 + legendStep / 2;
-  data.forEach((s, i) => {
-    const g = el("g", {});
-    if (isSel(s)) {
-      g.appendChild(el("rect", { x: lx - 4, y: ly - legendStep + 5, width: legendW - 10,
-                                 height: legendStep, rx: 2, fill: "#eef4f8" }));
-    }
-    g.appendChild(el("rect", { x: lx, y: ly - 8, width: 10, height: 10,
-                               fill: colour(i, s), "fill-opacity": 0.85 }));
-    const pct = ((s.value / total) * 100).toFixed(1);
-    // The rate itself is dropped where the caller asks for a compact legend: it is already
-    // on the selector above the pie and in the table below it, and carrying it here costs
-    // about 80 px of legend width that the circle can have instead.
-    g.appendChild(el("text", { x: lx + 15, y: ly, "font-size": fsLegend, fill: "#1b1f23",
-                               "font-weight": isSel(s) ? 600 : 400 },
-      options.compactLegend ? `${s.label}  ${pct}%`
-                            : `${s.label}  ${pct}%  (${s.value.toExponential(2)})`));
-    svg.appendChild(wire(g, s));
-    ly += legendStep;
-  });
+  if (showLegend) {
+    const lx = cx + r + 32;
+    let ly = cy - data.length * legendStep / 2 + legendStep / 2;
+    data.forEach((s, i) => {
+      const g = el("g", {});
+      if (isSel(s)) {
+        g.appendChild(el("rect", { x: lx - 4, y: ly - legendStep + 5, width: legendW - 10,
+                                   height: legendStep, rx: 2, fill: "#eef4f8" }));
+      }
+      g.appendChild(el("rect", { x: lx, y: ly - 8, width: 10, height: 10,
+                                 fill: colour(i, s), "fill-opacity": 0.85 }));
+      const pct = ((s.value / total) * 100).toFixed(1);
+      // The rate itself is dropped where the caller asks for a compact legend: it is already
+      // on the selector under the pie, and carrying it here costs about 80 px of legend
+      // width that the circle can have instead.
+      g.appendChild(el("text", { x: lx + 15, y: ly, "font-size": fsLegend, fill: "#1b1f23",
+                                 "font-weight": isSel(s) ? 600 : 400 },
+        options.compactLegend ? `${s.label}  ${pct}%`
+                              : `${s.label}  ${pct}%  (${s.value.toExponential(2)})`));
+      svg.appendChild(wire(g, s));
+      ly += legendStep;
+    });
+  }
   container.appendChild(svg);
 }
 

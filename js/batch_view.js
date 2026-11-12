@@ -314,6 +314,16 @@ export function drawSupplyFlow(container, captionEl, stat, matrix, opts = {}) {
     labelY = y + 13;
   }
   container.appendChild(svg);
+  if (typeof opts.onLegend === "function") {
+    const refAa = (opts.refCodon && stat.codon_aa.get(opts.refCodon)) || opts.refAa || "";
+    opts.onLegend(order.map((a) => ({
+      label: a === OTHER ? "other"
+           : a === SYNONYMOUS ? (refAa ? `synonymous (${refAa})` : "synonymous")
+           : a === "*" ? "stop" : a,
+      colour: (a === OTHER || a === SYNONYMOUS) ? NEUTRAL_COLOUR : residueColour(a),
+      percent: total > 0 ? 100 * dTotal.get(a) / total : 0,
+    })));
+  }
 
   let lead = null;
   for (const c of live) {
