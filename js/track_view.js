@@ -40,6 +40,7 @@ const CLASS_COLOUR = { total: "#2f4b7c", nonga: "#3f8f7a", ga: "#c2561a" };
  *   statsEl    optional element to receive the quantity table
  *   variants   optional array of positions differing from NL4-3
  *   onSelect   callback(position)
+ *   onZoom     optional callback(start, end) when the reader drags a span on the curve
  *   source     short phrase naming where the rates came from
  *   series     optional already-smoothed lines, one per submitted sequence. When set, these
  *              replace the single primary series; NL4-3 is still added from refPerSite, and
@@ -73,7 +74,7 @@ export function drawSupplyTrack(container, o) {
     width: o.width || LAYOUT.width, height: o.height || 320,
     yLabel: "supply per site per replication",
     marker: o.marker, markerLabel: o.markerLabel,
-    variants: o.variants, onSelect: o.onSelect,
+    variants: o.variants, onSelect: o.onSelect, onZoom: o.onZoom,
     sliderGap: o.sliderGap || 0,
   });
 
@@ -120,9 +121,8 @@ export function drawSupplyTrack(container, o) {
   const refSentence = !refPts ? ""
     : multi
       ? `The dashed grey line is <strong>NL4-3</strong>, smoothed over the same positions and ` +
-        `the same window as the sequence selected for the pie and the flow chart. Each coloured ` +
-        `line is a submitted sequence. They meet the reference wherever that sequence's codons ` +
-        `and 3\u2032 contexts match NL4-3. `
+        `the same window as the submitted sequences. Each coloured line is a submitted sequence. ` +
+        `They meet the reference wherever that sequence's codons and 3\u2032 contexts match NL4-3. `
       : `The dashed grey line is <strong>NL4-3</strong> over the same positions and the same ` +
         `window, so the two are comparable point for point. They coincide wherever your ` +
         `codons and 3\u2032 contexts match the reference, which for a close relative is most ` +

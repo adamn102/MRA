@@ -11,23 +11,24 @@
 //   - a sequence that aligns entirely outside the modelled region gets a refusal that
 //     names the covered region, not an empty table.
 //
-// Up to MAX_DETAIL_SEQUENCES submissions share one genome track. Checkboxes choose which
-// lines are drawn; one selector chooses which sequence the pie and the flow chart use.
-// Under those charts the tables match Browse. Every submitted sequence is in both,
-// distinguished by a sample column, and each table downloads in full.
+// Up to MAX_DETAIL_SEQUENCES submissions share one genome track and one grid of pies, one
+// pie per sequence at the marker. Checkboxes choose which lines are drawn; they do not
+// hide a pie. Under the grid, one table lists the slice selected on each pie. The two
+// genome-wide tables match Browse, with a sample column, and each downloads in full.
 
 import { bootstrapPage, privacyPanel, note, caveat, showError, exportProvenance,
          CUSTOM_CAVEAT, NEF_NOTE } from "./page.js";
 import { loadSmallAssets } from "./data.js";
 import { Analysis, progressRow, MAX_DETAIL_SEQUENCES } from "./analysis.js";
 import { parseFasta, alignToReference } from "./align.js";
-import { renderTable } from "./table.js";
+import { renderTable, formatRate } from "./table.js";
 import { MraEngine, GENETIC_CODE } from "./mra_engine.js";
 import { perSiteSupply, groupByPosition, buildFrameIndex, geneSegments, targetFor,
-         smoothSeries } from "./explore_core.js";
-import { drawSupplyTrack, drawPositionPie, CLASS_LABEL } from "./track_view.js";
-import { loadLanlFlow, lanlFlowAt } from "./lanl_flow.js";
-import { attachFigureDownloads } from "./figure_export.js";
+         smoothSeries, oneStepSlices } from "./explore_core.js";
+import { drawSupplyTrack, CLASS_LABEL } from "./track_view.js";
+import { pieChart, LAYOUT } from "./chart.js";
+import { residueColour } from "./batch_view.js";
+import { downloadFigure } from "./figure_export.js";
 import { setDetails } from "./figure_details.js";
 
 // Distinct from the dashed NL4-3 grey (#8a94a0). One colour per submitted sequence, in
@@ -102,19 +103,6 @@ document.getElementById("clear").addEventListener("click", () => {
   analysis = new Analysis(assets);
   analysis.start();
 });
-
-function syncFigures() {
-  attachFigureDownloads({
-    release: page.release,
-    onError: (err) => console.error("figure export failed:", err),
-  });
-}
-
-let lanlPromise = null;
-function lanlIndex() {
-  if (!lanlPromise) lanlPromise = loadLanlFlow(page.version);
-  return lanlPromise;
-}
 
 // --- run -------------------------------------------------------------------------
 document.getElementById("run").addEventListener("click", async () => {
@@ -285,12 +273,11 @@ function nearestCodon(item, nt) {
 }
 
 /**
- * One genome track for the whole submission, then the browse cards. Checkboxes choose
- * which sequences are drawn. The sample selector sits inside the pie chart and chooses
- * which sequence the pie and the flow chart analyse. The smoothing and coordinate
- * controls sit between the Results heading and the plot, and the position slider sits
- * in the track between the gene
- * boxes and the rate curve, matching Browse.
+ * One genome track for the whole submission, then a grid of pies, one per sequence, all
+ * at the marker. Checkboxes choose which lines are drawn and do not hide a pie. The
+ * smoothing and coordinate controls sit between the Results heading and the plot, and
+ * the position slider sits in the track between the gene boxes and the rate curve,
+ * matching Browse.
  */
 function renderDashboard(slot, items, allRows, truncated) {
   slot.innerHTML = "";
@@ -301,7 +288,14 @@ function renderDashboard(slot, items, allRows, truncated) {
   // Open on RT K65 (middle base 1954) when the sequence covers it.
   const prefer = 1954;
   let markerNt = nearestCodon(items[0], items[0].frameAt.has(prefer) ? prefer : (items[0].variants[0] || prefer));
-  let flowToken = 0;
+  if (markerNt === null) {
+    const donor = items.find((it) => it.frameAt.size);
+    if (donor) markerNt = nearestCodon(donor, prefer);
+  }
+  // One amino acid for every pie. A new position starts on the largest one-step change.
+  let picked = null;
+  let pieProtein = null;
+  let pieGeneAa = null;
 
   const fig = document.createElement("figure");
   fig.className = "chart plot-card";
@@ -365,41 +359,51 @@ function renderDashboard(slot, items, allRows, truncated) {
     `<div><label>Protein or subunit</label><select class="sq-target"></select></div>` +
     `<div><label>Position</label><input type="number" class="sq-pos" min="1" size="8"></div>` +
     `<div><label>Reading frame here</label><select class="sq-frame"></select></div>` +
+    `<div class="zoom-fields"><label>Zoom from</label>` +
+    `<input type="number" class="sq-z0" size="7">` +
+    `<span class="zoom-to">to</span>` +
+    `<input type="number" class="sq-z1" size="7">` +
+    `<button type="button" class="sq-zoom">Zoom</button>` +
+    `<button type="button" class="secondary sq-zoom-reset">Full range</button></div>` +
     `<div class="bar-actions"><button class="sq-go">Go</button></div>`;
 
   const head = document.createElement("div");
-  const dash = document.createElement("figure");
-  dash.className = "dashboard-figures";
-  dash.setAttribute("data-export-name", "position_dashboard_supply");
-  const chartEl = document.createElement("div");
-  const captionEl = document.createElement("figcaption");
-  dash.append(chartEl, captionEl);
+  const pieBoard = document.createElement("section");
+  pieBoard.className = "pie-board plot-card";
+  pieBoard.id = "pie-board";
+  const pieHead = document.createElement("div");
+  pieHead.className = "pie-board-head";
+  const pieTitle = document.createElement("h3");
+  pieTitle.className = "plot-title";
+  const aaBar = document.createElement("div");
+  aaBar.className = "pie-aa-bar";
+  aaBar.setAttribute("data-export-skip", "");
+  const aaLabel = document.createElement("label");
+  aaLabel.textContent = "Amino acid change ";
+  const aaSelect = document.createElement("select");
+  aaSelect.setAttribute("aria-label", "Amino acid change");
+  aaLabel.appendChild(aaSelect);
+  aaBar.appendChild(aaLabel);
+  pieHead.append(pieTitle, aaBar);
+  const pieGrid = document.createElement("div");
+  pieGrid.className = "pie-grid";
+  const selSlot = document.createElement("div");
+  selSlot.className = "pie-selection";
+  pieBoard.append(pieHead, pieGrid, selSlot);
   const lower = document.createElement("div");
-  slot.append(ctrl, fig, head, dash, lower);
+  slot.append(ctrl, fig, head, pieBoard, lower);
 
   const elWin = ctrl.querySelector(".sq-win"), elWinOut = ctrl.querySelector(".sq-win-out");
   const elClass = ctrl.querySelector(".sq-class"), elSys = ctrl.querySelector(".sq-sys");
   const elTarget = ctrl.querySelector(".sq-target"), elPos = ctrl.querySelector(".sq-pos");
   const elFrame = ctrl.querySelector(".sq-frame");
-  // Lives inside the pie, not the control bar. drawPositionPie reattaches this node after
-  // each redraw, so the listener below survives a new position or a new sample.
-  const sampleWrap = document.createElement("div");
-  sampleWrap.className = "pie-sample";
-  sampleWrap.setAttribute("data-export-skip", "");
-  const elWhich = document.createElement("select");
-  elWhich.className = "sq-which";
-  elWhich.id = "pie-sample";
-  elWhich.setAttribute("aria-label", "Pie Chart Sample");
-  const sampleLab = document.createElement("label");
-  sampleLab.htmlFor = "pie-sample";
-  sampleLab.textContent = "Pie Chart Sample";
-  sampleWrap.append(sampleLab, elWhich);
-  items.forEach((item, i) => {
-    const o = document.createElement("option");
-    o.value = String(i);
-    o.textContent = item.row.name;
-    elWhich.appendChild(o);
-  });
+  const elZ0 = ctrl.querySelector(".sq-z0"), elZ1 = ctrl.querySelector(".sq-z1");
+  const axis0 = region.first_position, axis1 = region.last_position;
+  let zoom0 = axis0, zoom1 = axis1;
+  elZ0.min = elZ1.min = String(axis0);
+  elZ0.max = elZ1.max = String(axis1);
+  elZ0.value = String(axis0);
+  elZ1.value = String(axis1);
 
   function markSelected() {
     toggles.querySelectorAll("label").forEach((lab, i) => {
@@ -426,6 +430,26 @@ function renderDashboard(slot, items, allRows, truncated) {
     sliderWrap.style.width = (100 * Number(svg.dataset.sliderWidth) / W).toFixed(3) + "%";
   }
 
+  function setZoom(a, b) {
+    let lo = Math.round(Math.min(a, b));
+    let hi = Math.round(Math.max(a, b));
+    lo = Math.max(axis0, Math.min(lo, axis1));
+    hi = Math.max(axis0, Math.min(hi, axis1));
+    if (!(hi > lo)) return;
+    zoom0 = lo;
+    zoom1 = hi;
+    elZ0.value = String(lo);
+    elZ1.value = String(hi);
+    drawTrack();
+  }
+  function resetZoom() {
+    zoom0 = axis0;
+    zoom1 = axis1;
+    elZ0.value = String(axis0);
+    elZ1.value = String(axis1);
+    drawTrack();
+  }
+
   function drawTrack() {
     const item = items[active];
     const win = Number(elWin.value);
@@ -443,7 +467,7 @@ function renderDashboard(slot, items, allRows, truncated) {
     });
     const trackText = drawSupplyTrack(trackSlot, {
       perSite: item.perSite, sites: item.sites, series, win, cls, segments: SEGMENTS,
-      first: region.first_position, last: region.last_position,
+      first: zoom0, last: zoom1,
       marker: markerNt,
       markerLabel: selected ? engine.hxb2Label(selected.protein, selected.geneAa) : String(markerNt),
       variants: item.variants,
@@ -453,37 +477,523 @@ function renderDashboard(slot, items, allRows, truncated) {
       subjectName: shortName(item.row.name),
       refBase: item.baseAt.get(markerNt),
       onSelect: (pos) => selectNt(pos),
+      onZoom: (a, b) => setZoom(a, b),
       // Room between the gene boxes and the rate curve for the position slider.
       sliderGap: 28,
     });
+    elSlider.min = String(zoom0);
+    elSlider.max = String(zoom1);
     placeTrackSlider();
     const where = selected ? ` (${engine.hxb2Label(selected.protein, selected.geneAa)})` : "";
+    const zoomed = zoom0 !== axis0 || zoom1 !== axis1;
     figCap.innerHTML =
       `Genome-wide ${CLASS_LABEL[cls]}, ${win} nt mean. Marker at ` +
       `${markerNt.toLocaleString()}${where}. Red ticks are where ` +
       `<strong>${escapeHtml(shortName(item.row.name))}</strong> differs from NL4-3. ` +
-      `The dashed grey line is NL4-3.`;
+      `The dashed grey line is NL4-3.` +
+      (zoomed
+        ? ` Showing positions ${zoom0.toLocaleString()}\u2013${zoom1.toLocaleString()}.`
+        : ``) +
+      ` Drag across the curve to zoom into a region, or set Zoom from and to.`;
     setDetails(fig, trackText, { title: "The genome supply track" });
-    syncFigures();
   }
 
-  function showPie(item, rows, label, noteHtml, yourCodon, protein, geneAa, refAa) {
-    const token = ++flowToken;
-    const opts = {
-      custom: true, noteHtml, refCodon: yourCodon, refAa,
-      sourceName: item.row.name,
-      markerPhrase: "the codon in " + escapeHtml(item.row.name),
-      sampleControl: sampleWrap,
+  const PIE_W = 170, PIE_H = 140, PIE_R = 52;
+
+  function rowsAt(item) {
+    if (pieProtein === null) return [];
+    return item.aaByPosition.get(pieProtein + "|" + pieGeneAa) || [];
+  }
+  function oneStepAt(item) {
+    return oneStepSlices(rowsAt(item));
+  }
+  function sliceKey(row) {
+    return row.alt_aa + (row.synonymous ? "*" : "");
+  }
+  function pickKey(pick) {
+    return pick && pick.altAa ? "aa:" + pick.altAa : "";
+  }
+  function pickFromKey(key) {
+    if (key && key.startsWith("aa:")) return { kind: "aa", altAa: key.slice(3) };
+    return null;
+  }
+  function sameChange(row, pick) {
+    if (!pick || !row) return false;
+    // The destination letter is one row. When this sequence already carries that residue,
+    // the row is the synonymous change, and its rate is the one to report.
+    return row.alt_aa === pick.altAa;
+  }
+  /** Highest-rate path of two or three nucleotide changes to this amino acid. */
+  function bestFarPath(item, altAa) {
+    if (!item._farPaths) {
+      const m = new Map();
+      for (const p of item.detail.paths) {
+        if (p.n_nt_changes < 2 || p.n_nt_changes > 3) continue;
+        const k = p.protein + "|" + p.position + "|" + p.alt_aa;
+        const cur = m.get(k);
+        if (!cur || p.mu_path > cur.mu_path) m.set(k, p);
+      }
+      item._farPaths = m;
+    }
+    if (pieProtein === null) return null;
+    return item._farPaths.get(pieProtein + "|" + pieGeneAa + "|" + altAa) || null;
+  }
+  function changeCatalog() {
+    const byKey = new Map();
+    for (const item of items) {
+      for (const r of rowsAt(item)) {
+        if (r.synonymous) continue;
+        const key = "aa:" + r.alt_aa;
+        let cur = byKey.get(key);
+        if (!cur) {
+          cur = { key, altAa: r.alt_aa, one: false, score: -1, minSteps: r.min_nt_changes };
+          byKey.set(key, cur);
+        }
+        if (r.min_nt_changes === 1) cur.one = true;
+        if (r.mu_aa > cur.score) cur.score = r.mu_aa;
+        cur.minSteps = Math.min(cur.minSteps, r.min_nt_changes);
+      }
+    }
+    const list = [...byKey.values()];
+    list.sort((a, b) => (b.one - a.one) || (b.score - a.score) || a.key.localeCompare(b.key));
+    for (const c of list) {
+      const name = c.altAa === "*" ? "stop" : c.altAa;
+      c.label = c.one ? name : `${name} (${c.minSteps}-step)`;
+    }
+    return list;
+  }
+  function ensurePick() {
+    const catalog = changeCatalog();
+    if (!picked || !catalog.some((c) => c.key === pickKey(picked))) {
+      const first = catalog.find((c) => c.one) || catalog[0];
+      picked = first ? pickFromKey(first.key) : null;
+    }
+    return catalog;
+  }
+
+  function paintCell(cell, i) {
+    const body = cell.querySelector(".plot-body");
+    const item = items[i];
+    const site = siteWithRef(pieProtein, pieGeneAa);
+    const covered = item.aaByPosition.has(pieProtein + "|" + pieGeneAa);
+    const oneStep = covered ? oneStepAt(item) : [];
+    if (!covered || !oneStep.length) {
+      body.innerHTML = "";
+      const p = document.createElement("p");
+      p.className = "caveat pie-empty";
+      p.textContent = !covered
+        ? `${item.row.name} does not cover ${site}.`
+        : `No one-step amino acid change from ${item.row.name} at ${site}.`;
+      body.appendChild(p);
+      return;
+    }
+    const match = oneStep.find((r) => sameChange(r, picked));
+    pieChart(body, oneStep.map((r) => ({
+      label: sliceKey(r),
+      value: r.mu_aa,
+      colour: residueColour(r.alt_aa),
+    })), {
+      legend: false,
+      drawTitle: false,
+      width: PIE_W,
+      height: PIE_H,
+      radius: PIE_R,
+      selected: match ? sliceKey(match) : null,
+    });
+  }
+
+  function outcomeFor(item) {
+    const site = siteWithRef(pieProtein, pieGeneAa);
+    const covered = item.aaByPosition.has(pieProtein + "|" + pieGeneAa);
+    if (!covered) return { sample: item.row.name, covered: false, site };
+    const rows = rowsAt(item);
+    const refAa = rows.length ? rows[0].ref_aa : "";
+    const refCodon = rows.length ? rows[0].codon : "";
+    const row = rows.find((r) => sameChange(r, picked));
+    if (!row) return { sample: item.row.name, covered: true, missing: true, refAa, refCodon };
+    const change = row.hxb2_change ||
+      engine.hxb2Mutation(pieProtein, pieGeneAa, row.ref_aa, row.alt_aa);
+    if (row.min_nt_changes === 1) {
+      const one = oneStepAt(item);
+      const total = one.reduce((t, r) => t + r.mu_aa, 0);
+      return {
+        sample: item.row.name, covered: true, colour: residueColour(row.alt_aa),
+        refAa: row.ref_aa, refCodon: row.codon, aa: sliceKey(row), change, steps: 1,
+        pct: total > 0 ? (100 * row.mu_aa / total) : null,
+        mu: row.mu_aa,
+      };
+    }
+    const path = bestFarPath(item, row.alt_aa);
+    return {
+      sample: item.row.name, covered: true, colour: residueColour(row.alt_aa),
+      refAa: row.ref_aa, refCodon: row.codon, aa: sliceKey(row), change,
+      steps: path ? path.n_nt_changes : row.min_nt_changes,
+      pct: null,
+      mu: path ? path.mu_path : null,
     };
-    drawPositionPie(chartEl, captionEl, rows, label, opts);
-    syncFigures();
-    lanlIndex().then((index) => {
-      if (token !== flowToken) return;
-      const flow = index ? lanlFlowAt(index, protein, geneAa) : null;
-      if (!flow) return;
-      drawPositionPie(chartEl, captionEl, rows, label, { ...opts, flow });
-      syncFigures();
-    }).catch((err) => console.error("flow chart failed:", err));
+  }
+
+  function renderSelection() {
+    selSlot.innerHTML = "";
+    if (pieProtein === null || !picked) return;
+    const heading = document.createElement("h3");
+    heading.className = "pie-selection-title";
+    heading.textContent = "Selected amino acid change";
+    const table = document.createElement("table");
+    table.className = "data pie-legend pie-by-sequence";
+    const thead = document.createElement("thead");
+    const headRow = document.createElement("tr");
+    const headers = [
+      { html: "Sequence", label: "Sequence" },
+      { html: "Reference amino acid", label: "Reference amino acid" },
+      { html: "Reference codon", label: "Reference codon" },
+      { html: "", label: "Color" },
+      { html: "Amino acid", label: "Amino acid" },
+      { html: "Percent of <em>de novo</em> diversification",
+        label: "Percent of de novo diversification" },
+      { html: "Mutability (amino acid <em>de novo</em> generation rate)",
+        label: "Mutability (amino acid de novo generation rate)" },
+    ];
+    for (const h of headers) {
+      const th = document.createElement("th");
+      th.scope = "col";
+      if (h.html) th.innerHTML = h.html;
+      else th.setAttribute("aria-label", h.label);
+      headRow.appendChild(th);
+    }
+    thead.appendChild(headRow);
+    const tbody = document.createElement("tbody");
+    for (const item of items) {
+      const o = outcomeFor(item);
+      const tr = document.createElement("tr");
+      const seq = document.createElement("td");
+      seq.textContent = o.sample;
+      const refCell = document.createElement("td");
+      const codonCell = document.createElement("td");
+      const colourCell = document.createElement("td");
+      const aaCell = document.createElement("td");
+      const pctCell = document.createElement("td");
+      const rateCell = document.createElement("td");
+      rateCell.className = "num";
+      const writeRef = () => {
+        refCell.textContent = o.refAa || "";
+        const code = document.createElement("code");
+        code.textContent = o.refCodon || "";
+        codonCell.appendChild(code);
+      };
+      if (!o.covered) {
+        aaCell.textContent = `not covered at ${o.site}`;
+        aaCell.colSpan = 6;
+        tr.append(seq, aaCell);
+      } else if (o.missing || !o.aa) {
+        writeRef();
+        aaCell.textContent = "not reached";
+        aaCell.colSpan = 4;
+        tr.append(seq, refCell, codonCell, aaCell);
+      } else {
+        writeRef();
+        const swatch = document.createElement("span");
+        swatch.className = "pie-swatch";
+        swatch.style.background = o.colour;
+        colourCell.appendChild(swatch);
+        aaCell.textContent = o.steps > 1 ? `${o.aa} (${o.steps}-step)` : o.aa;
+        aaCell.title = o.steps > 1
+          ? `${o.change}, highest ${o.steps}-step path`
+          : o.change;
+        pctCell.textContent = o.pct === null ? "\u2014" : `${o.pct.toFixed(1)}%`;
+        rateCell.textContent = formatRate(o.mu);
+        if (o.steps > 1) rateCell.title = `Highest ${o.steps}-step path rate`;
+        tr.append(seq, refCell, codonCell, colourCell, aaCell, pctCell, rateCell);
+      }
+      tbody.appendChild(tr);
+    }
+    table.append(thead, tbody);
+    selSlot.append(heading, table);
+  }
+
+  function fillAaSelect() {
+    const catalog = ensurePick();
+    aaSelect.innerHTML = "";
+    for (const c of catalog) {
+      const o = document.createElement("option");
+      o.value = c.key;
+      o.textContent = c.label;
+      aaSelect.appendChild(o);
+    }
+    aaSelect.value = pickKey(picked);
+    aaSelect.disabled = catalog.length === 0;
+    aaBar.hidden = catalog.length === 0;
+  }
+
+  function drawPies(protein, geneAa) {
+    pieProtein = protein;
+    pieGeneAa = geneAa;
+    picked = null;
+    const site = siteWithRef(protein, geneAa);
+    const label = engine.hxb2Label(protein, geneAa);
+    pieTitle.textContent =
+      `Distribution of one-step amino acid changes at ${label}`;
+    pieGrid.innerHTML = "";
+    fillAaSelect();
+    items.forEach((item, i) => {
+      const cell = document.createElement("figure");
+      cell.className = "chart plot-card pie-cell";
+      cell.dataset.exportName = "pie_" + exportSlug(item.row.name, i);
+      const name = document.createElement("div");
+      name.className = "pie-cell-name";
+      name.textContent = item.row.name;
+      name.title = item.row.name;
+      const body = document.createElement("div");
+      body.className = "plot-body";
+      cell.append(name, body);
+      pieGrid.appendChild(cell);
+      paintCell(cell, i);
+    });
+    setDetails(pieBoard, pieDetailHtml(site), {
+      title: `Distribution of one-step amino acid changes at ${label}`,
+    });
+    ensurePieDownload();
+    renderSelection();
+  }
+
+  function clearPies() {
+    pieProtein = null;
+    pieGeneAa = null;
+    picked = null;
+    pieTitle.textContent = "No modelled codon at this nucleotide";
+    pieGrid.innerHTML = "";
+    aaSelect.innerHTML = "";
+    aaBar.hidden = true;
+    selSlot.innerHTML = "";
+  }
+
+  function ensurePieDownload() {
+    const row = pieBoard.querySelector(":scope > .plot-tools");
+    if (!row || row.querySelector(".pie-grid-download")) return;
+    const oneBtn = document.createElement("button");
+    oneBtn.type = "button";
+    oneBtn.className = "secondary pie-one-download";
+    oneBtn.textContent = "Download a specific pie";
+    oneBtn.addEventListener("click", openPieChooser);
+    const allBtn = document.createElement("button");
+    allBtn.type = "button";
+    allBtn.className = "secondary pie-grid-download";
+    allBtn.textContent = "Download all pies (PNG)";
+    allBtn.addEventListener("click", () => downloadAllPies(allBtn));
+    row.append(oneBtn, allBtn, pieChooserDialog());
+  }
+
+  function pieChooserDialog() {
+    const dialog = document.createElement("dialog");
+    dialog.className = "details-dialog pie-chooser";
+    dialog.setAttribute("aria-label", "Download a specific pie");
+    const heading = document.createElement("h3");
+    heading.textContent = "Download a specific pie";
+    const text = document.createElement("p");
+    text.textContent = "Choose the sequence. The image uses the Browse pie: the title, the circle, and the legend table.";
+    const lab = document.createElement("label");
+    lab.textContent = "Sequence ";
+    const sel = document.createElement("select");
+    sel.className = "pie-chooser-select";
+    lab.appendChild(sel);
+    const actions = document.createElement("div");
+    actions.className = "pie-chooser-actions";
+    const save = document.createElement("button");
+    save.type = "button";
+    save.textContent = "Download";
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "secondary";
+    cancel.textContent = "Cancel";
+    cancel.addEventListener("click", () => dialog.close());
+    save.addEventListener("click", async () => {
+      const item = items[Number(sel.value)];
+      if (!item) return;
+      save.disabled = true;
+      save.textContent = "Saving\u2026";
+      try {
+        await downloadOnePie(item);
+        dialog.close();
+      } catch (err) {
+        showError(head, "Could not download the pie. " + err.message);
+      } finally {
+        save.disabled = false;
+        save.textContent = "Download";
+      }
+    });
+    actions.append(save, cancel);
+    dialog.append(heading, text, lab, actions);
+    return dialog;
+  }
+
+  function openPieChooser() {
+    const dialog = pieBoard.querySelector("dialog.pie-chooser");
+    const sel = dialog && dialog.querySelector("select");
+    if (!dialog || !sel) return;
+    const choices = items.filter((item) => oneStepAt(item).length);
+    sel.innerHTML = "";
+    for (const item of choices) {
+      const o = document.createElement("option");
+      o.value = String(items.indexOf(item));
+      o.textContent = item.row.name;
+      sel.appendChild(o);
+    }
+    if (!choices.length) {
+      showError(head, "None of the sequences has a one-step pie at this position.");
+      return;
+    }
+    if (typeof dialog.showModal === "function") dialog.showModal();
+    else dialog.setAttribute("open", "");
+  }
+
+  /** A Browse-format pie for one sequence: title, circle, codon line, and legend table. */
+  async function downloadOnePie(item) {
+    const one = oneStepAt(item);
+    if (!one.length) throw new Error(`${item.row.name} has no one-step pie at this position`);
+    const site = siteForSequence(item);
+    const who = item.row.name;
+    const fig = document.createElement("figure");
+    fig.className = "chart plot-card pie-export";
+    fig.dataset.exportName = "pie_" + exportSlug(who, items.indexOf(item));
+    const headEl = document.createElement("div");
+    headEl.className = "plot-head";
+    const title = document.createElement("h3");
+    title.className = "plot-title";
+    title.textContent = `Distribution of one-step amino acid changes from ${who} at ${site}`;
+    headEl.appendChild(title);
+    const body = document.createElement("div");
+    body.className = "plot-body";
+    const note = document.createElement("p");
+    note.className = "plot-note";
+    note.innerHTML = sequenceNote(item);
+    const table = legendTable(item, one);
+    fig.append(headEl, body, note, table);
+    const stage = document.createElement("div");
+    stage.className = "pie-export-stage";
+    stage.appendChild(fig);
+    document.body.appendChild(stage);
+    const match = one.find((r) => sameChange(r, picked));
+    const pieW = Math.floor((LAYOUT.width - LAYOUT.gap) / 2);
+    try {
+      pieChart(body, one.map((r) => ({
+        label: sliceKey(r),
+        value: r.mu_aa,
+        colour: residueColour(r.alt_aa),
+      })), {
+        legend: false,
+        drawTitle: false,
+        width: pieW,
+        height: 500,
+        title: title.textContent,
+        selected: match ? sliceKey(match) : null,
+      });
+      await downloadFigure(fig, { release: page.release });
+    } finally {
+      stage.remove();
+    }
+  }
+
+  function siteForSequence(item) {
+    const base = engine.hxb2Label(pieProtein, pieGeneAa);
+    const rows = rowsAt(item);
+    const aa = rows.length ? rows[0].ref_aa : "";
+    const m = /^(.*\s)(\d+)$/.exec(String(base).trim());
+    return aa && m ? m[1] + aa + m[2] : base;
+  }
+
+  function sequenceNote(item) {
+    const rows = rowsAt(item);
+    const rec = assets.reference.proteins[pieProtein];
+    const refCodon = rec.codon_seq[pieGeneAa - rec.first_aa];
+    const codonNt = rec.codon_nt[pieGeneAa - rec.first_aa];
+    const yourCodon = rows.length ? rows[0].codon : refCodon;
+    const aa = rows.length ? rows[0].ref_aa : (GENETIC_CODE[refCodon] || "");
+    const hxb2 = engine.hxb2Label(pieProtein, pieGeneAa);
+    const codonBit = yourCodon === refCodon
+      ? `codon <code>${escapeHtml(yourCodon)}</code>`
+      : `codon <code>${escapeHtml(yourCodon)}</code> (NL4-3 has <code>${escapeHtml(refCodon)}</code>)`;
+    return `<strong>${escapeHtml(hxb2)}</strong> &mdash; <strong>${escapeHtml(item.row.name)}</strong>, ` +
+      `amino acid <strong>${escapeHtml(aa)}</strong>, ${codonBit}. ` +
+      `NL4-3 ${escapeHtml(pieProtein)} position ${pieGeneAa}; ` +
+      `nucleotides ${codonNt[0].toLocaleString()}\u2013${codonNt[2].toLocaleString()}.`;
+  }
+
+  function legendTable(item, one) {
+    const total = one.reduce((t, r) => t + r.mu_aa, 0);
+    const table = document.createElement("table");
+    table.className = "data pie-legend is-selectable";
+    const thead = document.createElement("thead");
+    const headRow = document.createElement("tr");
+    const headers = [
+      { html: "", label: "Color" },
+      { html: "Amino acid", label: "Amino acid" },
+      { html: "Percent of <em>de novo</em> diversification",
+        label: "Percent of de novo diversification" },
+      { html: "Mutability (amino acid <em>de novo</em> generation rate)",
+        label: "Mutability (amino acid de novo generation rate)" },
+    ];
+    for (const h of headers) {
+      const th = document.createElement("th");
+      th.scope = "col";
+      if (h.html) th.innerHTML = h.html;
+      else th.setAttribute("aria-label", h.label);
+      headRow.appendChild(th);
+    }
+    thead.appendChild(headRow);
+    const tbody = document.createElement("tbody");
+    for (const r of one) {
+      const tr = document.createElement("tr");
+      if (sameChange(r, picked)) tr.classList.add("is-selected");
+      const colourCell = document.createElement("td");
+      const swatch = document.createElement("span");
+      swatch.className = "pie-swatch";
+      swatch.style.background = residueColour(r.alt_aa);
+      colourCell.appendChild(swatch);
+      const aaCell = document.createElement("td");
+      aaCell.textContent = sliceKey(r);
+      if (r.synonymous) aaCell.title = "Synonymous change";
+      const pctCell = document.createElement("td");
+      pctCell.textContent = total > 0 ? `${((r.mu_aa / total) * 100).toFixed(1)}%` : "\u2014";
+      const rateCell = document.createElement("td");
+      rateCell.className = "num";
+      rateCell.textContent = formatRate(r.mu_aa);
+      tr.append(colourCell, aaCell, pctCell, rateCell);
+      tbody.appendChild(tr);
+    }
+    table.append(thead, tbody);
+    return table;
+  }
+
+  async function downloadAllPies(button) {
+    if (typeof html2canvas === "undefined") {
+      showError(head, "The PNG library did not load. Reload the page and try again.");
+      return;
+    }
+    const prev = button.textContent;
+    button.disabled = true;
+    button.textContent = "Generating\u2026";
+    try {
+      const canvas = await html2canvas(pieBoard, {
+        backgroundColor: "#ffffff",
+        scale: 2,
+        logging: false,
+        useCORS: true,
+        ignoreElements: (node) => !!(node.hasAttribute && node.hasAttribute("data-export-skip")),
+      });
+      const blob = await new Promise((res) => canvas.toBlob(res, "image/png"));
+      if (!blob) throw new Error("the canvas could not be converted to an image");
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `mra_pies_${new Date().toISOString().split("T")[0]}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      showError(head, "Could not download the pies. " + err.message);
+    } finally {
+      button.disabled = false;
+      button.textContent = prev;
+    }
   }
 
   function apply(protein, geneAa, preferNt) {
@@ -511,23 +1021,8 @@ function renderDashboard(slot, items, allRows, truncated) {
       elPos.value = String(engine.ownPositionFor(t, geneAa));
     }
 
-    const aaRows = item.aaByPosition.get(protein + "|" + geneAa) || [];
-    const label = engine.hxb2Label(protein, geneAa);
-    const yourCodon = aaRows.length ? aaRows[0].codon : "?";
-    const refCodon = rec.codon_seq[geneAa - rec.first_aa];
-    const aa = aaRows.length ? aaRows[0].ref_aa : "?";
-    const refAa = GENETIC_CODE[refCodon] || "";
-    const own = t ? engine.ownPositionFor(t, geneAa) : null;
-    const noteHtml =
-      `<strong>${escapeHtml(label)}</strong> &mdash; <strong>${escapeHtml(item.row.name)}</strong>, ` +
-      `codon <code>${escapeHtml(yourCodon)}</code>` +
-      (yourCodon !== refCodon ? ` (NL4-3 has <code>${escapeHtml(refCodon)}</code>)` : " (same as NL4-3)") +
-      `, amino acid <strong>${escapeHtml(aa)}</strong>. ` +
-      `${escapeHtml(protein)} position ${geneAa}` +
-      (t && t.offset ? ` (${escapeHtml(t.key)} ${own})` : "") +
-      `; NL4-3 reference nucleotides ${codonNt[0].toLocaleString()}\u2013${codonNt[2].toLocaleString()}.`;
     drawTrack();
-    showPie(item, aaRows, label, noteHtml, yourCodon, protein, geneAa, refAa);
+    drawPies(protein, geneAa);
   }
 
   function selectNt(nt) {
@@ -536,7 +1031,6 @@ function renderDashboard(slot, items, allRows, truncated) {
     elSlider.value = String(markerNt);
     if (elSys.value === "nt") elPos.value = String(markerNt);
     if (!item.perSite.has(markerNt) || !(item.frameAt.get(markerNt) || []).length) {
-      selected = null;
       elFrame.innerHTML = "";
       elFrame.disabled = true;
       showError(head,
@@ -545,9 +1039,12 @@ function renderDashboard(slot, items, allRows, truncated) {
             `but is not inside a codon this atlas models.`
           : `NL4-3 nucleotide ${markerNt.toLocaleString()} is not covered by ${item.row.name}. ` +
             `It covers ${item.sites[0].toLocaleString()}\u2013${item.sites[item.sites.length - 1].toLocaleString()}.`);
-      chartEl.innerHTML = "";
-      captionEl.textContent = "";
+      const donor = items.find((it) => (it.frameAt.get(markerNt) || []).length);
+      const frame = donor ? donor.frameAt.get(markerNt)[0] : null;
+      selected = frame ? { protein: frame.protein, geneAa: frame.geneAa } : null;
       drawTrack();
+      if (frame) drawPies(frame.protein, frame.geneAa);
+      else clearPies();
       return;
     }
     const frames = item.frameAt.get(markerNt) || [];
@@ -612,9 +1109,21 @@ function renderDashboard(slot, items, allRows, truncated) {
     renderCompiledTables(lower, items);
   }
 
+  aaSelect.addEventListener("change", () => {
+    picked = pickFromKey(aaSelect.value);
+    pieGrid.querySelectorAll(".pie-cell").forEach((cell, i) => paintCell(cell, i));
+    renderSelection();
+  });
   elWin.addEventListener("input", () => { elWinOut.textContent = elWin.value; });
   elWin.addEventListener("change", drawTrack);
   elClass.addEventListener("change", drawTrack);
+  ctrl.querySelector(".sq-zoom").addEventListener("click", () => setZoom(Number(elZ0.value), Number(elZ1.value)));
+  ctrl.querySelector(".sq-zoom-reset").addEventListener("click", resetZoom);
+  for (const input of [elZ0, elZ1]) {
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") setZoom(Number(elZ0.value), Number(elZ1.value));
+    });
+  }
   elSlider.addEventListener("input", () => selectNt(Number(elSlider.value)));
   ctrl.querySelector(".sq-go").addEventListener("click", jump);
   elPos.addEventListener("keydown", (e) => { if (e.key === "Enter") jump(); });
@@ -622,20 +1131,6 @@ function renderDashboard(slot, items, allRows, truncated) {
   elFrame.addEventListener("change", (e) => {
     const [p, g] = e.target.value.split("|");
     apply(p, Number(g), markerNt);
-  });
-  elWhich.addEventListener("change", () => {
-    active = Number(elWhich.value);
-    markSelected();
-    fillTargets();
-    const item = items[active];
-    const nt = nearestCodon(item, markerNt);
-    if (nt === null) {
-      showError(head, `${item.row.name} has no modelled codon to chart.`);
-      chartEl.innerHTML = "";
-      captionEl.textContent = "";
-    } else {
-      selectNt(nt);
-    }
   });
   elSys.addEventListener("change", () => {
     const item = items[active];
@@ -654,6 +1149,42 @@ function renderDashboard(slot, items, allRows, truncated) {
   renderLower();
 }
 
+
+/** HXB2 site with NL4-3's residue, e.g. "RT K65". */
+function siteWithRef(protein, geneAa) {
+  const base = engine.hxb2Label(protein, geneAa);
+  const rec = assets.reference.proteins[protein];
+  const codon = rec && rec.codon_seq ? rec.codon_seq[geneAa - rec.first_aa] : "";
+  const refAa = GENETIC_CODE[codon] || "";
+  const m = /^(.*\s)(\d+)$/.exec(String(base).trim());
+  return refAa && m ? m[1] + refAa + m[2] : base;
+}
+
+function exportSlug(name, i) {
+  const s = String(name || "sequence").toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+  return (s.slice(0, 40) || "sequence") + "_" + (i + 1);
+}
+
+function pieDetailHtml(site) {
+  return `<p>Each circle is one submitted sequence at <strong>${escapeHtml(site)}</strong>. ` +
+    `A slice is an amino acid reachable by one nucleotide substitution from that sequence's codon. ` +
+    `Its size is that amino acid's share of the one-step <em>de novo</em> diversification: ` +
+    `the amino-acid <em>de novo</em> generation rate divided by the sum of those rates for every ` +
+    `one-step amino acid. Colours name the destination residue.</p>` +
+    `<p>The amino acid list chooses one change for every pie. A pie outlines that slice when the ` +
+    `sequence can reach it in one nucleotide substitution. The table under the grid is that change ` +
+    `for every sequence, in the same columns as the Browse legend.</p>` +
+    `<p><strong>Percent of <em>de novo</em> diversification</strong> is the change's share of the ` +
+    `one-step amino-acid generation rates. <strong>Mutability</strong> for a one-step change is the ` +
+    `amino-acid <em>de novo</em> generation rate: the sum, per replication, of every nucleotide path ` +
+    `to that amino acid. When a sequence cannot reach the change in one step, the row is the ` +
+    `highest-rate path of two or three nucleotide substitutions, the percent column is blank, and ` +
+    `mutability is that path's rate.</p>` +
+    `<p>These rates describe generation in one replication, not establishment in a population. ` +
+    `A sequence that does not cover this codon is named in its cell. The checkboxes on the genome ` +
+    `track choose which lines are drawn; every submitted sequence still has a pie.</p>`;
+}
 
 // The track overlays NL4-3 from the reference's own custom atlas, computed once from assets
 // already loaded. Cached so a batch of sequences pays the cost once.
@@ -714,6 +1245,10 @@ function renderCompiledTables(slot, items) {
     }
   }
   const provenance = compiledProvenance(items);
+
+  const allData = document.createElement("h2");
+  allData.textContent = "All Data";
+  slot.appendChild(allData);
 
   const aaHeading = document.createElement("h3");
   aaHeading.textContent = "Amino-acid mutability";

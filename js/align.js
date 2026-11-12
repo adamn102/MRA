@@ -45,9 +45,9 @@ export const MAX_BAND = 1024;          // give up rather than fall back to full 
 // genome enumerates 187,992 codon paths.
 //
 // MAX_DETAIL_SEQUENCES governs the "Your sequence" path, which RETAINS every atlas so each
-// sequence can be overlaid on the genome track and opened in the pie, the flow chart and
-// the tables. The cap is 10: a small set is what that page can actually show, and retaining
-// the atlases is the limit rather than the time. A full-genome atlas is ~62,500 amino-acid
+// sequence can be drawn on the genome track and as its own pie, and so both tables can
+// include it. The cap is 10: a 5-by-2 grid is what that page shows, and retaining the
+// atlases is the limit rather than the time. A full-genome atlas is ~62,500 amino-acid
 // rows, so 100 of them would be ~286 MB held in the worker.
 export const MAX_DETAIL_SEQUENCES = 10;
 

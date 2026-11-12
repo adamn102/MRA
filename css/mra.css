@@ -240,6 +240,50 @@ td .codon-options {
 }
 .pie-sample label { font-size: 11px; color: var(--muted); white-space: nowrap; }
 .pie-sample select { font-size: 13px; max-width: 220px; }
+/* Your Sequence: one card around the pie grid, as wide as the genome track. */
+.pie-board.plot-card { margin: 12px 0 0; padding: 16px 16px 12px; }
+.pie-board-head {
+  display: flex; align-items: center; justify-content: center; flex-wrap: wrap;
+  gap: 8px 18px; margin: 0 0 14px;
+}
+.pie-board-head .plot-title { margin: 0; font-size: 16px; }
+.pie-grid {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+.pie-cell { margin: 0; min-width: 0; padding: 6px 8px; }
+.pie-cell-name {
+  font-weight: 600; font-size: 12px; text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0 0 2px;
+}
+.pie-cell .plot-body { min-height: 0; }
+.pie-cell svg { display: block; width: 100%; height: auto; }
+.pie-empty { text-align: center; margin: 16px 6px; }
+.pie-aa-bar { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 13px; }
+.pie-chooser-actions { display: flex; gap: 8px; margin-top: 14px; }
+.pie-chooser select { font-size: 14px; max-width: 100%; }
+.pie-export-stage {
+  position: fixed; left: 0; top: 0; width: 562px; z-index: -1; pointer-events: none;
+}
+.pie-export { width: 562px; margin: 0; }
+.pie-export svg { display: block; width: 100%; height: auto; }
+.pie-aa-bar select { font-size: 13px; }
+.pie-selection-title { margin: 16px 0 8px; font-size: 16px; }
+.pie-selection table.data th { white-space: normal; line-height: 1.3; }
+/* Sequence sits in front of the same columns as the Browse pie legend. The shared
+   legend rules size the first column as a swatch, so this table resets that. */
+table.data.pie-legend.pie-by-sequence th:first-child,
+table.data.pie-legend.pie-by-sequence td:first-child { width: 16%; }
+table.data.pie-legend.pie-by-sequence th:nth-child(2),
+table.data.pie-legend.pie-by-sequence td:nth-child(2) { width: 12%; }
+table.data.pie-legend.pie-by-sequence th:nth-child(3),
+table.data.pie-legend.pie-by-sequence td:nth-child(3) { width: 10%; }
+table.data.pie-legend.pie-by-sequence th:nth-child(4),
+table.data.pie-legend.pie-by-sequence td:nth-child(4) { width: 2.2em; }
+table.data.pie-legend.pie-by-sequence th:nth-child(5),
+table.data.pie-legend.pie-by-sequence td:nth-child(5) { width: 12%; }
 .plot-card .card-controls > div { flex-direction: row; align-items: center; gap: 6px; }
 /* Browse pie legend. A readout of the slices, not a sortable data table: the header
    does not sort, and a click on a row selects that slice. */
@@ -286,6 +330,9 @@ table.data.pie-legend.is-selectable tbody tr.is-selected { background: #d9e6f2; 
 .control-bar label { font-size: 11px; color: var(--muted); }
 .control-bar select, .control-bar input[type="number"] { font-size: 13px; }
 .control-bar input[type="range"] { width: 150px; vertical-align: middle; }
+.control-bar .zoom-fields { flex-direction: row; align-items: center; gap: 6px; flex-wrap: wrap; }
+.control-bar .zoom-fields input[type="number"] { width: 7em; }
+.control-bar .zoom-to { font-size: 11px; color: var(--muted); }
 /* The trailing items -- Go, share, details -- sit on the baseline with the inputs. */
 .control-bar .bar-actions { flex-direction: row; align-items: center; gap: 8px;
   margin-left: auto; }

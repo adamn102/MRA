@@ -72,7 +72,7 @@ dev script is a convenience, not a dependency.
    keep the citation but show no rate.
 3. `sequence.html` — press **Load HIV references (worked example)** then **Compute custom atlas**.
    The button fills the box from `HIV-references.fasta`: BG505, BF520, REJO.c, HIV_89.6
-   and JRCSF. The genome track, the pie, the flow chart, and the merged amino-acid and
+   and JRCSF. The genome track, a pie for each sequence, and the merged amino-acid and
    codon-path tables are on this page. Then try `test/fixtures/JRFL_pol.fasta` via
    **Load FASTA file…** for a clinical *pol* fragment.
 4. `reference.html` — **Reference and Download**: what the rates mean, the coverage and

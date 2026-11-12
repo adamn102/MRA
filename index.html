@@ -52,6 +52,14 @@
     <label for="reading-frame">Reading frame here</label>
     <select id="reading-frame"></select>
   </div>
+  <div class="zoom-fields">
+    <label for="zoom-from">Zoom from</label>
+    <input type="number" id="zoom-from" size="7" disabled>
+    <span class="zoom-to">to</span>
+    <input type="number" id="zoom-to" size="7" aria-label="Zoom to" disabled>
+    <button type="button" id="zoom-apply" disabled>Zoom</button>
+    <button type="button" id="zoom-reset" class="secondary" disabled>Full range</button>
+  </div>
   <div class="bar-actions">
     <button id="go">Go</button>
     <span id="share-slot"></span>

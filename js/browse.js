@@ -169,8 +169,38 @@ const elWin = document.getElementById("track-window");
 const elWinOut = document.getElementById("track-window-out");
 const elClass = document.getElementById("track-class");
 const elSlider = document.getElementById("track-slider");
+const elZ0 = document.getElementById("zoom-from");
+const elZ1 = document.getElementById("zoom-to");
+let zoom0 = FIRST, zoom1 = LAST;
 elSlider.min = String(FIRST); elSlider.max = String(LAST);
-for (const el of [elWin, elClass, elSlider]) el.disabled = true;
+elZ0.min = elZ1.min = String(FIRST);
+elZ0.max = elZ1.max = String(LAST);
+elZ0.value = String(FIRST);
+elZ1.value = String(LAST);
+for (const el of [elWin, elClass, elSlider, elZ0, elZ1,
+                  document.getElementById("zoom-apply"), document.getElementById("zoom-reset")]) {
+  el.disabled = true;
+}
+
+function setZoom(a, b) {
+  let lo = Math.round(Math.min(a, b));
+  let hi = Math.round(Math.max(a, b));
+  lo = Math.max(FIRST, Math.min(lo, LAST));
+  hi = Math.max(FIRST, Math.min(hi, LAST));
+  if (!(hi > lo)) return;
+  zoom0 = lo;
+  zoom1 = hi;
+  elZ0.value = String(lo);
+  elZ1.value = String(hi);
+  drawTrack();
+}
+function resetZoom() {
+  zoom0 = FIRST;
+  zoom1 = LAST;
+  elZ0.value = String(FIRST);
+  elZ1.value = String(LAST);
+  drawTrack();
+}
 
 function placeTrackSlider() {
   const svg = document.querySelector("#genome-track svg");
@@ -193,7 +223,7 @@ function drawTrack() {
   const trackText = drawSupplyTrack(
     document.getElementById("genome-track"), {
       perSite, sites: SITES, win, cls: elClass.value, segments: GENE_SEGMENTS,
-      first: FIRST, last: LAST, marker: markerNt,
+      first: zoom0, last: zoom1, marker: markerNt,
       markerLabel: selected
         ? engine.hxb2Label(selected.target.protein, selected.geneAa) : String(markerNt),
       source: "read from the published NL4-3 atlas",
@@ -203,16 +233,22 @@ function drawTrack() {
       // repeated anywhere else on that page.
       refBase: assets.reference.sequence[markerNt - 1],
       onSelect: (pos) => selectNucleotide(pos),
+      onZoom: (a, b) => setZoom(a, b),
       // Room between the gene boxes and the rate curve for the position slider.
       sliderGap: 28,
     });
+  elSlider.min = String(zoom0);
+  elSlider.max = String(zoom1);
   placeTrackSlider();
   const classLabel = { total: "total substitution supply", nonga: "non-G\u2192A supply",
                        ga: "G\u2192A supply" }[elClass.value] || "supply";
+  const zoomed = zoom0 !== FIRST || zoom1 !== LAST;
   document.getElementById("track-caption").innerHTML =
     `Genome-wide ${classLabel}, ${win} nt mean. Marker at ` +
     `${markerNt.toLocaleString()}` +
-    (selected ? ` (${engine.hxb2Label(selected.target.protein, selected.geneAa)})` : "") + ".";
+    (selected ? ` (${engine.hxb2Label(selected.target.protein, selected.geneAa)})` : "") + "." +
+    (zoomed ? ` Showing positions ${zoom0.toLocaleString()}\u2013${zoom1.toLocaleString()}.` : "") +
+    ` Drag across the curve to zoom into a region, or set Zoom from and to.`;
   setDetails(trackFigure, trackText, { title: "The genome supply track" });
   syncFigureButtons();
 }
@@ -237,7 +273,10 @@ async function loadTrack() {
     const ntLayer = await loadNucleotideLayer(page.version);
     perSite = perSiteSupply(ntLayer.byPosition);
     SITES = [...perSite.keys()].sort((a, b) => a - b);
-    for (const el of [elWin, elClass, elSlider]) el.disabled = false;
+    for (const el of [elWin, elClass, elSlider, elZ0, elZ1,
+                      document.getElementById("zoom-apply"), document.getElementById("zoom-reset")]) {
+      el.disabled = false;
+    }
     drawTrack();
   } catch (err) {
     showError(slot, "Could not load the nucleotide layer, so the track is unavailable: " +
@@ -505,6 +544,14 @@ elSlider.addEventListener("input", () => selectNucleotide(Number(elSlider.value)
 elWin.addEventListener("input", () => { elWinOut.textContent = elWin.value; });
 elWin.addEventListener("change", drawTrack);
 elClass.addEventListener("change", drawTrack);
+document.getElementById("zoom-apply").addEventListener("click",
+  () => setZoom(Number(elZ0.value), Number(elZ1.value)));
+document.getElementById("zoom-reset").addEventListener("click", resetZoom);
+for (const input of [elZ0, elZ1]) {
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") setZoom(Number(elZ0.value), Number(elZ1.value));
+  });
+}
 document.getElementById("download-png")?.addEventListener("click", downloadDashboardPNG);
 
 // A shareable link reproduces the exact view, including the atlas version.

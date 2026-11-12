@@ -32,6 +32,15 @@ function niceLogTicks(lo, hi) {
   return ticks;
 }
 
+/** A 1-2-5 step that puts about six labels across a nucleotide span. */
+function niceStep(span) {
+  const raw = Math.max(span, 1) / 6;
+  const pow = Math.pow(10, Math.floor(Math.log10(raw)));
+  const err = raw / pow;
+  const nice = err >= 7.5 ? 10 : err >= 3.5 ? 5 : err >= 1.5 ? 2 : 1;
+  return Math.max(1, nice * pow);
+}
+
 const supLabel = (e) => "10" + String(e).replace(/-/g, "\u2212").split("").map(
   (c) => ({ "0": "\u2070", "1": "\u00b9", "2": "\u00b2", "3": "\u00b3", "4": "\u2074",
             "5": "\u2075", "6": "\u2076", "7": "\u2077", "8": "\u2078", "9": "\u2079",
@@ -83,7 +92,9 @@ export function genomeTrack(container, series, options = {}) {
   const sliderGap = Math.max(0, options.sliderGap || 0);
   const height = (options.height || 260) + sliderGap;
   const padLeft = LAYOUT.padLeft, padRight = LAYOUT.padRight, padBottom = 40;
-  const x0 = options.xMin || 1, x1 = options.xMax || 8213;
+  const x0 = options.xMin || 1;
+  let x1 = options.xMax || 8213;
+  if (!(x1 > x0)) x1 = x0 + 1;
 
   // An explicit gene band (labelled boxes above the plot) is opt-in via `geneBand`, so the
   // older faint `spans` shading used elsewhere keeps its appearance. Overlapping reading
@@ -132,10 +143,12 @@ export function genomeTrack(container, series, options = {}) {
   svg.appendChild(el("text", { x: 0, y: 13, "font-size": 12 }, options.title || ""));
 
   for (const span of options.spans || []) {
-    svg.appendChild(el("rect", { x: sx(span.start), y: padTop,
-                                 width: Math.max(sx(span.end) - sx(span.start), 1), height: plotH,
+    if (span.end < x0 || span.start > x1) continue;
+    const ss = Math.max(span.start, x0), se = Math.min(span.end, x1);
+    svg.appendChild(el("rect", { x: sx(ss), y: padTop,
+                                 width: Math.max(sx(se) - sx(ss), 1), height: plotH,
                                  fill: span.colour || "#0b5c8a", "fill-opacity": 0.055 }));
-    svg.appendChild(el("text", { x: (sx(span.start) + sx(span.end)) / 2, y: padTop - 3,
+    svg.appendChild(el("text", { x: (sx(ss) + sx(se)) / 2, y: padTop - 3,
                                  "text-anchor": "middle", "font-size": 9, fill: "#5c6670" },
                        span.label || ""));
   }
@@ -143,7 +156,9 @@ export function genomeTrack(container, series, options = {}) {
   // Labelled gene band. The gene containing the marker is filled solid so the eye lands on
   // it; the rest are tinted. A box too narrow for an inside label gets the label above it.
   for (const g of band) {
-    const gx = sx(g.start), gw = Math.max(sx(g.end) - sx(g.start), 2);
+    if (g.end < x0 || g.start > x1) continue;
+    const gs = Math.max(g.start, x0), ge = Math.min(g.end, x1);
+    const gx = sx(gs), gw = Math.max(sx(ge) - sx(gs), 2);
     const gy = 20 + g._row * (BOX_H + ROW_GAP);
     const hot = Number.isFinite(options.marker) &&
                 options.marker >= g.start && options.marker <= g.end;
@@ -151,8 +166,11 @@ export function genomeTrack(container, series, options = {}) {
                                  fill: hot ? "#2f4b7c" : "#ccd8e6",
                                  stroke: hot ? "#22395e" : "#9fb0c6", "stroke-width": 0.7 }));
     // Faint guide down the plot marks where this gene starts, so the band and the curve line up.
-    svg.appendChild(el("line", { x1: gx, x2: gx, y1: padTop, y2: padTop + plotH,
-                                 stroke: "#c9d4e2", "stroke-width": 0.6, "stroke-dasharray": "2 4" }));
+    // A gene clipped by the zoom window starts off-screen; its true boundary is not at the edge.
+    if (g.start >= x0) {
+      svg.appendChild(el("line", { x1: gx, x2: gx, y1: padTop, y2: padTop + plotH,
+                                   stroke: "#c9d4e2", "stroke-width": 0.6, "stroke-dasharray": "2 4" }));
+    }
     if (gw >= 20) {
       svg.appendChild(el("text", { x: gx + gw / 2, y: gy + BOX_H - 3, "text-anchor": "middle",
                                    "font-size": 8.5, fill: hot ? "#ffffff" : "#3c4a5c" },
@@ -170,15 +188,17 @@ export function genomeTrack(container, series, options = {}) {
   // Variant ticks: where a submitted sequence differs from NL4-3. Drawn on the baseline
   // rather than over the curve, so a dense cluster reads as a band without hiding the rates.
   if (options.variants && options.variants.length) {
+    const visible = options.variants.filter((v) => v >= x0 && v <= x1);
     const vy = padTop + plotH;
-    for (const v of options.variants) {
-      if (v < x0 || v > x1) continue;
+    for (const v of visible) {
       svg.appendChild(el("line", { x1: sx(v), x2: sx(v), y1: vy - 6, y2: vy,
                                    stroke: "#b5485d", "stroke-width": 0.8, "stroke-opacity": 0.75 }));
     }
-    svg.appendChild(el("text", { x: padLeft + plotW + 6, y: vy, "font-size": 8.5,
-                                 fill: "#b5485d" },
-                       `${options.variants.length} difference${options.variants.length === 1 ? "" : "s"}`));
+    if (visible.length) {
+      svg.appendChild(el("text", { x: padLeft + plotW + 6, y: vy, "font-size": 8.5,
+                                   fill: "#b5485d" },
+                         `${visible.length} difference${visible.length === 1 ? "" : "s"}`));
+    }
   }
 
   for (const e of niceLogTicks(yLo, yHi)) {
@@ -232,8 +252,13 @@ export function genomeTrack(container, series, options = {}) {
 
   const axisY = padTop + plotH;
   svg.appendChild(el("line", { x1: padLeft, x2: padLeft + plotW, y1: axisY, y2: axisY, stroke: "#999" }));
-  const step = Math.max(1, Math.round((x1 - x0) / 8 / 500) * 500);
-  for (let p = x0; p <= x1; p += step) {
+  const step = niceStep(x1 - x0);
+  const ticks = [];
+  for (let p = Math.ceil(x0 / step) * step; p <= x1 + 1e-6; p += step) ticks.push(p);
+  const near = (p) => ticks.some((t) => Math.abs(t - p) < step * 0.45);
+  if (!near(x0)) ticks.unshift(x0);
+  if (!near(x1)) ticks.push(x1);
+  for (const p of ticks) {
     svg.appendChild(el("line", { x1: sx(p), x2: sx(p), y1: axisY, y2: axisY + 4, stroke: "#999" }));
     svg.appendChild(el("text", { x: sx(p), y: axisY + 15, "text-anchor": "middle",
                                  "font-size": 10, fill: "#5c6670" }, p.toLocaleString()));
@@ -257,19 +282,73 @@ export function genomeTrack(container, series, options = {}) {
   }
 
   // Optional click-to-select over the plot area. The overlay is transparent and sits on
-  // top, so a click anywhere in the plot maps to a reference position.
-  if (typeof options.onSelect === "function") {
+  // top, so a click anywhere in the plot maps to a reference position. When onZoom is
+  // set, a drag across the curve zooms the x-axis to that span and a click still selects.
+  if (typeof options.onSelect === "function" || typeof options.onZoom === "function") {
     const hit = el("rect", { x: padLeft, y: padTop, width: plotW, height: plotH,
                              fill: "transparent", cursor: "crosshair" });
-    hit.addEventListener("click", (ev) => {
+    const posAt = (ev) => {
       const box = svg.getBoundingClientRect();
       // getBoundingClientRect is in CSS pixels; the SVG may be scaled by its viewBox.
       const scale = box.width / width;
       const px = (ev.clientX - box.left) / scale;
       const pos = Math.round(x0 + ((px - padLeft) / plotW) * (x1 - x0));
-      options.onSelect(Math.min(Math.max(pos, x0), x1));
-    });
-    svg.appendChild(hit);
+      return Math.min(Math.max(pos, x0), x1);
+    };
+    if (typeof options.onZoom !== "function") {
+      hit.addEventListener("click", (ev) => options.onSelect(posAt(ev)));
+      svg.appendChild(hit);
+    } else {
+      const brush = el("rect", {
+        fill: "#2f4b7c", "fill-opacity": 0.16, stroke: "#2f4b7c", "stroke-width": 1,
+        visibility: "hidden", "pointer-events": "none",
+      });
+      let startX = null, startPos = null, brushing = false;
+      hit.addEventListener("pointerdown", (ev) => {
+        if (ev.button !== 0) return;
+        startX = ev.clientX;
+        startPos = posAt(ev);
+        brushing = false;
+        try { hit.setPointerCapture(ev.pointerId); } catch { /* pointer is not active */ }
+        ev.preventDefault();
+      });
+      hit.addEventListener("pointermove", (ev) => {
+        if (startX === null || Math.abs(ev.clientX - startX) < 5) return;
+        brushing = true;
+        const pos = posAt(ev);
+        const xA = sx(Math.min(startPos, pos));
+        const xB = sx(Math.max(startPos, pos));
+        brush.setAttribute("x", xA);
+        brush.setAttribute("y", padTop);
+        brush.setAttribute("width", Math.max(xB - xA, 1));
+        brush.setAttribute("height", plotH);
+        brush.setAttribute("visibility", "visible");
+      });
+      const finish = (ev) => {
+        if (startPos === null) return;
+        const origin = startPos;
+        const pos = posAt(ev);
+        const dragged = brushing;
+        startX = null;
+        startPos = null;
+        brushing = false;
+        brush.setAttribute("visibility", "hidden");
+        if (dragged && Math.abs(pos - origin) >= 2) {
+          options.onZoom(Math.min(origin, pos), Math.max(origin, pos));
+        } else if (typeof options.onSelect === "function") {
+          options.onSelect(pos);
+        }
+      };
+      hit.addEventListener("pointerup", finish);
+      hit.addEventListener("pointercancel", () => {
+        startX = null;
+        startPos = null;
+        brushing = false;
+        brush.setAttribute("visibility", "hidden");
+      });
+      svg.appendChild(brush);
+      svg.appendChild(hit);
+    }
   }
   if (sliderGap) {
     const bandBottom = bandRows.length
@@ -314,7 +393,7 @@ export function pieChart(container, slices, options = {}) {
                                    (width - legendW - (showLegend ? 56 : 48)) / 2));
   const cx = showLegend ? 26 + r : width / 2;
   const cy = Math.max(r + 26, height / 2);
-  const fsSlice = r >= 130 ? 13 : 11;
+  const fsSlice = r >= 130 ? 13 : r >= 80 ? 11 : 9;
   const fsLegend = r >= 130 ? 12.5 : 11;
   const legendStep = r >= 130 ? 19 : 17;
 
