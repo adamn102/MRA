@@ -266,19 +266,23 @@ td .codon-options {
   gap: 8px 18px; margin: 0 0 14px;
 }
 .pie-board-head .plot-title { margin: 0; font-size: 16px; }
+/* The grid keeps the footprint of ten pies (five across, two rows). Fewer pies split
+   that same rectangle, so two each take half and four each take a quarter. */
 .pie-grid {
-  display: grid;
-  width: 100%;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 8px;
+  display: flex; flex-direction: column; width: 100%; gap: 8px;
+}
+.pie-grid-row { display: flex; flex: 1; gap: 8px; min-height: 0; }
+.pie-grid-row > .pie-cell {
+  flex: 1 1 0; min-width: 0; margin: 0;
+  display: flex; flex-direction: column;
 }
 .pie-cell { margin: 0; min-width: 0; padding: 6px 8px; }
 .pie-cell-name {
   font-weight: 600; font-size: 12px; text-align: center;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0 0 2px;
 }
-.pie-cell .plot-body { min-height: 0; }
-.pie-cell svg { display: block; width: 100%; height: auto; }
+.pie-cell .plot-body { flex: 1; min-height: 0; }
+.pie-cell svg { display: block; width: 100%; height: 100%; }
 .pie-empty { text-align: center; margin: 16px 6px; }
 .pie-aa-bar { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 13px; }
 .pie-chooser-actions { display: flex; gap: 8px; margin-top: 14px; }
@@ -349,9 +353,42 @@ table.data.pie-legend.is-selectable tbody tr.is-selected { background: #d9e6f2; 
 .control-bar label { font-size: 11px; color: var(--muted); }
 .control-bar select, .control-bar input[type="number"] { font-size: 13px; }
 .control-bar input[type="range"] { width: 150px; vertical-align: middle; }
-.control-bar .zoom-fields { flex-direction: row; align-items: center; gap: 6px; flex-wrap: wrap; }
-.control-bar .zoom-fields input[type="number"] { width: 7em; }
-.control-bar .zoom-to { font-size: 11px; color: var(--muted); }
+.control-bar .zoom-fields { flex-direction: row; align-items: center; gap: 8px; flex-wrap: wrap; }
+.control-bar .zoom-readout {
+  font-size: 12px; font-variant-numeric: tabular-nums; color: var(--muted); min-width: 7.5em;
+}
+/* Two thumbs on one track. The inputs are transparent except for the thumbs, so the
+   grey rail and the filled window are drawn once, behind them. */
+.zoom-range { position: relative; width: 240px; height: 18px; }
+.zoom-range-fill {
+  position: absolute; top: 7px; height: 4px; border-radius: 2px;
+  background: var(--accent); pointer-events: none;
+}
+.zoom-range::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 7px; height: 4px;
+  background: #d5dde6; border-radius: 2px;
+}
+.zoom-range input[type="range"] {
+  position: absolute; left: 0; top: 0; width: 100%; height: 18px; margin: 0;
+  background: none; pointer-events: none; appearance: none;
+}
+.zoom-range input[type="range"]:disabled { opacity: 0.45; }
+.zoom-range input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px; background: transparent;
+}
+.zoom-range input[type="range"]::-webkit-slider-thumb {
+  appearance: none; pointer-events: auto; width: 14px; height: 14px; margin-top: -5px;
+  border-radius: 50%; background: var(--accent); border: 2px solid #fff;
+  box-shadow: 0 0 0 1px var(--accent); cursor: pointer;
+}
+.zoom-range input[type="range"]::-moz-range-track { height: 4px; background: transparent; border: 0; }
+.zoom-range input[type="range"]::-moz-range-thumb {
+  pointer-events: auto; width: 14px; height: 14px; border-radius: 50%;
+  background: var(--accent); border: 2px solid #fff; box-shadow: 0 0 0 1px var(--accent); cursor: pointer;
+}
+.control-bar .track-names {
+  flex: 1 0 100%; flex-direction: row; align-items: center; margin-top: 4px;
+}
 /* The trailing items -- Go, share, details -- sit on the baseline with the inputs. */
 .control-bar .bar-actions { flex-direction: row; align-items: center; gap: 8px;
   margin-left: auto; }
@@ -362,7 +399,7 @@ table.data.pie-legend.is-selectable tbody tr.is-selected { background: #d9e6f2; 
   margin-top: 8px; font-size: 13px;
 }
 .overlay-row .overlay-label { font-size: 11px; color: var(--muted); }
-.overlay-row label { display: inline-flex; align-items: center; gap: 5px; }
+.overlay-row label, .overlay-row .track-fixed { display: inline-flex; align-items: center; gap: 5px; }
 .overlay-row label.is-selected { font-weight: 600; }
 .overlay-row .swatch { width: 14px; height: 3px; border-radius: 1px; display: inline-block; }
 /* The change selector sits under the pie, after the codon line. */

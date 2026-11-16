@@ -11,6 +11,56 @@
 
 const NS = "http://www.w3.org/2000/svg";
 
+/**
+ * Two range inputs that share one track and never cross. `onChange(lo, hi)` fires while a
+ * thumb moves. `set` updates both thumbs without firing, so a gene click or a double-click
+ * can move the window without looping back into itself.
+ */
+export function bindZoomRange(loEl, hiEl, { fill, readout, onChange } = {}) {
+  const paint = () => {
+    const min = Number(loEl.min);
+    const span = (Number(loEl.max) - min) || 1;
+    const a = (Number(loEl.value) - min) / span;
+    const b = (Number(hiEl.value) - min) / span;
+    if (fill) {
+      fill.style.left = (a * 100) + "%";
+      fill.style.width = Math.max((b - a) * 100, 0) + "%";
+    }
+    if (readout) {
+      readout.textContent = Number(loEl.value).toLocaleString() + "\u2013" +
+        Number(hiEl.value).toLocaleString();
+    }
+  };
+  const clamp = (which) => {
+    const min = Number(loEl.min), max = Number(loEl.max);
+    let lo = Number(loEl.value), hi = Number(hiEl.value);
+    if (lo >= hi) {
+      if (which === "lo") lo = hi - 1;
+      else hi = lo + 1;
+    }
+    lo = Math.max(min, Math.min(lo, max - 1));
+    hi = Math.max(min + 1, Math.min(hi, max));
+    if (lo >= hi) lo = hi - 1;
+    loEl.value = String(lo);
+    hiEl.value = String(hi);
+    paint();
+    if (onChange) onChange(lo, hi);
+  };
+  loEl.addEventListener("input", () => clamp("lo"));
+  hiEl.addEventListener("input", () => clamp("hi"));
+  loEl.addEventListener("pointerdown", () => { loEl.style.zIndex = "5"; hiEl.style.zIndex = "4"; });
+  hiEl.addEventListener("pointerdown", () => { hiEl.style.zIndex = "5"; loEl.style.zIndex = "4"; });
+  hiEl.style.zIndex = "4";
+  paint();
+  return {
+    set(lo, hi) {
+      loEl.value = String(lo);
+      hiEl.value = String(hi);
+      paint();
+    },
+  };
+}
+
 function el(name, attrs = {}, text = null) {
   const node = document.createElementNS(NS, name);
   for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);

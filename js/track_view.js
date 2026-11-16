@@ -21,7 +21,7 @@ export const CLASS_LABEL = {
   nonga: "non-G\u2192A supply",
   ga: "G\u2192A supply",
 };
-const CLASS_COLOUR = { total: "#2f4b7c", nonga: "#3f8f7a", ga: "#c2561a" };
+export const CLASS_COLOUR = { total: "#2f4b7c", nonga: "#3f8f7a", ga: "#c2561a" };
 
 /**
  * Draw the supply track and return the caption HTML describing exactly what is plotted.

@@ -12,9 +12,9 @@
 //     names the covered region, not an empty table.
 //
 // Up to MAX_DETAIL_SEQUENCES submissions share one genome track and one grid of pies, one
-// pie per sequence at the marker. Checkboxes choose which lines are drawn; they do not
-// hide a pie. Under the grid, one table lists the slice selected on each pie. The two
-// genome-wide tables match Browse, with a sample column, and each downloads in full.
+// pie per sequence at the marker. Checkboxes in the control bar choose which lines and pies
+// are drawn; the table under the grid still lists every sequence. The two genome-wide
+// tables match Browse, with a sample column, and each downloads in full.
 
 import { bootstrapPage, privacyPanel, note, caveat, showError, exportProvenance,
          CUSTOM_CAVEAT, NEF_NOTE } from "./page.js";
@@ -26,7 +26,7 @@ import { MraEngine, GENETIC_CODE } from "./mra_engine.js";
 import { perSiteSupply, groupByPosition, buildFrameIndex, geneSegments, targetFor,
          smoothSeries, oneStepSlices } from "./explore_core.js";
 import { drawSupplyTrack, CLASS_LABEL } from "./track_view.js";
-import { pieChart, LAYOUT } from "./chart.js";
+import { pieChart, LAYOUT, bindZoomRange } from "./chart.js";
 import { residueColour } from "./batch_view.js";
 import { downloadFigure } from "./figure_export.js";
 import { setDetails } from "./figure_details.js";
@@ -330,6 +330,7 @@ function renderDashboard(slot, items, allRows, truncated) {
     cb.addEventListener("change", () => {
       if (cb.checked) shown.add(i); else shown.delete(i);
       drawTrack();
+      syncPieGrid();
     });
     const swatch = document.createElement("i");
     swatch.className = "swatch";
@@ -339,7 +340,15 @@ function renderDashboard(slot, items, allRows, truncated) {
     lab.append(cb, swatch, name);
     toggles.appendChild(lab);
   });
-  fig.append(stack, figCap, toggles);
+  const nl43 = document.createElement("span");
+  nl43.className = "track-fixed";
+  const nlSwatch = document.createElement("i");
+  nlSwatch.className = "swatch";
+  nlSwatch.style.background = "#8a94a0";
+  nl43.append(nlSwatch, document.createTextNode("NL4-3"));
+  toggles.appendChild(nl43);
+  toggles.classList.add("track-names");
+  fig.append(stack, figCap);
 
   const ctrl = document.createElement("div");
   ctrl.className = "control-bar";
@@ -359,13 +368,14 @@ function renderDashboard(slot, items, allRows, truncated) {
     `<div><label>Protein or subunit</label><select class="sq-target"></select></div>` +
     `<div><label>Position</label><input type="number" class="sq-pos" min="1" size="8"></div>` +
     `<div><label>Reading frame here</label><select class="sq-frame"></select></div>` +
-    `<div class="zoom-fields"><label>Zoom from</label>` +
-    `<input type="number" class="sq-z0" size="7">` +
-    `<span class="zoom-to">to</span>` +
-    `<input type="number" class="sq-z1" size="7">` +
-    `<button type="button" class="sq-zoom">Zoom</button>` +
+    `<div class="zoom-fields"><label>Zoom</label>` +
+    `<div class="zoom-range"><span class="zoom-range-fill sq-zfill"></span>` +
+    `<input type="range" class="sq-z0" step="1" aria-label="Zoom from">` +
+    `<input type="range" class="sq-z1" step="1" aria-label="Zoom to"></div>` +
+    `<output class="zoom-readout sq-zread"></output>` +
     `<button type="button" class="secondary sq-zoom-reset">Full range</button></div>` +
     `<div class="bar-actions"><button class="sq-go">Go</button></div>`;
+  ctrl.appendChild(toggles);
 
   const head = document.createElement("div");
   const pieBoard = document.createElement("section");
@@ -387,6 +397,8 @@ function renderDashboard(slot, items, allRows, truncated) {
   pieHead.append(pieTitle, aaBar);
   const pieGrid = document.createElement("div");
   pieGrid.className = "pie-grid";
+  const pieGridObserver = new ResizeObserver(() => sizePieGrid());
+  pieGridObserver.observe(pieGrid);
   const selSlot = document.createElement("div");
   selSlot.className = "pie-selection";
   pieBoard.append(pieHead, pieGrid, selSlot);
@@ -404,6 +416,11 @@ function renderDashboard(slot, items, allRows, truncated) {
   elZ0.max = elZ1.max = String(axis1);
   elZ0.value = String(axis0);
   elZ1.value = String(axis1);
+  const zoomCtl = bindZoomRange(elZ0, elZ1, {
+    fill: ctrl.querySelector(".sq-zfill"),
+    readout: ctrl.querySelector(".sq-zread"),
+    onChange: (a, b) => setZoom(a, b),
+  });
 
   function markSelected() {
     toggles.querySelectorAll("label").forEach((lab, i) => {
@@ -436,17 +453,19 @@ function renderDashboard(slot, items, allRows, truncated) {
     lo = Math.max(axis0, Math.min(lo, axis1));
     hi = Math.max(axis0, Math.min(hi, axis1));
     if (!(hi > lo)) return;
+    if (lo === zoom0 && hi === zoom1) {
+      zoomCtl.set(lo, hi);
+      return;
+    }
     zoom0 = lo;
     zoom1 = hi;
-    elZ0.value = String(lo);
-    elZ1.value = String(hi);
+    zoomCtl.set(lo, hi);
     drawTrack();
   }
   function resetZoom() {
     zoom0 = axis0;
     zoom1 = axis1;
-    elZ0.value = String(axis0);
-    elZ1.value = String(axis1);
+    zoomCtl.set(axis0, axis1);
     drawTrack();
   }
 
@@ -496,7 +515,7 @@ function renderDashboard(slot, items, allRows, truncated) {
       (zoomed
         ? ` Showing positions ${zoom0.toLocaleString()}\u2013${zoom1.toLocaleString()}.`
         : ``) +
-      ` Drag across the curve to zoom, click a gene to zoom to it, or double-click the plot for the full range.`;
+      ` Drag across the curve or the Zoom slider to zoom, click a gene to zoom to it, or double-click the plot for the full range.`;
     setDetails(fig, trackText, { title: "The genome supply track" });
   }
 
@@ -602,6 +621,10 @@ function renderDashboard(slot, items, allRows, truncated) {
       radius: PIE_R,
       selected: match ? sliceKey(match) : null,
     });
+    // The chart caps itself at the viewBox width. In this grid the cell is the limit,
+    // so a pie can grow to half or a quarter of the card.
+    const svg = body.querySelector("svg");
+    if (svg) svg.style.maxWidth = "none";
   }
 
   function outcomeFor(item) {
@@ -735,22 +758,8 @@ function renderDashboard(slot, items, allRows, truncated) {
     const label = engine.hxb2Label(protein, geneAa);
     pieTitle.textContent =
       `Distribution of one-step amino acid changes at ${label}`;
-    pieGrid.innerHTML = "";
     fillAaSelect();
-    items.forEach((item, i) => {
-      const cell = document.createElement("figure");
-      cell.className = "chart plot-card pie-cell";
-      cell.dataset.exportName = "pie_" + exportSlug(item.row.name, i);
-      const name = document.createElement("div");
-      name.className = "pie-cell-name";
-      name.textContent = item.row.name;
-      name.title = item.row.name;
-      const body = document.createElement("div");
-      body.className = "plot-body";
-      cell.append(name, body);
-      pieGrid.appendChild(cell);
-      paintCell(cell, i);
-    });
+    syncPieGrid();
     setDetails(pieBoard, pieDetailHtml(site), {
       title: `Distribution of one-step amino acid changes at ${label}`,
     });
@@ -758,11 +767,72 @@ function renderDashboard(slot, items, allRows, truncated) {
     renderSelection();
   }
 
+  // Ten pies are five across and two high. The grid stays that tall, and the checked
+  // pies divide it: one row when five or fewer fit across, two rows after that, with
+  // the second row stretched so it still reaches both edges.
+  function tenPieBlockHeight(width) {
+    const gap = 8, name = 18, pad = 12;
+    const col = (width - 4 * gap) / 5;
+    const row = col * (PIE_H / PIE_W) + name + pad;
+    return Math.round(2 * row + gap);
+  }
+  function pieRowCounts(n) {
+    if (n <= 5) return [n];
+    const cols = Math.ceil(n / 2);
+    return [cols, n - cols];
+  }
+  function sizePieGrid() {
+    const width = pieGrid.clientWidth;
+    if (!width || !shown.size) return;
+    const next = tenPieBlockHeight(width) + "px";
+    if (pieGrid.style.height !== next) pieGrid.style.height = next;
+  }
+  function syncPieGrid() {
+    if (pieProtein === null) return;
+    const n = shown.size;
+    pieGrid.innerHTML = "";
+    if (!n) {
+      pieGrid.style.height = "";
+      const p = document.createElement("p");
+      p.className = "caveat pie-empty";
+      p.textContent = "No sequences are checked.";
+      pieGrid.appendChild(p);
+      return;
+    }
+    const seqs = [];
+    items.forEach((item, i) => { if (shown.has(i)) seqs.push(i); });
+    let cursor = 0;
+    for (const count of pieRowCounts(n)) {
+      const row = document.createElement("div");
+      row.className = "pie-grid-row";
+      for (let k = 0; k < count; k++) {
+        const i = seqs[cursor++];
+        const item = items[i];
+        const cell = document.createElement("figure");
+        cell.className = "chart plot-card pie-cell";
+        cell.dataset.seq = String(i);
+        cell.dataset.exportName = "pie_" + exportSlug(item.row.name, i);
+        const name = document.createElement("div");
+        name.className = "pie-cell-name";
+        name.textContent = item.row.name;
+        name.title = item.row.name;
+        const body = document.createElement("div");
+        body.className = "plot-body";
+        cell.append(name, body);
+        row.appendChild(cell);
+        paintCell(cell, i);
+      }
+      pieGrid.appendChild(row);
+    }
+    sizePieGrid();
+  }
+
   function clearPies() {
     pieProtein = null;
     pieGeneAa = null;
     picked = null;
     pieTitle.textContent = "No modelled codon at this nucleotide";
+    pieGrid.style.height = "";
     pieGrid.innerHTML = "";
     aaSelect.innerHTML = "";
     aaBar.hidden = true;
@@ -1113,19 +1183,13 @@ function renderDashboard(slot, items, allRows, truncated) {
 
   aaSelect.addEventListener("change", () => {
     picked = pickFromKey(aaSelect.value);
-    pieGrid.querySelectorAll(".pie-cell").forEach((cell, i) => paintCell(cell, i));
+    pieGrid.querySelectorAll(".pie-cell").forEach((cell) => paintCell(cell, Number(cell.dataset.seq)));
     renderSelection();
   });
   elWin.addEventListener("input", () => { elWinOut.textContent = elWin.value; });
   elWin.addEventListener("change", drawTrack);
   elClass.addEventListener("change", drawTrack);
-  ctrl.querySelector(".sq-zoom").addEventListener("click", () => setZoom(Number(elZ0.value), Number(elZ1.value)));
   ctrl.querySelector(".sq-zoom-reset").addEventListener("click", resetZoom);
-  for (const input of [elZ0, elZ1]) {
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") setZoom(Number(elZ0.value), Number(elZ1.value));
-    });
-  }
   elSlider.addEventListener("input", () => selectNt(Number(elSlider.value)));
   ctrl.querySelector(".sq-go").addEventListener("click", jump);
   elPos.addEventListener("keydown", (e) => { if (e.key === "Enter") jump(); });
@@ -1184,8 +1248,8 @@ function pieDetailHtml(site) {
     `highest-rate path of two or three nucleotide substitutions, the percent column is blank, and ` +
     `mutability is that path's rate.</p>` +
     `<p>These rates describe generation in one replication, not establishment in a population. ` +
-    `A sequence that does not cover this codon is named in its cell. The checkboxes on the genome ` +
-    `track choose which lines are drawn; every submitted sequence still has a pie.</p>`;
+    `A sequence that does not cover this codon is named in its cell. Unchecking a sequence ` +
+    `hides its line and its pie; the table still lists every sequence.</p>`;
 }
 
 // The track overlays NL4-3 from the reference's own custom atlas, computed once from assets
