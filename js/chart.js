@@ -6,8 +6,9 @@
 //   pieChart     one-step amino-acid supply at one codon
 //
 // SVG rather than canvas so the output is inspectable, scales on a high-DPI screen,
-// and can be saved by right-click. Rates span more than three orders of magnitude, so
-// the genome track's value axis is log10.
+// and can be saved by right-click. Rates span orders of magnitude, so the genome track
+// defaults to a log10 axis fitted to the values in view. A caller can ask for a linear
+// axis, or for the wider fixed axis (powers of ten, or zero to the largest rate).
 
 const NS = "http://www.w3.org/2000/svg";
 
@@ -82,6 +83,54 @@ function niceLogTicks(lo, hi) {
   return ticks;
 }
 
+/** A 1-2-5 step for a value span. Unlike `niceStep`, this is allowed to be far below 1. */
+function niceValueStep(span) {
+  const raw = span / 5;
+  if (!(raw > 0)) return 1;
+  const pow = Math.pow(10, Math.floor(Math.log10(raw)));
+  const err = raw / pow;
+  const nice = err >= 7.5 ? 10 : err >= 3.5 ? 5 : err >= 1.5 ? 2 : 1;
+  return nice * pow;
+}
+
+/** Tick values on a linear axis, including the ends when they land on the step. */
+function linearTickValues(yMin, yMax) {
+  const span = yMax - yMin;
+  if (!(span > 0)) return [];
+  const step = niceValueStep(span);
+  const ticks = [];
+  const first = Math.ceil((yMin - step * 1e-8) / step);
+  const last = Math.floor((yMax + step * 1e-8) / step);
+  for (let i = first; i <= last && ticks.length < 8; i++) {
+    const v = i * step;
+    if (v < yMin - step * 1e-6 || v > yMax + step * 1e-6) continue;
+    ticks.push(v);
+  }
+  return ticks.length ? ticks : [(yMin + yMax) / 2];
+}
+
+/**
+ * Positive tick values on a fitted log axis. Whole powers of ten when the span is wide;
+ * 1-2-5 (then finer) mantissas when the data occupies less than a decade, so a tight
+ * axis still has several gridlines.
+ */
+function fittedLogTicks(yLo, yHi) {
+  const span = yHi - yLo;
+  const mantissas = span >= 2 ? [1]
+    : span >= 1.15 ? [1, 2, 5]
+    : span >= 0.5 ? [1, 2, 3, 5, 7]
+    : [1, 1.5, 2, 2.5, 3, 4, 5, 6, 7, 8, 9];
+  const ticks = [];
+  for (let e = Math.floor(yLo) - 1; e <= Math.ceil(yHi); e++) {
+    for (const m of mantissas) {
+      const lv = Math.log10(m) + e;
+      if (lv <= yLo + span * 0.03 || lv >= yHi - span * 0.03) continue;
+      ticks.push(m * Math.pow(10, e));
+    }
+  }
+  return ticks;
+}
+
 /** A 1-2-5 step that puts about six labels across a nucleotide span. */
 function niceStep(span) {
   const raw = Math.max(span, 1) / 6;
@@ -95,6 +144,19 @@ const supLabel = (e) => "10" + String(e).replace(/-/g, "\u2212").split("").map(
   (c) => ({ "0": "\u2070", "1": "\u00b9", "2": "\u00b2", "3": "\u00b3", "4": "\u2074",
             "5": "\u2075", "6": "\u2076", "7": "\u2077", "8": "\u2078", "9": "\u2079",
             "\u2212": "\u207b" }[c] || c)).join("");
+
+/** Compact tick text. Powers of ten stay as 10ⁿ; other values are a one-decimal mantissa. */
+function formatAxisValue(v) {
+  if (!(v > 0)) return "0";
+  const e = Math.floor(Math.log10(v) + 1e-12);
+  const m = v / Math.pow(10, e);
+  const mRound = Math.round(m * 10) / 10;
+  if (Math.abs(mRound - 1) < 1e-6) return supLabel(e);
+  const mStr = Math.abs(mRound - Math.round(mRound)) < 1e-6
+    ? String(Math.round(mRound))
+    : mRound.toFixed(1);
+  return mStr + "\u00d7" + supLabel(e);
+}
 
 // Survives a redraw, so the second click of a double-click is still recognisable after the
 // first click has replaced the plot. A lone click waits briefly, and is cancelled if the
@@ -158,7 +220,10 @@ export function trackSliderGeometry(width = LAYOUT.width) {
 // ---------------------------------------------------------------------------------
 /**
  * Rate along the genome. series: [{label, colour, points: [[position, rate], ...]}].
- * Log10 value axis. Optional shaded spans for gene boundaries.
+ * The value axis is log10 unless `yScale` is "linear". `autoScale` (default true) fits
+ * the axis to the rates inside the current x window; false keeps a fixed axis — whole
+ * powers of ten on a log scale, or zero to the largest rate on a linear scale.
+ * Optional shaded spans for gene boundaries.
  */
 export function genomeTrack(container, series, options = {}) {
   container.innerHTML = "";
@@ -167,7 +232,17 @@ export function genomeTrack(container, series, options = {}) {
   // without covering either. The plot area keeps the height it was given.
   const sliderGap = Math.max(0, options.sliderGap || 0);
   const height = (options.height || 260) + sliderGap;
-  const padLeft = LAYOUT.padLeft, padRight = LAYOUT.padRight, padBottom = 40;
+  let padLeft = LAYOUT.padLeft;
+  // One series is named inside the plot. Several series need a legend in the right margin,
+  // and the margin has to be wide enough for the longest name or the text is clipped.
+  const sideLegend = series.length > 1;
+  const legendText = sideLegend
+    ? Math.max(...series.map((s) => (s.label || "").length), 1) * 7.1
+    : 0;
+  const padRight = sideLegend
+    ? Math.max(LAYOUT.padRight, Math.ceil(36 + legendText) + 10)
+    : LAYOUT.padRight;
+  const padBottom = 40;
   const x0 = options.xMin || 1;
   let x1 = options.xMax || 8213;
   if (!(x1 > x0)) x1 = x0 + 1;
@@ -197,23 +272,93 @@ export function genomeTrack(container, series, options = {}) {
   const BOX_H = 12, ROW_GAP = 2;
   const bandH = bandRows.length ? bandRows.length * (BOX_H + ROW_GAP) + 6 : 0;
   const padTop = 24 + bandH + sliderGap;
-  const plotW = width - padLeft - padRight, plotH = height - padTop - padBottom;
+  const plotH = height - padTop - padBottom;
 
   // The ribbon's extent counts toward the y-domain: an envelope drawn outside the computed
   // range would be silently clipped at the plot edge and read as a narrower spread.
   const ribbon = options.ribbon || null;
-  const ribbonVals = ribbon ? ribbon.flatMap((r) => [r[1], r[2]]).filter((v) => v > 0) : [];
-  const all = series.flatMap((s) => s.points.map((p) => p[1])).filter((v) => v > 0)
-    .concat(ribbonVals);
-  if (!all.length) {
+  const yScale = options.yScale === "linear" ? "linear" : "log";
+  const autoScale = options.autoScale !== false;
+  // Auto-scale reads only the window on screen, which is the data being plotted. The fixed
+  // axis reads every point, so zooming does not move the scale.
+  const collectRates = (restrict) => {
+    const vals = [];
+    for (const s of series) {
+      for (const p of s.points) {
+        if (!(p[1] > 0)) continue;
+        if (restrict && (p[0] < x0 || p[0] > x1)) continue;
+        vals.push(p[1]);
+      }
+    }
+    if (ribbon) {
+      for (const r of ribbon) {
+        if (restrict && (r[0] < x0 || r[0] > x1)) continue;
+        if (r[1] > 0) vals.push(r[1]);
+        if (r[2] > 0) vals.push(r[2]);
+      }
+    }
+    return vals;
+  };
+  let basis = autoScale ? collectRates(true) : collectRates(false);
+  if (!basis.length) basis = collectRates(false);
+  if (!basis.length) {
     container.appendChild(Object.assign(document.createElement("p"),
       { className: "caveat", textContent: "No rates to plot for this selection." }));
     return;
   }
-  const lo = Math.log10(Math.min(...all)), hi = Math.log10(Math.max(...all));
-  const yLo = Math.floor(lo), yHi = Math.ceil(hi);
+  const dataMin = Math.min(...basis), dataMax = Math.max(...basis);
+  let sy;
+  let yTicks;
+  if (yScale === "linear") {
+    let yMin, yMax;
+    if (autoScale) {
+      const span = dataMax - dataMin;
+      const pad = span > 0 ? span * 0.12 : (dataMax || 1) * 0.08;
+      yMin = Math.max(0, dataMin - pad);
+      yMax = dataMax + pad;
+      if (!(yMax > yMin)) yMax = yMin + (dataMax || 1) * 0.1;
+    } else {
+      const every = collectRates(false);
+      const mx = Math.max(...every, dataMax);
+      const step = niceValueStep(mx || 1);
+      yMin = 0;
+      yMax = Math.max(step, Math.ceil((mx * 1.02) / step) * step);
+    }
+    sy = (v) => padTop + plotH - ((v - yMin) / (yMax - yMin)) * plotH;
+    yTicks = linearTickValues(yMin, yMax).map((v) => ({ v, label: formatAxisValue(v) }));
+  } else {
+    const lo = Math.log10(dataMin), hi = Math.log10(dataMax);
+    let yLo, yHi;
+    if (autoScale) {
+      const span = hi - lo;
+      if (span < 0.12) {
+        const mid = (lo + hi) / 2;
+        yLo = mid - 0.08;
+        yHi = mid + 0.08;
+      } else {
+        const pad = span * 0.12;
+        yLo = lo - pad;
+        yHi = hi + pad;
+      }
+    } else {
+      const every = collectRates(false);
+      const a = Math.log10(Math.min(...every));
+      const b = Math.log10(Math.max(...every));
+      yLo = Math.floor(a);
+      yHi = Math.ceil(b);
+      if (yHi <= yLo) yHi = yLo + 1;
+    }
+    sy = (v) => padTop + plotH - ((Math.log10(v) - yLo) / (yHi - yLo)) * plotH;
+    const powers = autoScale ? fittedLogTicks(yLo, yHi) : niceLogTicks(yLo, yHi).map((e) => Math.pow(10, e));
+    yTicks = powers.map((v) => ({ v, label: formatAxisValue(v) }));
+  }
+  // A mantissa label such as 2.5×10⁻⁴ is wider than 10⁻⁴. Grow the left margin so it
+  // stays clear of the rotated axis title, and so the position slider follows the plot.
+  const tickChars = yTicks.reduce((m, t) => Math.max(m, t.label.length), 2);
+  const needLeft = 24 + Math.ceil(tickChars * 6.5);
+  if (needLeft > padLeft) padLeft = needLeft;
+  const plotW = width - padLeft - padRight;
   const sx = (p) => padLeft + ((p - x0) / (x1 - x0)) * plotW;
-  const sy = (v) => padTop + plotH - ((Math.log10(v) - yLo) / (yHi - yLo)) * plotH;
 
   const svg = svgRoot(width, height, options.title);
   svg.appendChild(el("text", { x: 0, y: 13, "font-size": 12 }, options.title || ""));
@@ -287,19 +432,20 @@ export function genomeTrack(container, series, options = {}) {
       svg.appendChild(el("line", { x1: sx(v), x2: sx(v), y1: vy - 6, y2: vy,
                                    stroke: "#b5485d", "stroke-width": 0.8, "stroke-opacity": 0.75 }));
     }
-    if (visible.length) {
+    if (visible.length && !sideLegend) {
       svg.appendChild(el("text", { x: padLeft + plotW + 6, y: vy, "font-size": 8.5,
                                    fill: "#b5485d" },
                          `${visible.length} difference${visible.length === 1 ? "" : "s"}`));
     }
   }
 
-  for (const e of niceLogTicks(yLo, yHi)) {
-    const y = sy(Math.pow(10, e));
+  for (const tick of yTicks) {
+    const y = sy(tick.v);
+    if (y < padTop - 1 || y > padTop + plotH + 1) continue;
     svg.appendChild(el("line", { x1: padLeft, x2: padLeft + plotW, y1: y, y2: y,
                                  stroke: "#e3e8ec", "stroke-width": 0.8 }));
     svg.appendChild(el("text", { x: padLeft - 6, y: y + 3.5, "text-anchor": "end",
-                                 "font-size": 10, fill: "#5c6670" }, supLabel(e)));
+                                 "font-size": 10, fill: "#5c6670" }, tick.label));
   }
 
   // Inter-sample envelope, drawn under the series so the median line stays readable. Points
@@ -328,6 +474,7 @@ export function genomeTrack(container, series, options = {}) {
     }
   }
 
+  const drawn = [];
   for (const s of series) {
     const pts = s.points.filter((p) => p[1] > 0 && p[0] >= x0 && p[0] <= x1);
     if (!pts.length) continue;
@@ -338,9 +485,32 @@ export function genomeTrack(container, series, options = {}) {
     // NL4-3 overlay on the sequence page is.
     if (s.dash) attrs["stroke-dasharray"] = s.dash;
     svg.appendChild(el("path", attrs));
-    const last = pts[pts.length - 1];
-    svg.appendChild(el("text", { x: padLeft + plotW + 6, y: sy(last[1]) + 3.5, "font-size": 10,
-                                 fill: s.colour || "#0b5c8a" }, s.label));
+    drawn.push({ s, last: pts[pts.length - 1] });
+  }
+  if (drawn.length === 1) {
+    // Bottom-right corner of the plot, flush with the right edge and just above the axis.
+    const { s } = drawn[0];
+    svg.appendChild(el("text", {
+      x: padLeft + plotW, y: padTop + plotH - 6, "text-anchor": "end", "font-size": 12,
+      fill: s.colour || "#0b5c8a", stroke: "#ffffff", "stroke-width": 3.5,
+      "paint-order": "stroke", "stroke-linejoin": "round",
+    }, s.label || ""));
+  } else if (drawn.length > 1) {
+    const lx = padLeft + plotW + 12;
+    const rowH = 16;
+    let ly = padTop + 14;
+    for (const { s } of drawn) {
+      const colour = s.colour || "#0b5c8a";
+      const swatch = el("line", {
+        x1: lx, x2: lx + 16, y1: ly - 4, y2: ly - 4,
+        stroke: colour, "stroke-width": Math.max(s.width || 2, 2), "stroke-linecap": "round",
+      });
+      if (s.dash) swatch.setAttribute("stroke-dasharray", s.dash);
+      svg.appendChild(swatch);
+      svg.appendChild(el("text", { x: lx + 22, y: ly, "font-size": 12, fill: colour },
+                         s.label || ""));
+      ly += rowH;
+    }
   }
 
   const axisY = padTop + plotH;

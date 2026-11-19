@@ -25,7 +25,7 @@ import { renderTable, formatRate } from "./table.js";
 import { MraEngine, GENETIC_CODE } from "./mra_engine.js";
 import { perSiteSupply, groupByPosition, buildFrameIndex, geneSegments, targetFor,
          smoothSeries, oneStepSlices } from "./explore_core.js";
-import { drawSupplyTrack, CLASS_LABEL } from "./track_view.js";
+import { drawSupplyTrack, bindAxisControls, CLASS_LABEL } from "./track_view.js";
 import { pieChart, LAYOUT, bindZoomRange } from "./chart.js";
 import { residueColour } from "./batch_view.js";
 import { downloadFigure } from "./figure_export.js";
@@ -253,6 +253,7 @@ function prepareItem(row, detail, geom, colour) {
   }
   return {
     row, detail, geom, colour, perSite, sites, baseAt, variants, aaByPosition, proteinSpans,
+    indels: indelRatesFor(sites),
     frameAt: buildFrameIndex(assets.reference.proteins, aaByPosition),
     targets: engine.proteinTargets(proteinSpans),
     variantIdx: 0,
@@ -354,13 +355,13 @@ function renderDashboard(slot, items, allRows, truncated) {
   ctrl.className = "control-bar";
   ctrl.setAttribute("data-export-skip", "");
   ctrl.innerHTML =
-    `<div><label>Smoothing window (nt)</label>` +
-    `<input type="range" class="sq-win" min="25" max="501" step="2" value="151">` +
-    `<output class="sq-win-out">151</output></div>` +
+    `<div class="control-main">` +
     `<div><label>Supply shown</label><select class="sq-class">` +
     `<option value="total">Total substitution supply</option>` +
     `<option value="nonga">non-G&rarr;A only</option>` +
-    `<option value="ga">G&rarr;A only</option></select></div>` +
+    `<option value="ga">G&rarr;A only</option>` +
+    `<option value="insertion">Insertions</option>` +
+    `<option value="deletion">Deletions</option></select></div>` +
     `<div><label>Jump to</label><select class="sq-sys">` +
     `<option value="protein">Protein position</option>` +
     `<option value="nt">NL4-3 nucleotide</option>` +
@@ -374,8 +375,27 @@ function renderDashboard(slot, items, allRows, truncated) {
     `<input type="range" class="sq-z1" step="1" aria-label="Zoom to"></div>` +
     `<output class="zoom-readout sq-zread"></output>` +
     `<button type="button" class="secondary sq-zoom-reset">Full range</button></div>` +
-    `<div class="bar-actions"><button class="sq-go">Go</button></div>`;
-  ctrl.appendChild(toggles);
+    `<div class="bar-actions"><button class="sq-go">Go</button></div>` +
+    `</div>`;
+  const foot = document.createElement("div");
+  foot.className = "control-foot";
+  const axisBar = document.createElement("div");
+  axisBar.className = "axis-controls";
+  axisBar.innerHTML =
+    `<span class="overlay-label">Y-axis</span>` +
+    `<button type="button" class="toggle y-autoscale is-on" aria-pressed="true">Auto-scale</button>` +
+    `<div class="seg" role="group" aria-label="Y-axis scale">` +
+    `<button type="button" class="y-log is-on" aria-pressed="true">Log</button>` +
+    `<button type="button" class="y-linear" aria-pressed="false">Linear</button></div>`;
+  const smooth = document.createElement("div");
+  smooth.className = "smooth-window";
+  smooth.innerHTML =
+    `<label>Smoothing window (nt)</label>` +
+    `<input type="range" class="sq-win" min="25" max="501" step="1" value="250">` +
+    `<output class="sq-win-out">250</output>`;
+  foot.append(toggles, axisBar, smooth);
+  ctrl.append(foot);
+  const axis = bindAxisControls(ctrl, () => drawTrack());
 
   const head = document.createElement("div");
   const pieBoard = document.createElement("section");
@@ -474,6 +494,7 @@ function renderDashboard(slot, items, allRows, truncated) {
     const win = Number(elWin.value);
     elWinOut.textContent = String(win);
     const cls = elClass.value;
+    const indel = cls === "insertion" || cls === "deletion";
     const series = [];
     items.forEach((it, i) => {
       if (!shown.has(i)) return;
@@ -481,24 +502,30 @@ function renderDashboard(slot, items, allRows, truncated) {
         label: shortName(it.row.name),
         name: it.row.name,
         colour: it.colour,
-        points: smoothSeries(it.sites, it.perSite, cls, win),
+        points: smoothSeries(it.sites, indel ? it.indels : it.perSite, cls, win),
         width: i === active ? 1.7 : 1.15,
       });
     });
+    const ref = referenceAtlas();
     const trackText = drawSupplyTrack(trackSlot, {
-      perSite: item.perSite, sites: item.sites, series, win, cls, segments: SEGMENTS,
+      perSite: indel ? item.indels : item.perSite, sites: item.sites, series, win, cls,
+      segments: SEGMENTS,
       first: zoom0, last: zoom1,
       marker: markerNt,
       markerLabel: selected ? engine.hxb2Label(selected.protein, selected.geneAa) : String(markerNt),
       variants: item.variants,
       title: `Smoothed ${CLASS_LABEL[cls]} along the submitted sequences, with NL4-3 overlaid`,
-      source: "computed from the codons and 3\u2032 context in the sequences you submitted, not from NL4-3",
-      refPerSite: referenceAtlas().perSite,
+      source: indel
+        ? "the NL4-3 rate at each covered position; an insertion or deletion has no sequence context"
+        : "computed from the codons and 3\u2032 context in the sequences you submitted, not from NL4-3",
+      refPerSite: indel ? ref.indels : ref.perSite,
       subjectName: shortName(item.row.name),
       refBase: item.baseAt.get(markerNt),
       onSelect: (pos) => selectNt(pos),
       onZoom: (a, b) => setZoom(a, b),
       onZoomReset: resetZoom,
+      yScale: axis.yScale,
+      autoScale: axis.autoScale,
       // Room between the gene boxes and the rate curve for the position slider.
       sliderGap: 28,
     });
@@ -511,7 +538,9 @@ function renderDashboard(slot, items, allRows, truncated) {
       `Genome-wide ${CLASS_LABEL[cls]}, ${win} nt mean. Marker at ` +
       `${markerNt.toLocaleString()}${where}. Red ticks are where ` +
       `<strong>${escapeHtml(shortName(item.row.name))}</strong> differs from NL4-3. ` +
-      `The dashed grey line is NL4-3.` +
+      (indel
+        ? `The dashed grey line is NL4-3, and each submitted sequence follows it wherever that sequence covers the site. `
+        : `The dashed grey line is NL4-3. `) +
       (zoomed
         ? ` Showing positions ${zoom0.toLocaleString()}\u2013${zoom1.toLocaleString()}.`
         : ``) +
@@ -1163,6 +1192,56 @@ function renderDashboard(slot, items, allRows, truncated) {
     apply(t.protein, geneAa, null);
   }
 
+  function renderIndelTable(slot, kind) {
+    const noun = kind === "insertion" ? "insertion" : "deletion";
+    const heading = document.createElement("h2");
+    heading.textContent = kind === "insertion" ? "Insertions" : "Deletions";
+    slot.appendChild(heading);
+    const note = document.createElement("p");
+    note.className = "caveat";
+    note.textContent =
+      "One row per nucleotide a sequence covers. The rate is the NL4-3 " + noun +
+      " rate at that position. It does not depend on the codon or the surrounding bases, " +
+      "so every sequence that covers a position has the same rate there. These are " +
+      "single-nucleotide events, not the amino-acid changes charted for substitutions.";
+    slot.appendChild(note);
+    const rows = [];
+    for (const item of items) {
+      for (const pos of item.sites) {
+        const rec = item.indels.get(pos);
+        if (!rec || !(rec[kind] > 0)) continue;
+        rows.push({
+          sample: item.row.name,
+          ref_position: pos,
+          nucleotide: item.baseAt.get(pos) || "",
+          rate: rec[kind],
+        });
+      }
+    }
+    const box = document.createElement("div");
+    slot.appendChild(box);
+    renderTable(box, {
+      columns: [
+        { key: "sample", label: "Sample" },
+        { key: "ref_position", label: "NL4-3 position", type: "num" },
+        { key: "nucleotide", label: "Nucleotide",
+          title: "The base in the submitted sequence at this aligned position" },
+        { key: "rate", label: "Rate", type: "rate",
+          title: "NL4-3 " + noun + " rate at this position" },
+      ],
+      rows,
+      sort: { key: "ref_position", dir: "asc" },
+      csvHeader: "label",
+      filterPlaceholder: "filter by sample, position, or nucleotide",
+      downloadName: `mra_${page.version}_${kind}s.csv`,
+      provenance: exportProvenance(page.release, [
+        `NL4-3 ${noun} rates at positions covered by the submitted sequences.`,
+        "An insertion or deletion has no nucleotide context, so the rate is the reference rate at the aligned coordinate.",
+      ]),
+    });
+  }
+
+  let analysisMode = "aa";
   function renderLower() {
     lower.innerHTML = "";
     if (truncated) lower.appendChild(truncationNote());
@@ -1178,6 +1257,10 @@ function renderDashboard(slot, items, allRows, truncated) {
           `no position-resolved rates can be given. ${NEF_NOTE}`;
       lower.appendChild(div);
     }
+    if (analysisMode === "insertion" || analysisMode === "deletion") {
+      renderIndelTable(lower, analysisMode);
+      return;
+    }
     renderCompiledTables(lower, items);
   }
 
@@ -1188,7 +1271,15 @@ function renderDashboard(slot, items, allRows, truncated) {
   });
   elWin.addEventListener("input", () => { elWinOut.textContent = elWin.value; });
   elWin.addEventListener("change", drawTrack);
-  elClass.addEventListener("change", drawTrack);
+  elClass.addEventListener("change", () => {
+    drawTrack();
+    const indel = elClass.value === "insertion" || elClass.value === "deletion";
+    pieBoard.hidden = indel;
+    const mode = indel ? elClass.value : "aa";
+    if (mode === analysisMode) return;
+    analysisMode = mode;
+    renderLower();
+  });
   ctrl.querySelector(".sq-zoom-reset").addEventListener("click", resetZoom);
   elSlider.addEventListener("input", () => selectNt(Number(elSlider.value)));
   ctrl.querySelector(".sq-go").addEventListener("click", jump);
@@ -1261,12 +1352,25 @@ function shortName(name) {
 }
 
 let _refCache = null;
+function indelRatesFor(positions) {
+  const out = new Map();
+  for (const pos of positions) {
+    const ins = engine.indelRate(pos, "insertion");
+    const del = engine.indelRate(pos, "deletion");
+    out.set(pos, {
+      insertion: ins ? ins.rate : 0,
+      deletion: del ? del.rate : 0,
+    });
+  }
+  return out;
+}
 function referenceAtlas() {
   if (_refCache) return _refCache;
   const seq = assets.reference.sequence;
   const refAtlas = engine.customAtlas({
     name: "NL4-3", sequence: seq, alignment: alignToReference(seq, seq) });
-  _refCache = { perSite: perSiteSupply(groupByPosition(refAtlas.nt), "rate") };
+  const perSite = perSiteSupply(groupByPosition(refAtlas.nt), "rate");
+  _refCache = { perSite, indels: indelRatesFor([...perSite.keys()]) };
   return _refCache;
 }
 
@@ -1395,7 +1499,7 @@ function compiledProvenance(items) {
     "THIS IS NOT A MEASUREMENT OF THESE VIRUSES. It is the MRA model, fitted on NL4-3,",
     "applied to each submitted sequence. Codon identity and local 3' context come from that",
     "sequence; position effects were measured on NL4-3 and transfer only where it aligns.",
-    "Indels are excluded: their predictor has no nucleotide context.");
+    "The amino-acid and codon-path tables exclude insertions and deletions.");
   return exportProvenance(page.release, lines);
 }
 

@@ -64,7 +64,9 @@ for html in sorted(ROOT.glob("*.html")):
 # reveals the DOI alone and nothing about the session or any submitted sequence. The separate
 # fetch/XMLHttpRequest/sendBeacon checks below still apply and are what enforce the guarantee.
 ALLOWED_URL_CONTEXTS = ("creativecommons.org", "www.w3.org",    # licence link, SVG namespace
-                        "doi.org")                             # citation links (anchors only)
+                        "doi.org",                             # citation links (anchors only)
+                        "balazslab.partners.org",              # lab website (anchors only)
+                        "github.com/adamn102/MRA")             # source repository (anchors only)
 for path in sorted(list(ROOT.glob("*.html")) + list(ROOT.glob("js/*.js")) + list(ROOT.glob("*.js")) + list(ROOT.glob("css/*.css"))):
     for url in re.findall(r'https?://[^\s"\'()<>]+', path.read_text()):
         if any(a in url for a in ALLOWED_URL_CONTEXTS):

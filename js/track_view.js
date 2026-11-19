@@ -20,8 +20,13 @@ export const CLASS_LABEL = {
   total: "total substitution supply",
   nonga: "non-G\u2192A supply",
   ga: "G\u2192A supply",
+  insertion: "insertion rate",
+  deletion: "deletion rate",
 };
-export const CLASS_COLOUR = { total: "#2f4b7c", nonga: "#3f8f7a", ga: "#c2561a" };
+export const CLASS_COLOUR = {
+  total: "#2f4b7c", nonga: "#3f8f7a", ga: "#c2561a",
+  insertion: "#6b3fa0", deletion: "#a4262c",
+};
 
 /**
  * Draw the supply track and return the caption HTML describing exactly what is plotted.
@@ -69,11 +74,14 @@ export function drawSupplyTrack(container, o) {
                     dash: "4 3", opacity: 0.95 });
     }
   }
+  const yScale = o.yScale === "linear" ? "linear" : "log";
+  const autoScale = o.autoScale !== false;
   genomeTrack(container, series, {
     title: o.title || `Smoothed ${CLASS_LABEL[o.cls]} along the genome`,
     xMin: o.first, xMax: o.last, geneBand: o.segments,
     width: o.width || LAYOUT.width, height: o.height || 320,
     yLabel: "supply per site per replication",
+    yScale, autoScale,
     marker: o.marker, markerLabel: o.markerLabel,
     variants: o.variants, onSelect: o.onSelect, onZoom: o.onZoom, onZoomReset: o.onZoomReset,
     sliderGap: o.sliderGap || 0,
@@ -119,23 +127,77 @@ export function drawSupplyTrack(container, o) {
   }
 
   const multi = Array.isArray(o.series);
+  const indel = o.cls === "insertion" || o.cls === "deletion";
   const refSentence = !refPts ? ""
-    : multi
+    : indel
       ? `The dashed grey line is <strong>NL4-3</strong>, smoothed over the same positions and ` +
-        `the same window as the submitted sequences. Each coloured line is a submitted sequence. ` +
-        `They meet the reference wherever that sequence's codons and 3\u2032 contexts match NL4-3. `
-      : `The dashed grey line is <strong>NL4-3</strong> over the same positions and the same ` +
-        `window, so the two are comparable point for point. They coincide wherever your ` +
-        `codons and 3\u2032 contexts match the reference, which for a close relative is most ` +
-        `of the genome \u2014 the gaps between them are the whole of what your sequence ` +
-        `changes about mutational supply. `;
-  return `Centred running mean of the per-site rate over a ${o.win} nt window, summed across ` +
-    `substitution classes${o.cls === "total" ? "" : " and restricted to " + CLASS_LABEL[o.cls]}. ` +
-    `Rates are ${o.source}. Insertions and deletions are excluded. ` +
+        `the same window. A submitted sequence takes this rate wherever it covers the site. `
+      : multi
+        ? `The dashed grey line is <strong>NL4-3</strong>, smoothed over the same positions and ` +
+          `the same window as the submitted sequences. Each coloured line is a submitted sequence. ` +
+          `They meet the reference wherever that sequence's codons and 3\u2032 contexts match NL4-3. `
+        : `The dashed grey line is <strong>NL4-3</strong> over the same positions and the same ` +
+          `window, so the two are comparable point for point. They coincide wherever your ` +
+          `codons and 3\u2032 contexts match the reference, which for a close relative is most ` +
+          `of the genome \u2014 the gaps between them are the whole of what your sequence ` +
+          `changes about mutational supply. `;
+  const what = indel
+    ? `Centred running mean of the per-site ${CLASS_LABEL[o.cls]} over a ${o.win} nt window. ` +
+      `Rates are ${o.source}. An insertion or deletion has no nucleotide context, so the ` +
+      `value is the NL4-3 rate at that position. `
+    : `Centred running mean of the per-site rate over a ${o.win} nt window, summed across ` +
+      `substitution classes${o.cls === "total" ? "" : " and restricted to " + CLASS_LABEL[o.cls]}. ` +
+      `Rates are ${o.source}. Insertions and deletions are excluded. `;
+  const axisSentence = yScale === "linear"
+    ? (autoScale
+      ? `The value axis is linear and fitted to the rates in view. `
+      : `The value axis is linear, from zero to the largest rate on the track. `)
+    : (autoScale
+      ? `The value axis is logarithmic and fitted to the rates in view. `
+      : `The value axis is logarithmic, on whole powers of ten. `);
+  return what +
     refSentence +
+    axisSentence +
     `The band above the plot shows coding segments; overlapping reading frames sit on ` +
     `separate rows, and spliced genes (tat, rev) appear as one box per exon, with the gene ` +
     `holding the marker filled solid.` + spanNote;
+}
+
+/**
+ * The Y-axis switches under a genome track. Auto-scale starts on. Log starts selected.
+ * `onChange` redraws the track; the returned object is read at draw time.
+ */
+export function bindAxisControls(root, onChange) {
+  const autoBtn = root.querySelector(".y-autoscale");
+  const logBtn = root.querySelector(".y-log");
+  const linBtn = root.querySelector(".y-linear");
+  const state = { autoScale: true, yScale: "log" };
+  const paint = () => {
+    autoBtn.classList.toggle("is-on", state.autoScale);
+    autoBtn.setAttribute("aria-pressed", state.autoScale ? "true" : "false");
+    logBtn.classList.toggle("is-on", state.yScale === "log");
+    logBtn.setAttribute("aria-pressed", state.yScale === "log" ? "true" : "false");
+    linBtn.classList.toggle("is-on", state.yScale === "linear");
+    linBtn.setAttribute("aria-pressed", state.yScale === "linear" ? "true" : "false");
+  };
+  autoBtn.addEventListener("click", () => {
+    state.autoScale = !state.autoScale;
+    paint();
+    onChange();
+  });
+  logBtn.addEventListener("click", () => {
+    if (state.yScale === "log") return;
+    state.yScale = "log";
+    paint();
+    onChange();
+  });
+  linBtn.addEventListener("click", () => {
+    if (state.yScale === "linear") return;
+    state.yScale = "linear";
+    paint();
+    onChange();
+  });
+  return state;
 }
 
 /**
@@ -174,7 +236,7 @@ export function trackStats(a) {
       note: rank === null ? "no value at this position"
         : `${rank.toFixed(0)}th percentile of the plotted track` },
     { label: "G\u2192A share at this exact site",
-      value: a.site ? `${(100 * a.site.ga / a.site.total).toFixed(0)}%` : "\u2014",
+      value: a.site && a.site.total > 0 ? `${(100 * a.site.ga / a.site.total).toFixed(0)}%` : "\u2014",
       // A non-G base cannot have G->A supply, so 0% there is a property of the base rather
       // than a small measurement. Saying which base it is stops that reading as a bug.
       note: !a.site ? "site not covered"

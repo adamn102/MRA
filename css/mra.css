@@ -81,6 +81,7 @@ section.table-section { scroll-margin-top: 70px; }
 .privacy { border-left-color: var(--good); }
 .error-box { border-left-color: var(--bad); background: #fdf0f0; }
 .caveat { font-size: 13px; color: var(--muted); }
+.pending-link { color: var(--muted); font-style: italic; }
 
 /* --- forms -------------------------------------------------------------- */
 label { font-size: 14px; }
@@ -345,15 +346,18 @@ table.data.pie-legend.is-selectable tbody tr.is-selected { background: #d9e6f2; 
    them and the figures; collected into one bar they read as the dashboard's control strip,
    and the figures close up behind it. */
 .control-bar {
-  display: flex; flex-wrap: wrap; align-items: end; gap: 10px 18px;
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 16px;
   border: 1px solid var(--rule); border-radius: 4px; background: var(--panel);
-  padding: 10px 12px; margin: 12px 0;
+  padding: 12px 14px; margin: 12px 0;
 }
-.control-bar > div { display: flex; flex-direction: column; gap: 3px; }
+/* The wrapper exists so the markup can group the position controls. It does not
+   draw a box: its children join the card's flex line. */
+.control-main { display: contents; }
+.control-bar .control-main > div { display: flex; flex-direction: column; gap: 3px; }
 .control-bar label { font-size: 11px; color: var(--muted); }
 .control-bar select, .control-bar input[type="number"] { font-size: 13px; }
 .control-bar input[type="range"] { width: 150px; vertical-align: middle; }
-.control-bar .zoom-fields { flex-direction: row; align-items: center; gap: 8px; flex-wrap: wrap; }
+.control-bar .control-main > .zoom-fields { flex-direction: row; align-items: center; gap: 8px; flex-wrap: wrap; }
 .control-bar .zoom-readout {
   font-size: 12px; font-variant-numeric: tabular-nums; color: var(--muted); min-width: 7.5em;
 }
@@ -387,11 +391,50 @@ table.data.pie-legend.is-selectable tbody tr.is-selected { background: #d9e6f2; 
   background: var(--accent); border: 2px solid #fff; box-shadow: 0 0 0 1px var(--accent); cursor: pointer;
 }
 .control-bar .track-names {
-  flex: 1 0 100%; flex-direction: row; align-items: center; margin-top: 4px;
+  flex: 1 1 auto; flex-direction: row; align-items: center; margin: 0;
 }
-/* The trailing items -- Go, share, details -- sit on the baseline with the inputs. */
-.control-bar .bar-actions { flex-direction: row; align-items: center; gap: 8px;
-  margin-left: auto; }
+/* Go, share, numbering, and the dashboard download sit with the position controls.
+   Numbering is a details button, which is drawn small under a plot; in this bar it
+   matches the other buttons. */
+.control-bar .control-main > .bar-actions { display: flex; flex-direction: row; align-items: center; gap: 8px; }
+.control-bar .plot-tools { margin: 0; padding: 0; }
+.control-bar .plot-tools button { font-size: 14px; padding: 6px 14px; }
+/* Names on the left of the last row. Scale controls sit beside the smoothing window,
+   which stays in the bottom-right corner. */
+.control-foot {
+  flex: 1 0 100%; display: flex; align-items: center; justify-content: flex-start;
+  flex-wrap: wrap; gap: 16px 28px; margin-top: 2px; padding-top: 10px;
+  border-top: 1px solid var(--rule);
+}
+.control-bar .axis-controls {
+  display: flex; align-items: center; gap: 6px; flex: 0 0 auto; margin-left: auto;
+}
+.control-bar .axis-controls .overlay-label { margin: 0; }
+.control-bar .seg { display: inline-flex; }
+.control-bar button.toggle,
+.control-bar .seg button {
+  background: #fff; color: var(--accent); padding: 6px 12px; font-size: 14px; line-height: 1.2;
+}
+.control-bar .seg button { border-radius: 0; }
+.control-bar .seg button:first-child { border-radius: 3px 0 0 3px; }
+.control-bar .seg button + button { margin-left: -1px; border-radius: 0 3px 3px 0; }
+.control-bar button.toggle.is-on,
+.control-bar .seg button.is-on {
+  background: var(--accent); color: #fff; position: relative; z-index: 1;
+}
+.control-bar .smooth-window {
+  flex: 0 0 auto; margin-left: 0;
+  display: grid; grid-template-columns: auto auto; align-items: center;
+  column-gap: 12px; row-gap: 4px;
+}
+.control-bar .smooth-window label { grid-column: 1; grid-row: 1; justify-self: start; }
+.control-bar .smooth-window output {
+  grid-column: 2; grid-row: 1; justify-self: end;
+  font-size: 13px; font-variant-numeric: tabular-nums; color: var(--ink);
+}
+.control-bar .smooth-window input[type="range"] {
+  grid-column: 1 / -1; grid-row: 2; width: 210px; margin: 0;
+}
 /* Checkboxes for the submitted sequences, under the genome-track caption. A short stroke
    matches the line on the plot, so the key and the series are the same colour. */
 .overlay-row {

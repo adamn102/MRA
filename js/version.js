@@ -160,26 +160,13 @@ export function renderVersionBanner(container, resolved, releases) {
   container.appendChild(div);
 }
 
-// A version selector that preserves the rest of the query string.
-export function renderVersionSelector(container, resolved, releases) {
+// The atlas version, as text. Older releases stay reachable by their ?v= address and are
+// archived with the repository; the header does not offer a switcher.
+export function renderVersionSelector(container, resolved) {
   container.innerHTML = "";
-  const label = document.createElement("label");
-  label.setAttribute("for", "mra-version-select");
-  label.textContent = "Atlas version ";
-  const select = document.createElement("select");
-  select.id = "mra-version-select";
-  for (const r of releases.releases) {
-    const opt = document.createElement("option");
-    opt.value = r.version;
-    opt.textContent = r.version + (r.version === releases.latest ? " (latest)" : "") + " \u2014 " + r.release_date;
-    if (r.version === resolved.version) opt.selected = true;
-    select.appendChild(opt);
-  }
-  select.addEventListener("change", () => {
-    window.location.href = shareableUrl(select.value);
-  });
-  container.appendChild(label);
-  container.appendChild(select);
+  const span = document.createElement("span");
+  span.textContent = "Atlas version " + resolved.version;
+  container.appendChild(span);
 }
 
 // ---------------------------------------------------------------------------

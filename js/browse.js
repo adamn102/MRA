@@ -19,14 +19,14 @@
 import { bootstrapPage, note, caveat, showError, exportProvenance, shareButton } from "./page.js";
 import { loadSmallAssets, loadAminoAcidLayer, loadNucleotideLayer, loadPathShard } from "./data.js";
 import { renderTable } from "./table.js";
-import { drawSupplyTrack, drawPositionPie, CLASS_COLOUR } from "./track_view.js";
+import { drawSupplyTrack, drawPositionPie, bindAxisControls, CLASS_COLOUR, CLASS_LABEL } from "./track_view.js";
 import { bindZoomRange } from "./chart.js";
 import { loadLanlFlow, lanlFlowAt } from "./lanl_flow.js";
 import { setDetails } from "./figure_details.js";
 import { attachFigureDownloads } from "./figure_export.js";
 import { MraEngine } from "./mra_engine.js";
-import { perSiteSupply, smoothSeries, buildFrameIndex, geneSegments, oneStepSlices,
-         targetFor as targetForIn } from "./explore_core.js";
+import { perSiteSupply, perSiteIndels, smoothSeries, buildFrameIndex, geneSegments,
+         oneStepSlices, targetFor as targetForIn } from "./explore_core.js";
 
 
 /**
@@ -166,9 +166,15 @@ let markerNt = 1954;         // middle base of RT K65 (AAA, NL4-3 1953–1955)
 // The nucleotide layer is several megabytes, so it loads AFTER the dashboard has painted.
 // Until it arrives the track slot shows a note and its controls stay disabled.
 let perSite = null, SITES = null;
+let ntByPosition = null, indelPerSite = null, indelSites = null;
+let indelShown = null;
 const elWin = document.getElementById("track-window");
 const elWinOut = document.getElementById("track-window-out");
 const elClass = document.getElementById("track-class");
+const axis = bindAxisControls(document.querySelector(".control-bar"), () => drawTrack());
+const elAuto = document.getElementById("y-autoscale");
+const elLog = document.getElementById("y-log");
+const elLinear = document.getElementById("y-linear");
 const elSlider = document.getElementById("track-slider");
 const elZ0 = document.getElementById("zoom-from");
 const elZ1 = document.getElementById("zoom-to");
@@ -184,7 +190,9 @@ const zoomCtl = bindZoomRange(elZ0, elZ1, {
   readout: document.getElementById("zoom-readout"),
   onChange: (a, b) => setZoom(a, b),
 });
-for (const el of [elWin, elClass, elSlider, elZ0, elZ1, elZoomReset]) el.disabled = true;
+for (const el of [elWin, elClass, elSlider, elZ0, elZ1, elZoomReset, elAuto, elLog, elLinear]) {
+  el.disabled = true;
+}
 
 function setZoom(a, b) {
   let lo = Math.round(Math.min(a, b));
@@ -219,16 +227,24 @@ function placeTrackSlider() {
   slider.style.width = (100 * Number(svg.dataset.sliderWidth) / W).toFixed(3) + "%";
 }
 
+function indelMode() {
+  return elClass.value === "insertion" || elClass.value === "deletion";
+}
+
 function drawTrack() {
   if (!perSite) return;
   const win = Number(elWin.value);
   elWinOut.textContent = String(win);
+  const cls = elClass.value;
+  const indel = indelMode();
   const trackFigure = document.getElementById("genome-track").closest("figure");
   // The track's own description goes behind the figure's Details button; the caption keeps
   // one line saying what is plotted and where the marker is.
   const trackText = drawSupplyTrack(
     document.getElementById("genome-track"), {
-      perSite, sites: SITES, win, cls: elClass.value, segments: GENE_SEGMENTS,
+      perSite: indel ? indelPerSite : perSite,
+      sites: indel ? indelSites : SITES,
+      win, cls, segments: GENE_SEGMENTS,
       first: zoom0, last: zoom1, marker: markerNt,
       markerLabel: selected
         ? engine.hxb2Label(selected.target.protein, selected.geneAa) : String(markerNt),
@@ -241,16 +257,17 @@ function drawTrack() {
       onSelect: (pos) => selectNucleotide(pos),
       onZoom: (a, b) => setZoom(a, b),
       onZoomReset: resetZoom,
+      yScale: axis.yScale,
+      autoScale: axis.autoScale,
       // Room between the gene boxes and the rate curve for the position slider.
       sliderGap: 28,
     });
   elSlider.min = String(zoom0);
   elSlider.max = String(zoom1);
   placeTrackSlider();
-  const classLabel = { total: "total substitution supply", nonga: "non-G\u2192A supply",
-                       ga: "G\u2192A supply" }[elClass.value] || "supply";
+  const classLabel = CLASS_LABEL[cls] || "supply";
   const swatch = document.getElementById("track-swatch");
-  if (swatch) swatch.style.background = CLASS_COLOUR[elClass.value] || CLASS_COLOUR.total;
+  if (swatch) swatch.style.background = CLASS_COLOUR[cls] || CLASS_COLOUR.total;
   const zoomed = zoom0 !== FIRST || zoom1 !== LAST;
   document.getElementById("track-caption").innerHTML =
     `Genome-wide ${classLabel}, ${win} nt mean. Marker at ` +
@@ -260,6 +277,68 @@ function drawTrack() {
     ` Drag across the curve or the Zoom slider to zoom, click a gene to zoom to it, or double-click the plot for the full range.`;
   setDetails(trackFigure, trackText, { title: "The genome supply track" });
   syncFigureButtons();
+  syncIndelPanels();
+}
+
+/** Insertions and deletions keep the track and replace the pie, the flow, and the
+ *  amino-acid tables with one rate table. Switching back shows the plots again. */
+function syncIndelPanels() {
+  const kind = elClass.value;
+  const indel = kind === "insertion" || kind === "deletion";
+  const figures = document.querySelector(".dashboard-figures");
+  const head = document.getElementById("dashboard-head");
+  const table = document.getElementById("dashboard-table");
+  const pathsH = document.getElementById("paths-heading");
+  const paths = document.getElementById("dashboard-paths");
+  const panel = document.getElementById("indel-panel");
+  if (figures) figures.hidden = indel;
+  if (head) head.hidden = indel;
+  if (table) table.hidden = indel;
+  if (paths) paths.hidden = indel;
+  if (pathsH) pathsH.hidden = indel || !(paths && paths.querySelector("table"));
+  if (panel) panel.hidden = !indel;
+  if (!indel || !ntByPosition) return;
+  if (indelShown === kind) return;
+  indelShown = kind;
+  const noun = kind === "insertion" ? "insertion" : "deletion";
+  document.getElementById("indel-heading").textContent =
+    kind === "insertion" ? "Insertions along NL4-3" : "Deletions along NL4-3";
+  document.getElementById("indel-note").textContent =
+    "One row per modelled nucleotide. The rate is the published per-site " + noun +
+    " rate from the same nucleotide table as the substitution track. These are single-nucleotide " +
+    "events, not codon insertions or deletions, and not the amino-acid rates shown for substitutions.";
+  const rows = [];
+  for (const pos of indelSites) {
+    const group = ntByPosition.get(pos) || [];
+    const hit = group.find((r) => r.mut_type === kind);
+    if (!hit || !(hit.bio_rate_mean > 0)) continue;
+    rows.push({
+      ref_position: pos,
+      ref_nucleotide: hit.ref_nucleotide || "",
+      rate: hit.bio_rate_mean,
+      lo95: hit.bio_rate_lo95,
+      hi95: hit.bio_rate_hi95,
+    });
+  }
+  renderTable(document.getElementById("indel-table"), {
+    columns: [
+      { key: "ref_position", label: "NL4-3 position", type: "num" },
+      { key: "ref_nucleotide", label: "Reference nucleotide" },
+      { key: "rate", label: "Rate", type: "rate",
+        title: "Published bio_rate_mean for this " + noun },
+      { key: "lo95", label: "95% lower", type: "rate" },
+      { key: "hi95", label: "95% upper", type: "rate" },
+    ],
+    rows,
+    sort: { key: "ref_position", dir: "asc" },
+    csvHeader: "label",
+    filterPlaceholder: "filter by position or nucleotide",
+    downloadName: `mra_${page.version}_${kind}s.csv`,
+    provenance: exportProvenance(page.release, [
+      `Published ${noun} rates from nt_level_supply.csv, one row per NL4-3 position.`,
+      "bio_rate_mean with the published 95% interval. Not recomputed.",
+    ]),
+  });
 }
 
 // Guards against an out-of-order redraw: the precomputed batch is fetched asynchronously, so
@@ -280,9 +359,12 @@ async function loadTrack() {
   slot.innerHTML = "<p class=\"caveat\">Loading the nucleotide layer for the track\u2026</p>";
   try {
     const ntLayer = await loadNucleotideLayer(page.version);
-    perSite = perSiteSupply(ntLayer.byPosition);
+    ntByPosition = ntLayer.byPosition;
+    perSite = perSiteSupply(ntByPosition);
     SITES = [...perSite.keys()].sort((a, b) => a - b);
-    for (const el of [elWin, elClass, elSlider, elZ0, elZ1, elZoomReset]) {
+    indelPerSite = perSiteIndels(ntByPosition);
+    indelSites = [...indelPerSite.keys()].sort((a, b) => a - b);
+    for (const el of [elWin, elClass, elSlider, elZ0, elZ1, elZoomReset, elAuto, elLog, elLinear]) {
       el.disabled = false;
     }
     drawTrack();
@@ -496,6 +578,7 @@ async function showPosition(target, genePosition) {
   } catch (err) {
     showError(pathSlot, "Could not load codon paths: " + err.message);
   }
+  syncIndelPanels();
 }
 
 // --- coordinate entry ---------------------------------------------------------------

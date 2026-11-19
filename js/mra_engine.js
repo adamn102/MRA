@@ -377,6 +377,24 @@ export class MraEngine {
     return { lo95: null, hi95: null, source: "unavailable" };
   }
 
+  /**
+   * Insertion or deletion rate at one aligned position.
+   *
+   * log rate = intercept_bio + beta_mut_bio[kind] + that kind's position spline.
+   * There is no nucleotide context, so the rate is the NL4-3 rate at the coordinate.
+   * It matches the published median to the rounding of the shipped coefficients.
+   */
+  indelRate(refPosition, kind) {
+    if (kind !== "insertion" && kind !== "deletion") return null;
+    const beta = this.bundle.beta_mut_bio && this.bundle.beta_mut_bio[kind];
+    if (beta === undefined || typeof this.bundle.intercept_bio !== "number") return null;
+    const sp = this.splineTerm(kind, refPosition);
+    return {
+      rate: Math.exp(this.bundle.intercept_bio + beta + sp.value),
+      positionSource: sp.source,
+    };
+  }
+
   // -- reading context out of a submitted sequence ---------------------------------
   // Read from the SUBMITTED sequence, not from NL4-3. This is the step where a user's
   // sequence genuinely changes the answer.

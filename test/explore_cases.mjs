@@ -10,7 +10,7 @@ import fs from "node:fs";
 import { MraEngine } from "../js/mra_engine.js";
 import { trackStats } from "../js/track_view.js";
 import { LAYOUT, trackSliderGeometry } from "../js/chart.js";
-import { perSiteSupply, smoothSeries, buildFrameIndex, geneSegments, oneStepSlices,
+import { perSiteSupply, perSiteIndels, smoothSeries, buildFrameIndex, geneSegments, oneStepSlices,
          targetFor } from "../js/explore_core.js";
 
 const vArg = process.argv.indexOf("--version");
@@ -88,6 +88,12 @@ const indelOnly = [...byPosition.entries()]
   .filter(([, rows]) => rows.every((r) => !r.mut_type.includes("->")));
 check("indel-only positions are excluded from the track",
       indelOnly.every(([p]) => !perSite.has(p)), `${indelOnly.length} such positions`);
+
+const indelRates = perSiteIndels(byPosition);
+check("every modelled position has an insertion and a deletion rate",
+      indelRates.size === byPosition.size &&
+      [...indelRates.values()].every((r) => r.insertion > 0 && r.deletion > 0),
+      String(indelRates.size));
 
 // --- 2. smoothing -----------------------------------------------------------------
 const sm151 = smoothSeries(sites, perSite, "total", 151);
@@ -177,6 +183,14 @@ const engine = new MraEngine({
   bundle: J("mra_web_model.json"), reference, intervals: J("interval_ratios.json"),
   hxb2: J("hxb2_align.json"),
 });
+const ins1954 = engine.indelRate(1954, "insertion");
+check("insertion rate at nt 1954 matches the published median",
+      ins1954 && close(ins1954.rate, 2.78455e-6, 0.01),
+      ins1954 ? ins1954.rate.toExponential(4) : "missing");
+const del1 = engine.indelRate(1, "deletion");
+check("deletion rate at nt 1 matches the published median",
+      del1 && close(del1.rate, 5.868e-6, 0.01),
+      del1 ? del1.rate.toExponential(4) : "missing");
 const targets = engine.proteinTargets(new Map(
   [...aaByPosition.keys()].reduce((m, k) => {
     const [prot, pos] = k.split("|"); const n = Number(pos);

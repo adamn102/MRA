@@ -34,6 +34,30 @@ export function perSiteSupply(byPosition, rateField = "bio_rate_mean") {
 }
 
 /**
+ * Per-site insertion and deletion rates from the same nucleotide rows. Kept apart from
+ * perSiteSupply: an indel is one event per site, not a sum across substitution classes,
+ * and a position that has only indels stays out of the substitution track.
+ *
+ * @returns {Map<number, {insertion:number, deletion:number}>}
+ */
+export function perSiteIndels(byPosition, rateField = "bio_rate_mean") {
+  const out = new Map();
+  for (const [pos, rows] of byPosition) {
+    let insertion = 0, deletion = 0, has = false;
+    for (const r of rows) {
+      if (r.mut_type !== "insertion" && r.mut_type !== "deletion") continue;
+      const v = r[rateField];
+      if (!(v > 0)) continue;
+      has = true;
+      if (r.mut_type === "insertion") insertion += v;
+      else deletion += v;
+    }
+    if (has) out.set(pos, { insertion, deletion });
+  }
+  return out;
+}
+
+/**
  * Centred running mean of a per-site field over `win` sites.
  *
  * Arithmetic rather than geometric: the window value is the expected per-site supply across

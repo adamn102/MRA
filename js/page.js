@@ -33,6 +33,7 @@ const PAGES = [
     menu: TABLE_SECTIONS.map((s) => ({ hash: "#" + s.id, label: s.label })) },
   { href: "sequence.html", label: "Your sequence" },
   { href: "reference.html", label: "Reference and Download" },
+  { href: "https://balazslab.partners.org/", label: "Back to the Balazs Lab", external: true },
 ];
 
 export const PRIVACY_TEXT =
@@ -77,6 +78,14 @@ export async function bootstrapPage(activeHref) {
   const v = resolved.version.replace(/^v/, "");
   for (const p of PAGES) {
     const a = document.createElement("a");
+    if (p.external) {
+      a.href = p.href;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.textContent = p.label;
+      nav.appendChild(a);
+      continue;
+    }
     a.href = p.href + "?v=" + v;
     a.textContent = p.label;
     if (p.href === activeHref) a.setAttribute("aria-current", "page");
@@ -104,7 +113,7 @@ export async function bootstrapPage(activeHref) {
     group.appendChild(menu);
     nav.appendChild(group);
   }
-  renderVersionSelector(slot, resolved, releases);
+  renderVersionSelector(slot, resolved);
   renderVersionBanner(bannerSlot, resolved, releases);
   buildFooter(resolved.release);
   registerOfflineSupport();

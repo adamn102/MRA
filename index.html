@@ -20,17 +20,15 @@
 <!-- The controls sit between the heading and the genome track. The position slider is not
      in this bar: it sits inside the track, between the gene boxes and the rate curve. -->
 <div class="control-bar" data-export-skip>
-  <div>
-    <label for="track-window">Smoothing window (nt)</label>
-    <input type="range" id="track-window" min="25" max="501" step="2" value="151">
-    <output id="track-window-out">151</output>
-  </div>
+  <div class="control-main">
   <div>
     <label for="track-class">Supply shown</label>
     <select id="track-class">
       <option value="total">Total substitution supply</option>
       <option value="nonga">non-G&rarr;A only</option>
       <option value="ga">G&rarr;A only</option>
+      <option value="insertion">Insertions</option>
+      <option value="deletion">Deletions</option>
     </select>
   </div>
   <div>
@@ -70,9 +68,25 @@
     <span id="coord-help"></span>
     <button id="download-png" class="secondary">Download dashboard (PNG)</button>
   </div>
-  <div class="overlay-row track-names">
-    <span class="overlay-label">On the track</span>
-    <span class="track-fixed"><i class="swatch" id="track-swatch" style="background:#2f4b7c"></i> NL4-3</span>
+  </div>
+  <div class="control-foot">
+    <div class="overlay-row track-names">
+      <span class="overlay-label">On the track</span>
+      <span class="track-fixed"><i class="swatch" id="track-swatch" style="background:#2f4b7c"></i> NL4-3</span>
+    </div>
+    <div class="axis-controls">
+      <span class="overlay-label">Y-axis</span>
+      <button type="button" id="y-autoscale" class="toggle y-autoscale is-on" aria-pressed="true" disabled>Auto-scale</button>
+      <div class="seg" role="group" aria-label="Y-axis scale">
+        <button type="button" id="y-log" class="y-log is-on" aria-pressed="true" disabled>Log</button>
+        <button type="button" id="y-linear" class="y-linear" aria-pressed="false" disabled>Linear</button>
+      </div>
+    </div>
+    <div class="smooth-window">
+      <label for="track-window">Smoothing window (nt)</label>
+      <input type="range" id="track-window" min="25" max="501" step="1" value="250">
+      <output id="track-window-out">250</output>
+    </div>
   </div>
 </div>
 
@@ -101,6 +115,12 @@
 <div id="dashboard-table"></div>
 <h3 id="paths-heading" hidden>Individual codon paths at this position</h3>
 <div id="dashboard-paths"></div>
+
+<div id="indel-panel" hidden>
+  <h3 id="indel-heading"></h3>
+  <p class="caveat" id="indel-note"></p>
+  <div id="indel-table"></div>
+</div>
 
 <p class="caveat">Looking up a whole list of mutations at once?
 <a href="tables.html">MRA Table</a> takes a pasted list or a file and returns a rate for
