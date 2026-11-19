@@ -161,17 +161,28 @@ export class MraEngine {
     return hit === undefined ? null : hit;             // null = an NL4-3 insertion vs HXB2
   }
   /**
-   * The selectable protein/subunit list: each gene, followed by its subunits indented.
-   * `offset` converts the subunit's own numbering to gene numbering (RT 103 -> Pol 253).
+   * The selectable protein/subunit list. Genes run 5' to 3' — Gag, Pol, Vif, Vpr, Tat,
+   * Rev, Vpu, Env, Nef — and each gene is followed by its subunits in that same direction.
+   * `offset` converts the
+   * subunit's own numbering to gene numbering (RT 103 -> Pol 253).
    *
    * @param {Map<string,{min:number,max:number}>} proteinSpans  from loadAminoAcidLayer
    */
   proteinTargets(proteinSpans) {
+    const startNt = (protein) => {
+      const rec = this.reference.proteins[protein];
+      const codon = rec && rec.codon_nt && rec.codon_nt[0];
+      return codon && codon.length ? Math.min(...codon) : -1;
+    };
     const targets = [];
-    for (const protein of [...proteinSpans.keys()].sort()) {
+    const proteins = [...proteinSpans.keys()].sort(
+      (a, b) => startNt(a) - startNt(b) || a.localeCompare(b));
+    for (const protein of proteins) {
       const span = proteinSpans.get(protein);
       targets.push({ key: protein, label: `${protein}  (1\u2013${span.max})`, protein, offset: 0 });
-      for (const sp of this.subProteins[protein] || []) {
+      const subs = (this.subProteins[protein] || []).slice()
+        .sort((a, b) => a.firstGeneAa - b.firstGeneAa);
+      for (const sp of subs) {
         targets.push({ key: sp.abbrev, protein,
                        label: `\u2003${sp.abbrev} \u2014 ${sp.name} (1\u2013${sp.lastGeneAa - sp.offset})`,
                        offset: sp.offset, maxOwn: sp.lastGeneAa - sp.offset });

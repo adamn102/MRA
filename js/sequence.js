@@ -23,8 +23,8 @@ import { Analysis, progressRow, MAX_DETAIL_SEQUENCES } from "./analysis.js";
 import { parseFasta, alignToReference } from "./align.js";
 import { renderTable, formatRate } from "./table.js";
 import { MraEngine, GENETIC_CODE } from "./mra_engine.js";
-import { perSiteSupply, groupByPosition, buildFrameIndex, geneSegments, targetFor,
-         smoothSeries, oneStepSlices } from "./explore_core.js";
+import { perSiteSupply, groupByPosition, buildFrameIndex, geneSegments, geneNtWindow,
+         targetFor, smoothSeries, oneStepSlices } from "./explore_core.js";
 import { drawSupplyTrack, bindAxisControls, CLASS_LABEL } from "./track_view.js";
 import { pieChart, LAYOUT, bindZoomRange } from "./chart.js";
 import { residueColour } from "./batch_view.js";
@@ -487,6 +487,32 @@ function renderDashboard(slot, items, allRows, truncated) {
     zoom1 = axis1;
     zoomCtl.set(axis0, axis1);
     drawTrack();
+  }
+
+  function primeZoom(lo, hi) {
+    lo = Math.max(axis0, Math.min(Math.round(lo), axis1));
+    hi = Math.max(axis0, Math.min(Math.round(hi), axis1));
+    if (!(hi > lo)) return;
+    zoom0 = lo;
+    zoom1 = hi;
+    zoomCtl.set(lo, hi);
+  }
+
+  function zoomToGene(protein, geneAa, target) {
+    const win = geneNtWindow(assets.reference.proteins, protein, {
+      offset: target ? target.offset || 0 : 0,
+      maxOwn: target && target.maxOwn ? target.maxOwn : null,
+      geneAa,
+    });
+    if (win) primeZoom(win.start, win.end);
+  }
+
+  function zoomToNt(item, nt) {
+    const frames = item.frameAt.get(nt) || [];
+    const keep = selected && frames.find((f) => f.protein === selected.protein);
+    const frame = keep || frames[0];
+    if (!frame) return;
+    zoomToGene(frame.protein, frame.geneAa, targetFor(item.targets, frame.protein, frame.geneAa));
   }
 
   function drawTrack() {
@@ -1103,6 +1129,8 @@ function renderDashboard(slot, items, allRows, truncated) {
     const codonNt = rec.codon_nt[geneAa - rec.first_aa];
     selected = { protein, geneAa };
     markerNt = (preferNt && codonNt.includes(preferNt)) ? preferNt : codonNt[1];
+    elSlider.min = String(zoom0);
+    elSlider.max = String(zoom1);
     elSlider.value = String(markerNt);
     head.innerHTML = "";
 
@@ -1153,7 +1181,8 @@ function renderDashboard(slot, items, allRows, truncated) {
     apply((keep || frames[0]).protein, (keep || frames[0]).geneAa, markerNt);
   }
 
-  function jump() {
+  function jump(zoomGene) {
+    zoomGene = zoomGene === true;
     const item = items[active];
     head.innerHTML = "";
     if (elSys.value === "variant") {
@@ -1165,7 +1194,9 @@ function renderDashboard(slot, items, allRows, truncated) {
       item.variantIdx = Number.isInteger(want) && want >= 1 && want <= item.variants.length
         ? want - 1 : (item.variantIdx + 1) % item.variants.length;
       elPos.value = String(item.variantIdx + 1);
-      selectNt(item.variants[item.variantIdx]);
+      const nt = item.variants[item.variantIdx];
+      if (zoomGene) zoomToNt(item, nt);
+      selectNt(nt);
       return;
     }
     const raw = Number(elPos.value);
@@ -1177,6 +1208,7 @@ function renderDashboard(slot, items, allRows, truncated) {
           `It covers ${item.sites[0].toLocaleString()}\u2013${item.sites[item.sites.length - 1].toLocaleString()}.`);
         return;
       }
+      if (zoomGene) zoomToNt(item, raw);
       selectNt(raw);
       return;
     }
@@ -1189,6 +1221,7 @@ function renderDashboard(slot, items, allRows, truncated) {
         (span ? ` \u2014 ${t.protein} ${span.min}\u2013${span.max} was analysed.` : "."));
       return;
     }
+    if (zoomGene) zoomToGene(t.protein, geneAa, t);
     apply(t.protein, geneAa, null);
   }
 
@@ -1282,8 +1315,8 @@ function renderDashboard(slot, items, allRows, truncated) {
   });
   ctrl.querySelector(".sq-zoom-reset").addEventListener("click", resetZoom);
   elSlider.addEventListener("input", () => selectNt(Number(elSlider.value)));
-  ctrl.querySelector(".sq-go").addEventListener("click", jump);
-  elPos.addEventListener("keydown", (e) => { if (e.key === "Enter") jump(); });
+  ctrl.querySelector(".sq-go").addEventListener("click", () => jump(true));
+  elPos.addEventListener("keydown", (e) => { if (e.key === "Enter") jump(true); });
   elTarget.addEventListener("change", jump);
   elFrame.addEventListener("change", (e) => {
     const [p, g] = e.target.value.split("|");

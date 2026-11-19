@@ -26,7 +26,7 @@ import { setDetails } from "./figure_details.js";
 import { attachFigureDownloads } from "./figure_export.js";
 import { MraEngine } from "./mra_engine.js";
 import { perSiteSupply, perSiteIndels, smoothSeries, buildFrameIndex, geneSegments,
-         oneStepSlices, targetFor as targetForIn } from "./explore_core.js";
+         geneNtWindow, oneStepSlices, targetFor as targetForIn } from "./explore_core.js";
 
 
 /**
@@ -214,6 +214,27 @@ function resetZoom() {
   zoom1 = LAST;
   zoomCtl.set(FIRST, LAST);
   drawTrack();
+}
+
+/** Move the window without redrawing. The jump that follows paints the track once. */
+function primeZoom(lo, hi) {
+  lo = Math.max(FIRST, Math.min(Math.round(lo), LAST));
+  hi = Math.max(FIRST, Math.min(Math.round(hi), LAST));
+  if (!(hi > lo)) return;
+  zoom0 = lo;
+  zoom1 = hi;
+  zoomCtl.set(lo, hi);
+}
+
+/** Zoom to the subunit when the site sits in one, otherwise to the gene. Spliced genes
+ *  open the exon that holds the residue. */
+function zoomToGene(protein, geneAa, target) {
+  const win = geneNtWindow(assets.reference.proteins, protein, {
+    offset: target ? target.offset || 0 : 0,
+    maxOwn: target && target.maxOwn ? target.maxOwn : null,
+    geneAa,
+  });
+  if (win) primeZoom(win.start, win.end);
 }
 
 function placeTrackSlider() {
@@ -408,6 +429,8 @@ function applySelection(protein, geneAa, preferNt) {
   selected = { target, geneAa, codonIndex, codonNt };
   markerNt = (preferNt && codonNt.includes(preferNt)) ? preferNt : codonNt[1];
 
+  elSlider.min = String(zoom0);
+  elSlider.max = String(zoom1);
   elSlider.value = String(markerNt);
   refreshFrameSelector();
   syncCoordinateBox();
@@ -582,8 +605,10 @@ async function showPosition(target, genePosition) {
 }
 
 // --- coordinate entry ---------------------------------------------------------------
-/** Resolve whatever is in the boxes and move the selection there. */
-function jumpFromBoxes() {
+/** Resolve whatever is in the boxes and move the selection there.
+ *  Go and Enter also zoom the track to that gene or subunit. */
+function jumpFromBoxes(zoomGene) {
+  zoomGene = zoomGene === true;
   const head = document.getElementById("dashboard-head");
   const raw = Number(document.getElementById("position").value);
   if (!Number.isInteger(raw) || raw < 1) {
@@ -595,6 +620,12 @@ function jumpFromBoxes() {
       showError(head, `Nucleotide ${raw.toLocaleString()} is outside the modelled region ` +
                       `${FIRST.toLocaleString()}\u2013${LAST.toLocaleString()}.`);
       return;
+    }
+    if (zoomGene) {
+      const frames = frameAt.get(raw) || [];
+      const keep = selected && frames.find((f) => f.protein === selected.target.protein);
+      const frame = keep || frames[0];
+      if (frame) zoomToGene(frame.protein, frame.geneAa, targetFor(frame.protein, frame.geneAa));
     }
     selectNucleotide(raw);
     return;
@@ -619,12 +650,13 @@ function jumpFromBoxes() {
     showPosition(target, geneAa);         // renders the specific out-of-region message
     return;
   }
+  if (zoomGene) zoomToGene(target.protein, geneAa, target);
   applySelection(target.protein, geneAa, null);
 }
 
-document.getElementById("go").addEventListener("click", jumpFromBoxes);
+document.getElementById("go").addEventListener("click", () => jumpFromBoxes(true));
 document.getElementById("position").addEventListener("keydown",
-  (e) => { if (e.key === "Enter") jumpFromBoxes(); });
+  (e) => { if (e.key === "Enter") jumpFromBoxes(true); });
 select.addEventListener("change", jumpFromBoxes);
 document.getElementById("coord-system").addEventListener("change", syncCoordinateBox);
 document.getElementById("reading-frame").addEventListener("change", (e) => {

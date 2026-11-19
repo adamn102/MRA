@@ -152,6 +152,46 @@ export function targetFor(targets, protein, geneAa) {
   return fallback;
 }
 
+/**
+ * Nucleotide window of one gene or subunit, for zooming the track to it.
+ * Nucleotides are split at gaps, so a spliced gene does not zoom across its intron.
+ * The window is the exon that holds `geneAa` (the exon with more of that codon's bases,
+ * when one codon straddles the splice). `offset` and `maxOwn` are the subunit fields
+ * from proteinTargets; leave them off for the whole gene. Returns {start, end} or null.
+ */
+export function geneNtWindow(proteins, protein, { offset = 0, maxOwn = null, geneAa = null } = {}) {
+  const rec = proteins[protein];
+  const codons = rec && rec.codon_nt;
+  if (!codons || !codons.length) return null;
+  const first = rec.first_aa;
+  const aaLo = first + (offset || 0);
+  const aaHi = maxOwn ? aaLo + maxOwn - 1 : first + codons.length - 1;
+  const nts = [];
+  let focus = null;
+  for (let aa = aaLo; aa <= aaHi; aa++) {
+    const codon = codons[aa - first];
+    if (!codon || !codon.length) continue;
+    if (geneAa === aa) focus = codon;
+    for (const n of codon) nts.push(n);
+  }
+  if (!nts.length) return null;
+  nts.sort((a, b) => a - b);
+  const runs = [];
+  for (const n of nts) {
+    const last = runs[runs.length - 1];
+    if (!last || n > last.end + 1) runs.push({ start: n, end: n });
+    else if (n > last.end) last.end = n;
+  }
+  if (!focus) return runs.length === 1 ? runs[0] : runs.reduce((a, b) => (b.end - b.start > a.end - a.start ? b : a));
+  let best = runs[0], bestN = -1;
+  for (const run of runs) {
+    let n = 0;
+    for (const p of focus) if (p >= run.start && p <= run.end) n++;
+    if (n > bestN) { best = run; bestN = n; }
+  }
+  return best;
+}
+
 /** Group flat atlas rows into the position map perSiteSupply expects. */
 export function groupByPosition(rows, key = "ref_position") {
   const out = new Map();

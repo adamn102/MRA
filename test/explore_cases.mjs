@@ -10,7 +10,8 @@ import fs from "node:fs";
 import { MraEngine } from "../js/mra_engine.js";
 import { trackStats } from "../js/track_view.js";
 import { LAYOUT, trackSliderGeometry } from "../js/chart.js";
-import { perSiteSupply, perSiteIndels, smoothSeries, buildFrameIndex, geneSegments, oneStepSlices,
+import { perSiteSupply, perSiteIndels, smoothSeries, buildFrameIndex, geneSegments, geneNtWindow,
+         oneStepSlices,
          targetFor } from "../js/explore_core.js";
 
 const vArg = process.argv.indexOf("--version");
@@ -204,6 +205,27 @@ const byKey = new Map(targets.map((t) => [t.key, t]));
 check("the subunit list offers PR, RT, IN and the gag products",
       ["PR", "RT", "IN", "p17", "p24", "Gag", "Pol", "Env"].every((k) => byKey.has(k)),
       [...byKey.keys()].join(","));
+const geneKeys = targets.filter((t) => !t.maxOwn).map((t) => t.key);
+check("genes are listed 5' to 3'",
+      geneKeys.join(",") === "Gag,Pol,Vif,Vpr,Tat,Rev,Vpu,Env,Nef",
+      geneKeys.join(","));
+const subsAfter = (gene) => {
+  const i = targets.findIndex((t) => t.key === gene);
+  const out = [];
+  for (let k = i + 1; k < targets.length && targets[k].maxOwn; k++) out.push(targets[k].key);
+  return out.join(",");
+};
+check("pol subunits are listed 5' to 3'", subsAfter("Pol") === "PR,RT,RNH,IN", subsAfter("Pol"));
+check("gag subunits are listed 5' to 3'", subsAfter("Gag") === "p17,p24,p2,p7,p1,p6", subsAfter("Gag"));
+const rtWin = geneNtWindow(reference.proteins, "Pol", { offset: 150, maxOwn: 440, geneAa: 215 });
+check("zooming to RT covers K65 and stops at the subunit",
+      rtWin && rtWin.start <= 1954 && rtWin.end >= 1954 && rtWin.start > 1503,
+      JSON.stringify(rtWin));
+const tatFirst = geneNtWindow(reference.proteins, "Tat", { geneAa: 1 });
+const tatLast = geneNtWindow(reference.proteins, "Tat", { geneAa: reference.proteins.Tat.codon_nt.length });
+check("a spliced gene zooms to the exon that holds the residue",
+      tatFirst && tatLast && tatFirst.end < tatLast.start && tatLast.start - tatFirst.end > 500,
+      JSON.stringify([tatFirst, tatLast]));
 
 /** own-numbering position -> centre nucleotide of that codon, the path the Go button takes */
 function ntFor(key, ownPos) {
